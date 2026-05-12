@@ -1,0 +1,22 @@
+services:
+  nginx:
+    image: nginx:stable-alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./logs:/var/log/nginx
+    ports:
+      - "8080:80"
+
+  tinysiem:
+    build: ./app
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs:ro
+      - tinysiem_data:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      - nginx
+
+volumes:
+  tinysiem_data:

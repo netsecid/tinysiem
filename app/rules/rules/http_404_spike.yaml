@@ -1,0 +1,13 @@
+name: http_404_spike
+description: "Multiple 404 responses from the same IP in a short window"
+severity: medium
+source: nginx
+condition:
+  type: threshold
+  field: status_code
+  value: 404
+  operator: eq
+  threshold_count: 10
+  window_seconds: 60
+mitre_tactic: "Discovery"
+mitre_technique: "T1595"

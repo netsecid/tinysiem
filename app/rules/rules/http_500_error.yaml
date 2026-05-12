@@ -1,0 +1,11 @@
+name: http_500_error
+description: "Server-side error detected"
+severity: high
+source: nginx
+condition:
+  type: field_match
+  field: status_code
+  value: 500
+  operator: eq
+mitre_tactic: "Impact"
+mitre_technique: "T1499"
