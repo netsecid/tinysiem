@@ -1,8 +1,17 @@
+# Environment
 .env
+
+# Database files
 *.db
 *.duckdb
 chroma_store/
-logs/
+
+# Generated log files (shared volume, not source)
+logs/*.log
+logs/*.gz
+!logs/.gitkeep
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -10,3 +19,12 @@ __pycache__/
 *.egg-info/
 dist/
 .eggs/
+.venv/
+venv/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db

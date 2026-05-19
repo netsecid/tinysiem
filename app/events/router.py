@@ -1,0 +1,93 @@
+from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
+
+from app.auth import verify_api_key
+from app.storage import duckdb_store
+
+router = APIRouter(prefix="/events", tags=["events"])
+
+_FILTER_PARAMS = dict(
+    source=None, source_ip=None,
+    status_code=None, status_min=None, status_max=None,
+    method=None, uri=None, q=None,
+    start=None, end=None,
+)
+
+
+def _filter_kwargs(
+    source: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    status_code: Optional[int] = None,
+    status_min: Optional[int] = None,
+    status_max: Optional[int] = None,
+    method: Optional[str] = None,
+    uri: Optional[str] = None,
+    q: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+) -> dict:
+    return dict(
+        source=source, source_ip=source_ip,
+        status_code=status_code, status_min=status_min, status_max=status_max,
+        method=method, uri=uri, q=q, start=start, end=end,
+    )
+
+
+@router.get("")
+def list_events(
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    source: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    status_code: Optional[int] = None,
+    status_min: Optional[int] = None,
+    status_max: Optional[int] = None,
+    method: Optional[str] = None,
+    uri: Optional[str] = None,
+    q: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    _: str = Depends(verify_api_key),
+):
+    return duckdb_store.query_events(
+        limit=limit, offset=offset,
+        **_filter_kwargs(source, source_ip, status_code, status_min, status_max,
+                         method, uri, q, start, end),
+    )
+
+
+@router.get("/facets")
+def event_facets(
+    source: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    status_code: Optional[int] = None,
+    status_min: Optional[int] = None,
+    status_max: Optional[int] = None,
+    method: Optional[str] = None,
+    uri: Optional[str] = None,
+    q: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    _: str = Depends(verify_api_key),
+):
+    return duckdb_store.get_event_facets(
+        **_filter_kwargs(source, source_ip, status_code, status_min, status_max,
+                         method, uri, q, start, end),
+    )
+
+
+@router.get("/histogram")
+def event_histogram(
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    buckets: int = Query(60, ge=10, le=200),
+    _: str = Depends(verify_api_key),
+):
+    now = datetime.utcnow()
+    resolved_start = start or (now - timedelta(hours=1))
+    resolved_end = end or now
+    return duckdb_store.get_event_histogram(
+        start=resolved_start, end=resolved_end, buckets=buckets
+    )

@@ -2,9 +2,14 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.decoder import engine as decoder_engine
+from app.alerts.router import router as alerts_router
+from app.events.router import router as events_router
 from app.ingest.router import router as ingest_router
 from app.rules import engine as rule_engine
 from app.storage import chroma_store, duckdb_store
@@ -36,7 +41,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
 app.include_router(ingest_router)
+app.include_router(events_router)
+app.include_router(alerts_router)
+
+app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/ui/events.html")
 
 
 @app.get("/health")

@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TinySIEM — Alerts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0d0e17;
+  --surface:#12131f;
+  --surface2:#191a2d;
+  --surface3:#1f2138;
+  --surface4:#252845;
+  --border:#252840;
+  --border2:#323560;
+  --text:#cdd0eb;
+  --text-dim:#7b7fa8;
+  --text-muted:#454870;
+  --accent:#4d9fff;
+  --accent-dim:#0d2a50;
+  --green:#3ddc84;
+  --green-dim:#0a2e1c;
+  --yellow:#f5c842;
+  --yellow-dim:#322800;
+  --orange:#f07832;
+  --orange-dim:#2a1800;
+  --red:#e85555;
+  --red-dim:#320c0c;
+  --teal:#2dd4bf;
+  --purple:#a78bfa;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+  --sidebar-w:232px;
+}
+[data-theme="light"]{
+  --bg:#f0f2f8;
+  --surface:#ffffff;
+  --surface2:#f5f7fc;
+  --surface3:#eaecf5;
+  --surface4:#e0e3f0;
+  --border:#dde0f0;
+  --border2:#c0c6e0;
+  --text:#1a1c2e;
+  --text-dim:#4a4f6a;
+  --text-muted:#9096b8;
+  --accent:#2979ff;
+  --accent-dim:#e3ecff;
+  --green:#1a8a4a;
+  --green-dim:#eaf7ef;
+  --yellow:#c47800;
+  --yellow-dim:#fff4d6;
+  --orange:#b84800;
+  --orange-dim:#fff0e0;
+  --red:#c0392b;
+  --red-dim:#fde8e6;
+  --teal:#0a7a6a;
+  --purple:#5a2ed0;
+}
+
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
+
+/* ── NAV ── */
+.nav{display:flex;align-items:center;height:44px;background:var(--surface);border-bottom:1px solid var(--border);padding:0 14px;flex-shrink:0}
+.nav-logo{display:flex;align-items:center;gap:7px;font-weight:600;font-size:14px;color:var(--text);margin-right:16px;letter-spacing:-.3px;text-decoration:none}
+.nav-item{padding:0 11px;height:44px;display:flex;align-items:center;font-size:13px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;user-select:none;transition:color .15s;text-decoration:none}
+.nav-item:hover{color:var(--text)}
+.nav-item.active{color:var(--accent);border-bottom-color:var(--accent)}
+.nav-space{flex:1}
+.nav-btn{margin-left:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
+.nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
+
+/* ── APP LAYOUT ── */
+.app{display:flex;flex-direction:column;height:100vh}
+.top-area{flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)}
+.body-area{flex:1;display:flex;overflow:hidden}
+
+/* ── SEARCH BAR ── */
+.search-bar{display:flex;align-items:center;gap:8px;padding:8px 14px}
+.search-wrap{flex:1;display:flex;align-items:center;background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:0 10px;gap:7px;transition:border-color .15s}
+.search-wrap:focus-within{border-color:var(--accent)}
+.search-icon{color:var(--text-muted);flex-shrink:0;opacity:.7}
+.search-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:var(--mono);font-size:12.5px;padding:6px 0}
+.search-input::placeholder{color:var(--text-muted)}
+.search-clear{background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;font-size:14px;line-height:1;display:none}
+.search-clear.show{display:block}
+.search-btn{padding:0 14px;height:32px;background:var(--accent);border:none;border-radius:5px;color:#fff;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
+.search-btn:hover{opacity:.88}
+
+/* ── ACTIVE FILTERS STRIP ── */
+.active-filters{display:flex;gap:5px;padding:0 14px 8px;flex-wrap:wrap;min-height:0}
+.active-filters:empty{padding:0}
+.filter-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;background:var(--accent-dim);border:1px solid var(--accent);border-radius:3px;font-family:var(--mono);font-size:11px;color:var(--accent)}
+.chip-rm{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;line-height:1;padding:0;opacity:.6}
+.chip-rm:hover{opacity:1}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.sb-head{padding:10px 12px 6px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sb-clear{background:none;border:none;color:var(--text-muted);font-size:11px;cursor:pointer;padding:0}
+.sb-clear:hover{color:var(--accent)}
+.facet-group{border-bottom:1px solid var(--border)}
+.facet-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 12px 6px;cursor:pointer;user-select:none}
+.facet-hdr:hover{background:var(--surface3)}
+.facet-title{font-size:11.5px;font-weight:600;color:var(--text-dim);display:flex;align-items:center;gap:5px}
+.facet-chevron{color:var(--text-muted);transition:transform .2s;font-size:10px}
+.facet-group.open .facet-chevron{transform:rotate(0)}
+.facet-group:not(.open) .facet-chevron{transform:rotate(-90deg)}
+.facet-body{display:none;padding:0 8px 8px}
+.facet-group.open .facet-body{display:block}
+.fv{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:4px;cursor:pointer;transition:background .1s}
+.fv:hover{background:var(--surface3)}
+.fv.active{background:var(--accent-dim)}
+.fv-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--border2)}
+.fv-label{flex:1;font-size:12px;color:var(--text-dim);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fv.active .fv-label{color:var(--accent)}
+.fv-count{font-size:11px;color:var(--text-muted);font-family:var(--mono);flex-shrink:0}
+.fv-bar-wrap{width:100%;height:2px;background:var(--border);border-radius:1px;margin-top:2px}
+.fv-bar{height:100%;border-radius:1px;min-width:2px}
+.fv-inner{flex:1;min-width:0}
+.facet-empty{padding:4px 6px 8px;font-size:11px;color:var(--text-muted)}
+
+/* severity dot colors */
+.dot-critical{background:var(--red)}
+.dot-high{background:var(--orange)}
+.dot-medium{background:var(--yellow)}
+.dot-low{background:var(--green)}
+.dot-unknown{background:var(--text-muted)}
+.dot-rule{background:var(--teal)}
+
+/* ── MAIN PANEL ── */
+.main-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ── CONTROLS ── */
+.controls{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0}
+.ctrl-sel{background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:3px 7px;cursor:pointer;height:26px}
+.ctrl-sel:focus{outline:none;border-color:var(--accent)}
+.ctrl-btn{display:flex;align-items:center;gap:4px;padding:0 9px;height:26px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-size:12px;cursor:pointer;transition:all .12s;white-space:nowrap}
+.ctrl-btn:hover{color:var(--text);background:var(--surface4)}
+.ctrl-space{flex:1}
+.result-info{font-family:var(--mono);font-size:11.5px;color:var(--text-muted)}
+.result-info b{color:var(--text);font-weight:500}
+.pager{display:flex;align-items:center;gap:3px}
+.page-btn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:13px;transition:all .12s}
+.page-btn:hover:not(:disabled){color:var(--text);border-color:var(--accent)}
+.page-btn:disabled{opacity:.3;cursor:default}
+.page-info{font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:0 5px;min-width:48px;text-align:center}
+
+/* ── TABLE ── */
+.table-scroll{flex:1;overflow:auto}
+.table-scroll::-webkit-scrollbar{width:6px;height:6px}
+.table-scroll::-webkit-scrollbar-track{background:var(--surface)}
+.table-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{position:sticky;top:0;background:var(--surface2);color:var(--text-muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;z-index:2}
+tbody td{padding:5px 10px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+.col-exp{width:24px}.col-time{width:160px}.col-rule{width:200px}
+.col-sev{width:90px}.col-ip{width:120px}.col-mitre{width:140px}
+.col-tech{width:100px}.col-sum{width:auto;min-width:160px}
+tr.dr{cursor:pointer;transition:background .08s}
+tr.dr:hover{background:var(--surface3)}
+tr.dr.open{background:var(--surface3)}
+tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid var(--border2);white-space:normal}
+.exp-body{padding:12px 14px 14px 32px}
+.exp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;margin-bottom:10px}
+.ef{padding:5px 8px;background:var(--surface3);border:1px solid var(--border);border-radius:4px}
+.ef-k{font-size:9.5px;color:var(--text-muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:1px}
+.ef-v{font-family:var(--mono);font-size:11.5px;color:var(--text);word-break:break-all}
+
+/* ── SEVERITY BADGES ── */
+.badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:3px;font-family:var(--mono);font-size:11px;font-weight:600;line-height:16px;text-transform:uppercase;letter-spacing:.04em}
+.sev-critical{background:var(--red-dim);color:var(--red);border:1px solid var(--red)}
+.sev-high{background:var(--orange-dim);color:var(--orange);border:1px solid var(--orange)}
+.sev-medium{background:var(--yellow-dim);color:var(--yellow);border:1px solid var(--yellow)}
+.sev-low{background:var(--green-dim);color:var(--green);border:1px solid var(--green)}
+.sev-unknown{background:var(--surface4);color:var(--text-muted);border:1px solid var(--border2)}
+
+/* mitre badge */
+.mbadge{display:inline-flex;padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10.5px;background:var(--surface4);color:var(--purple);border:1px solid var(--border2)}
+
+@keyframes slideIn{from{background:color-mix(in srgb,var(--red) 10%,transparent)}to{background:transparent}}
+.rn{animation:slideIn 2s ease-out}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:7px}
+.empty-row td{text-align:center;padding:52px;color:var(--text-muted);font-size:12.5px}
+
+/* ── ALERT DETAIL MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-bg.show{display:flex}
+.detail-modal{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;width:760px;max-width:100%;max-height:88vh;display:flex;flex-direction:column}
+.dm-head{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.dm-title-wrap{flex:1;min-width:0}
+.dm-rule{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dm-time{font-family:var(--mono);font-size:11px;color:var(--text-muted);margin-top:2px}
+.dm-close{width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:15px;transition:all .12s;flex-shrink:0}
+.dm-close:hover{color:var(--text);background:var(--surface3)}
+.dm-body{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;flex:1}
+.dm-body::-webkit-scrollbar{width:5px}
+.dm-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.dm-label{font-size:10.5px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.dm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px}
+.dm-field{padding:6px 8px;background:var(--surface3);border:1px solid var(--border);border-radius:4px}
+.df-k{font-size:9.5px;color:var(--text-muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:2px}
+.df-v{font-family:var(--mono);font-size:11.5px;color:var(--text);word-break:break-all}
+.dm-summary{padding:10px 12px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;font-family:var(--mono);font-size:12px;color:var(--text-dim);line-height:1.6}
+.dm-foot{display:flex;gap:7px;padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0}
+.rm-btn{padding:5px 14px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);font-size:12px;cursor:pointer;transition:all .12s}
+.rm-btn:hover{color:var(--text);border-color:var(--accent)}
+.rm-btn.ok{color:var(--green);border-color:var(--green)}
+
+/* ── CFG MODAL ── */
+.cfg-modal{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:22px;width:400px;max-width:94vw}
+.cfg-modal h2{font-size:14px;font-weight:600;margin-bottom:2px}
+.cfg-modal p{color:var(--text-muted);font-size:12px;margin-bottom:16px}
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:10.5px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+.fg input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12.5px;padding:6px 9px}
+.fg input:focus{outline:none;border-color:var(--accent)}
+.cfg-foot{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
+.btn-p{padding:6px 16px;background:var(--accent);border:none;border-radius:5px;color:#fff;font-size:13px;font-weight:500;cursor:pointer}
+.btn-s{padding:6px 16px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);font-size:13px;cursor:pointer}
+
+/* error state */
+.sb-error{padding:12px;font-size:11px;color:var(--red)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- NAV -->
+<nav class="nav">
+  <a class="nav-logo" href="/ui/events.html">
+    <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
+      <rect width="18" height="18" rx="4" fill="#4d9fff" opacity=".18"/>
+      <rect x="3" y="3" width="5" height="5" rx="1" fill="#4d9fff"/>
+      <rect x="10" y="3" width="5" height="2" rx="1" fill="#4d9fff" opacity=".55"/>
+      <rect x="10" y="7" width="3" height="1.2" rx=".6" fill="#4d9fff" opacity=".35"/>
+      <rect x="3" y="10" width="12" height="1.5" rx=".75" fill="#4d9fff" opacity=".45"/>
+      <rect x="3" y="13" width="8" height="1.5" rx=".75" fill="#4d9fff" opacity=".25"/>
+    </svg>
+    TinySIEM
+  </a>
+  <a class="nav-item" href="/ui/events.html">Events</a>
+  <a class="nav-item active" href="/ui/alerts.html">Alerts</a>
+  <div class="nav-space"></div>
+  <button class="nav-btn" id="themeBtn" title="Toggle theme" onclick="toggleTheme()">🌙</button>
+  <button class="nav-btn" title="Settings" onclick="openCfg()">
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" opacity=".75">
+      <path fill-rule="evenodd" d="M5.67.5h2.66l.38 1.52a4.98 4.98 0 011.3.75l1.5-.5 1.33 2.3-1.14 1.07a5 5 0 010 1.72l1.14 1.07-1.33 2.3-1.5-.5a4.98 4.98 0 01-1.3.75L8.33 13.5H5.67l-.38-1.52a4.98 4.98 0 01-1.3-.75l-1.5.5L1.16 9.43l1.14-1.07a5 5 0 010-1.72L1.16 5.57l1.33-2.3 1.5.5a4.98 4.98 0 011.3-.75L5.67.5zM7 4.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z" clip-rule="evenodd"/>
+    </svg>
+  </button>
+</nav>
+
+<!-- TOP AREA -->
+<div class="top-area">
+  <div class="search-bar">
+    <div class="search-wrap">
+      <svg class="search-icon" width="13" height="13" viewBox="0 0 13 13" fill="currentColor">
+        <path d="M5.5 0a5.5 5.5 0 100 11A5.5 5.5 0 005.5 0zm-4 5.5a4 4 0 118 0 4 4 0 01-8 0zM9.94 9.03l2.53 2.53-1.06 1.06-2.53-2.53 1.06-1.06z"/>
+      </svg>
+      <input class="search-input" id="searchInput" type="text"
+        placeholder="Search alerts… (rule name, IP, MITRE tactic…)"
+        oninput="onInput(this.value)"
+        onkeydown="if(event.key==='Enter')runSearch()"/>
+      <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+    </div>
+    <button class="search-btn" onclick="runSearch()">Search</button>
+  </div>
+  <div class="active-filters" id="activeFilters"></div>
+</div>
+
+<!-- BODY: sidebar + main -->
+<div class="body-area">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-head">
+      Filters
+      <button class="sb-clear" onclick="clearAllFacets()" title="Clear all filters">Reset</button>
+    </div>
+    <div id="sidebarContent">
+      <div style="padding:20px 12px;font-size:11px;color:var(--text-muted)">Loading…</div>
+    </div>
+  </aside>
+
+  <!-- MAIN PANEL -->
+  <div class="main-panel">
+
+    <!-- Controls -->
+    <div class="controls">
+      <select class="ctrl-sel" id="limitSel" onchange="onLimit()">
+        <option value="50">50 rows</option>
+        <option value="100" selected>100 rows</option>
+        <option value="250">250 rows</option>
+        <option value="500">500 rows</option>
+      </select>
+      <button class="ctrl-btn" onclick="runSearch()">
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M4.6 0a4.6 4.6 0 100 9.2A4.6 4.6 0 004.6 0zm3.5 7.7l2.1 2.1-.8.8-2.1-2.1.8-.8z"/></svg>
+        Refresh
+      </button>
+      <button class="ctrl-btn" onclick="exportCSV()">
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M5.5 7.5L2.5 4.5H4.5V1h2v3.5h2L5.5 7.5zM1 9.5v1h9v-1H1z"/></svg>
+        Export CSV
+      </button>
+      <div class="ctrl-space"></div>
+      <span class="result-info" id="resultInfo">—</span>
+      <div class="pager">
+        <button class="page-btn" id="prevBtn" onclick="goPage(-1)" disabled>‹</button>
+        <span class="page-info" id="pageInfo">1 / 1</span>
+        <button class="page-btn" id="nextBtn" onclick="goPage(1)" disabled>›</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-scroll">
+      <table>
+        <colgroup>
+          <col class="col-exp"><col class="col-time"><col class="col-rule">
+          <col class="col-sev"><col class="col-ip"><col class="col-mitre">
+          <col class="col-tech"><col class="col-sum">
+        </colgroup>
+        <thead><tr>
+          <th></th><th>Triggered</th><th>Rule</th>
+          <th>Severity</th><th>Source IP</th><th>MITRE Tactic</th>
+          <th>Technique</th><th>Summary</th>
+        </tr></thead>
+        <tbody id="tbody">
+          <tr class="empty-row"><td colspan="8"><span class="spinner"></span>Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div><!-- /main-panel -->
+</div><!-- /body-area -->
+
+<!-- ALERT DETAIL MODAL -->
+<div class="modal-bg" id="detailModal" onclick="onDetailBg(event)">
+  <div class="detail-modal">
+    <div class="dm-head">
+      <div class="dm-title-wrap">
+        <div class="dm-rule" id="dmRule"></div>
+        <div class="dm-time" id="dmTime"></div>
+      </div>
+      <div id="dmSevBadge"></div>
+      <button class="dm-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="dm-body">
+      <div>
+        <div class="dm-label">Summary</div>
+        <div class="dm-summary" id="dmSummary"></div>
+      </div>
+      <div>
+        <div class="dm-label">Alert Fields</div>
+        <div class="dm-grid" id="dmGrid"></div>
+      </div>
+    </div>
+    <div class="dm-foot">
+      <button class="rm-btn" id="dmCopyJSON" onclick="copyDetailJSON()">Copy as JSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- CFG MODAL -->
+<div class="modal-bg" id="cfgModal" onclick="onCfgBg(event)">
+  <div class="cfg-modal">
+    <h2>Connect to TinySIEM</h2>
+    <p>Set your API endpoint and key.</p>
+    <div class="fg">
+      <label>API Endpoint</label>
+      <input type="text" id="cfgEp" value="http://localhost:8000">
+    </div>
+    <div class="fg">
+      <label>API Key</label>
+      <input type="password" id="cfgKey" placeholder="your-api-key"
+        onkeydown="if(event.key==='Enter')saveCfg()">
+    </div>
+    <div class="cfg-foot">
+      <button class="btn-s" onclick="closeCfg()">Cancel</button>
+      <button class="btn-p" onclick="saveCfg()">Connect</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────
+const S={
+  ep:'http://localhost:8000', key:'',
+  q:'',
+  af:{},   // active facet filters {severity, rule_name}
+  limit:100, offset:0, total:0, page:1,
+  alerts:[], detailAl:null,
+};
+
+// ── THEME ──────────────────────────────────────────────────────────────
+const TH=document.documentElement;
+function applyTheme(t){
+  TH.setAttribute('data-theme',t);
+  document.getElementById('themeBtn').textContent=t==='dark'?'🌙':'☀️';
+  localStorage.setItem('ts_theme',t);
+}
+function toggleTheme(){applyTheme(TH.getAttribute('data-theme')==='dark'?'light':'dark')}
+
+// ── INIT ───────────────────────────────────────────────────────────────
+(function init(){
+  const theme=localStorage.getItem('ts_theme')||'dark';
+  applyTheme(theme);
+  S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
+  S.key=localStorage.getItem('ts_key')||'';
+  if(!S.key){openCfg();return;}
+  fetchFacets();
+  fetchAlerts();
+})();
+
+// ── SEARCH ─────────────────────────────────────────────────────────────
+function onInput(v){
+  document.getElementById('searchClear').classList.toggle('show',v.length>0);
+}
+function clearSearch(){
+  document.getElementById('searchInput').value='';
+  document.getElementById('searchClear').classList.remove('show');
+  S.q=''; S.offset=0; S.page=1;
+  fetchAlerts();
+}
+function runSearch(){
+  S.q=document.getElementById('searchInput').value.trim();
+  S.offset=0; S.page=1;
+  fetchAlerts();
+}
+
+// ── BUILD QUERY STRING ─────────────────────────────────────────────────
+function buildQS(){
+  const p=new URLSearchParams();
+  p.set('limit',S.limit);
+  p.set('offset',S.offset);
+  if(S.q) p.set('q',S.q);
+  if(S.af.severity) p.set('severity',S.af.severity);
+  if(S.af.rule_name) p.set('rule_name',S.af.rule_name);
+  return p.toString();
+}
+
+// ── FETCH ALERTS ───────────────────────────────────────────────────────
+async function fetchAlerts(){
+  const tbody=document.getElementById('tbody');
+  tbody.innerHTML='<tr class="empty-row"><td colspan="8"><span class="spinner"></span>Loading…</td></tr>';
+  try{
+    const r=await fetch(`${S.ep}/alerts?${buildQS()}`,{headers:{Authorization:`Bearer ${S.key}`}});
+    if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    const d=await r.json();
+    S.total=d.total; S.alerts=d.alerts;
+    renderTable(d.alerts);
+    updatePager();
+    renderChips();
+  }catch(e){
+    tbody.innerHTML=`<tr class="empty-row"><td colspan="8" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+  }
+}
+
+// ── FETCH FACETS ───────────────────────────────────────────────────────
+async function fetchFacets(){
+  try{
+    const r=await fetch(`${S.ep}/alerts/facets`,{headers:{Authorization:`Bearer ${S.key}`}});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d=await r.json();
+    buildSidebar(d);
+  }catch(e){
+    document.getElementById('sidebarContent').innerHTML=
+      `<div class="sb-error">Could not load facets: ${e.message}</div>`;
+  }
+}
+
+// ── SIDEBAR ────────────────────────────────────────────────────────────
+const SEV_ORDER=['critical','high','medium','low'];
+
+function buildSidebar(d){
+  const sc=document.getElementById('sidebarContent');
+  sc.innerHTML='';
+  sc.appendChild(makeFacetGroup('Severity','severity',d.severity,'dot-'+'{v}'));
+  sc.appendChild(makeFacetGroup('Rule','rule_name',d.rule_name,'dot-rule'));
+}
+
+function dotClass(field,value){
+  if(field==='severity') return 'dot-'+(value||'unknown').toLowerCase();
+  return 'dot-rule';
+}
+
+function makeFacetGroup(title,field,items,_dotClass){
+  const max=Math.max(1,...(items||[]).map(i=>i.count));
+  const g=document.createElement('div');
+  g.className='facet-group open';
+  g.innerHTML=`<div class="facet-hdr" onclick="toggleFacet(this.parentElement)">
+    <span class="facet-title">${title}</span>
+    <span class="facet-chevron">▼</span>
+  </div>`;
+  const body=document.createElement('div');
+  body.className='facet-body';
+  if(!items||!items.length){
+    body.innerHTML='<div class="facet-empty">No data</div>';
+  } else {
+    (items).forEach(it=>{
+      const isActive=S.af[field]===it.value;
+      const pct=Math.round(it.count/max*100);
+      const dc=dotClass(field,it.value);
+      const row=document.createElement('div');
+      row.className='fv'+(isActive?' active':'');
+      row.onclick=()=>clickFacet(field,it.value);
+      row.innerHTML=`<div class="fv-dot ${dc}"></div>
+        <div class="fv-inner">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span class="fv-label">${esc(it.value)}</span>
+            <span class="fv-count">${it.count}</span>
+          </div>
+          <div class="fv-bar-wrap"><div class="fv-bar ${dc}" style="width:${pct}%"></div></div>
+        </div>`;
+      body.appendChild(row);
+    });
+  }
+  g.appendChild(body);
+  return g;
+}
+
+function toggleFacet(grp){grp.classList.toggle('open')}
+
+function clickFacet(field,value){
+  if(S.af[field]===value) delete S.af[field];
+  else S.af[field]=value;
+  S.offset=0; S.page=1;
+  fetchAlerts();
+  fetchFacets();
+  renderChips();
+}
+
+function clearAllFacets(){
+  S.af={};
+  S.offset=0; S.page=1;
+  fetchAlerts();
+  fetchFacets();
+  renderChips();
+}
+
+// ── ACTIVE FILTER CHIPS ────────────────────────────────────────────────
+function renderChips(){
+  const el=document.getElementById('activeFilters');
+  el.innerHTML='';
+  Object.entries(S.af).forEach(([k,v])=>{
+    const chip=document.createElement('span');
+    chip.className='filter-chip';
+    chip.innerHTML=`<b>${k}:</b>&nbsp;${esc(v)}<button class="chip-rm" onclick="clickFacet('${k}','${v.replace(/'/g,"\\'")}')">✕</button>`;
+    el.appendChild(chip);
+  });
+  if(S.q){
+    const chip=document.createElement('span');
+    chip.className='filter-chip';
+    chip.innerHTML=`<b>search:</b>&nbsp;${esc(S.q)}<button class="chip-rm" onclick="clearSearch()">✕</button>`;
+    el.appendChild(chip);
+  }
+}
+
+// ── RENDER TABLE ───────────────────────────────────────────────────────
+function renderTable(alerts){
+  const tbody=document.getElementById('tbody');
+  if(!alerts.length){
+    tbody.innerHTML='<tr class="empty-row"><td colspan="8">No alerts found</td></tr>';
+    return;
+  }
+  tbody.innerHTML='';
+  alerts.forEach((al,i)=>{
+    const tr=document.createElement('tr');
+    tr.className='dr';
+    tr.onclick=()=>toggleExpand(tr,al,i);
+    const t=fmtTime(al.triggered_at);
+    tr.innerHTML=`
+      <td><span style="color:var(--text-muted);font-size:10px">▶</span></td>
+      <td><span style="font-family:var(--mono);font-size:11.5px">${t}</span></td>
+      <td style="font-family:var(--mono);font-size:12px">${esc(al.rule_name||'—')}</td>
+      <td>${sevBadge(al.severity)}</td>
+      <td><span style="font-family:var(--mono);font-size:12px">${esc(al.source_ip||'—')}</span></td>
+      <td><span style="font-size:12px">${esc(al.mitre_tactic||'—')}</span></td>
+      <td>${al.mitre_technique?`<span class="mbadge">${esc(al.mitre_technique)}</span>`:'<span style="color:var(--text-muted)">—</span>'}</td>
+      <td style="color:var(--text-dim);font-size:12px">${esc((al.summary||'').slice(0,100))}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ── EXPAND ROW ─────────────────────────────────────────────────────────
+let _openTr=null;
+function toggleExpand(tr,al,i){
+  if(_openTr){
+    const prev=_openTr;
+    const prevExp=prev.nextSibling;
+    if(prevExp&&prevExp.classList.contains('expand-row')){prevExp.remove();}
+    prev.classList.remove('open');
+    prev.querySelector('td:first-child span').textContent='▶';
+    _openTr=null;
+    if(prev===tr) return;
+  }
+  tr.classList.add('open');
+  tr.querySelector('td:first-child span').textContent='▼';
+  _openTr=tr;
+  const exp=document.createElement('tr');
+  exp.className='expand-row';
+  const showFields=['alert_id','triggered_at','rule_name','severity','mitre_tactic','mitre_technique','source_ip','event_id'];
+  const fieldRows=showFields.map(k=>`
+    <div class="ef">
+      <span class="ef-k">${k}</span>
+      <span class="ef-v">${esc(al[k]||'—')}</span>
+    </div>`).join('');
+  exp.innerHTML=`<td colspan="8"><div class="exp-body">
+    <div class="exp-grid">${fieldRows}</div>
+    <div style="display:flex;gap:7px;margin-top:8px">
+      <button class="ctrl-btn" onclick="openDetail(${i})">View Full Detail</button>
+    </div>
+  </div></td>`;
+  tr.parentNode.insertBefore(exp,tr.nextSibling);
+}
+
+// ── DETAIL MODAL ───────────────────────────────────────────────────────
+function openDetail(i){
+  const al=S.alerts[i];
+  if(!al) return;
+  S.detailAl=al;
+  document.getElementById('dmRule').textContent=al.rule_name||'Unknown Rule';
+  document.getElementById('dmTime').textContent=fmtTime(al.triggered_at);
+  document.getElementById('dmSevBadge').innerHTML=sevBadge(al.severity);
+  document.getElementById('dmSummary').textContent=al.summary||'—';
+  const grid=document.getElementById('dmGrid');
+  const skip=['summary'];
+  grid.innerHTML=Object.entries(al)
+    .filter(([k])=>!skip.includes(k))
+    .map(([k,v])=>`<div class="dm-field">
+      <span class="df-k">${esc(k)}</span>
+      <span class="df-v">${esc(v!=null?String(v):'—')}</span>
+    </div>`).join('');
+  document.getElementById('detailModal').classList.add('show');
+}
+function closeDetail(){document.getElementById('detailModal').classList.remove('show')}
+function onDetailBg(e){if(e.target.id==='detailModal') closeDetail()}
+function copyDetailJSON(){
+  navigator.clipboard.writeText(JSON.stringify(S.detailAl,null,2));
+  const btn=document.getElementById('dmCopyJSON');
+  btn.textContent='Copied!'; btn.classList.add('ok');
+  setTimeout(()=>{btn.textContent='Copy as JSON';btn.classList.remove('ok')},1800);
+}
+
+// ── SEVERITY BADGE ─────────────────────────────────────────────────────
+function sevBadge(sev){
+  const s=(sev||'unknown').toLowerCase();
+  return `<span class="badge sev-${s}">${esc(s)}</span>`;
+}
+
+// ── PAGER ──────────────────────────────────────────────────────────────
+function updatePager(){
+  const pages=Math.max(1,Math.ceil(S.total/S.limit));
+  document.getElementById('pageInfo').textContent=`${S.page} / ${pages}`;
+  document.getElementById('prevBtn').disabled=S.page<=1;
+  document.getElementById('nextBtn').disabled=S.page>=pages;
+  const start=S.offset+1, end=Math.min(S.offset+S.limit,S.total);
+  document.getElementById('resultInfo').innerHTML=
+    S.total===0?'No alerts':`<b>${start}–${end}</b> of <b>${S.total}</b> alerts`;
+}
+function goPage(d){
+  const pages=Math.max(1,Math.ceil(S.total/S.limit));
+  S.page=Math.max(1,Math.min(pages,S.page+d));
+  S.offset=(S.page-1)*S.limit;
+  fetchAlerts();
+}
+function onLimit(){
+  S.limit=parseInt(document.getElementById('limitSel').value,10);
+  S.offset=0; S.page=1;
+  fetchAlerts();
+}
+
+// ── EXPORT CSV ─────────────────────────────────────────────────────────
+function exportCSV(){
+  if(!S.alerts.length) return;
+  const cols=['alert_id','triggered_at','rule_name','severity','source_ip','mitre_tactic','mitre_technique','summary'];
+  const rows=[cols.join(','),...S.alerts.map(a=>cols.map(c=>JSON.stringify(a[c]??'')).join(','))];
+  const blob=new Blob([rows.join('\n')],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='tinysiem_alerts.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── CFG MODAL ──────────────────────────────────────────────────────────
+function openCfg(){
+  document.getElementById('cfgEp').value=S.ep;
+  document.getElementById('cfgKey').value=S.key;
+  document.getElementById('cfgModal').classList.add('show');
+}
+function closeCfg(){document.getElementById('cfgModal').classList.remove('show')}
+function onCfgBg(e){if(e.target.id==='cfgModal') closeCfg()}
+function saveCfg(){
+  S.ep=document.getElementById('cfgEp').value.replace(/\/+$/,'');
+  S.key=document.getElementById('cfgKey').value.trim();
+  localStorage.setItem('ts_ep',S.ep);
+  localStorage.setItem('ts_key',S.key);
+  closeCfg();
+  fetchFacets();
+  fetchAlerts();
+}
+
+// ── UTILS ──────────────────────────────────────────────────────────────
+function esc(s){
+  if(s==null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtTime(ts){
+  if(!ts) return '—';
+  try{
+    const d=new Date(ts);
+    const pad=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} `+
+           `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }catch{return ts}
+}
+
+// keyboard shortcuts
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeDetail();closeCfg();}
+});
+</script>
+</body>
+</html>
