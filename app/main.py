@@ -12,6 +12,7 @@ from app.alerts.router import router as alerts_router
 from app.auth_router import router as auth_router
 from app.events.router import router as events_router
 from app.ingest.router import router as ingest_router
+from app.users.router import router as users_router
 from app.password import hash_password
 from app.rules import engine as rule_engine
 from app.storage import chroma_store, duckdb_store
@@ -47,7 +48,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -55,6 +56,7 @@ app.include_router(ingest_router)
 app.include_router(events_router)
 app.include_router(alerts_router)
 app.include_router(auth_router)
+app.include_router(users_router)
 
 app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 
