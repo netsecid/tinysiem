@@ -141,7 +141,7 @@ const S={navCollapsed:false,theme:'dark',jwt:'',ep:'',role:''};
 
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-function parseJwt(t){try{return JSON.parse(atob(t.split('.')[1]))}catch{return null}}
+function parseJwt(t){try{const b64=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
 function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role')}
 function logout(){clearAuth();window.location.href='/ui/login.html'}
 function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
@@ -215,7 +215,7 @@ async function loadUsers(){
   const users=data.users||[];
   const rows=users.map(u=>`<tr>
     <td style="font-family:var(--mono)">${esc(u.username)}</td>
-    <td>${roleBadge(esc(u.role))}</td>
+    <td>${roleBadge(u.role)}</td>
     <td style="font-family:var(--mono);color:var(--text-dim)">${esc((u.created_at||'').slice(0,10))}</td>
     <td style="display:flex;gap:6px">
       <button class="btn-sm" data-id="${esc(u.id)}" data-username="${esc(u.username)}" data-role="${esc(u.role)}" onclick="openEditModalFromBtn(this)">Edit</button>
