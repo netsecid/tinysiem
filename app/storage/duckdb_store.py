@@ -389,9 +389,7 @@ def count_superadmins() -> int:
 
 
 def ensure_superadmin(password_hash: str) -> None:
-    """Create 'admin' superadmin if no users exist yet."""
-    with _lock:
-        count = _get_conn().execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    if count == 0:
+    """Create 'admin' superadmin user if it does not already exist."""
+    if get_user_by_username("admin") is None:
         create_user("admin", password_hash, "superadmin")
         logger.info("Created initial superadmin user 'admin'")

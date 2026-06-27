@@ -41,8 +41,10 @@ AUTH_HEADERS = {"Authorization": f"Bearer {TEST_KEY}"}
 @pytest.fixture(scope="session", autouse=True)
 def _init_db():
     """Initialize DuckDB once per session so tests can use duckdb_store directly."""
+    from app.password import hash_password
     from app.storage import duckdb_store
     duckdb_store.init_db(os.environ["TINYSIEM_DUCKDB_PATH"])
+    duckdb_store.ensure_superadmin(hash_password(os.environ["TINYSIEM_SUPERADMIN_PASSWORD"]))
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -58,3 +60,17 @@ async def client():
 @pytest.fixture
 def auth_headers():
     return AUTH_HEADERS
+
+
+@pytest.fixture
+def superadmin_headers():
+    from app.auth import create_token
+    token = create_token("test-superadmin", "admin", "superadmin")
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def analyst_headers():
+    from app.auth import create_token
+    token = create_token("test-analyst", "analyst", "analyst")
+    return {"Authorization": f"Bearer {token}"}

@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from app.auth import verify_api_key
+from app.auth import AuthUser, require_analyst
 from app.config import settings
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -75,7 +75,7 @@ def list_alerts(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
-    _: str = Depends(verify_api_key),
+    _: AuthUser = Depends(require_analyst),
 ):
     alerts = _read_all_alerts()
     alerts = _apply_filters(alerts, severity, rule_name, source_ip, q, start, end)
@@ -85,7 +85,7 @@ def list_alerts(
 
 
 @router.get("/facets")
-def alert_facets(_: str = Depends(verify_api_key)):
+def alert_facets(_: AuthUser = Depends(require_analyst)):
     alerts = _read_all_alerts()
     sev_counts = Counter(a.get("severity") or "unknown" for a in alerts)
     rule_counts = Counter(a.get("rule_name") or "unknown" for a in alerts)

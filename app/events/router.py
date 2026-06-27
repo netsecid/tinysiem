@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from app.auth import verify_api_key
+from app.auth import AuthUser, require_analyst
 from app.storage import duckdb_store
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -49,7 +49,7 @@ def list_events(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
-    _: str = Depends(verify_api_key),
+    _: AuthUser = Depends(require_analyst),
 ):
     return duckdb_store.query_events(
         limit=limit, offset=offset,
@@ -70,7 +70,7 @@ def event_facets(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
-    _: str = Depends(verify_api_key),
+    _: AuthUser = Depends(require_analyst),
 ):
     return duckdb_store.get_event_facets(
         **_filter_kwargs(source, source_ip, status_code, status_min, status_max,
@@ -83,7 +83,7 @@ def event_histogram(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
     buckets: int = Query(60, ge=10, le=200),
-    _: str = Depends(verify_api_key),
+    _: AuthUser = Depends(require_analyst),
 ):
     now = datetime.utcnow()
     resolved_start = start or (now - timedelta(hours=1))

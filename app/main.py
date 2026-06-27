@@ -9,8 +9,10 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.decoder import engine as decoder_engine
 from app.alerts.router import router as alerts_router
+from app.auth_router import router as auth_router
 from app.events.router import router as events_router
 from app.ingest.router import router as ingest_router
+from app.password import hash_password
 from app.rules import engine as rule_engine
 from app.storage import chroma_store, duckdb_store
 
@@ -28,6 +30,7 @@ async def lifespan(app: FastAPI):
     chroma_store.init_chroma()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
+    duckdb_store.ensure_superadmin(hash_password(settings.tinysiem_superadmin_password))
     yield
     logger.info("TinySIEM shutting down")
     duckdb_store.close_db()
@@ -51,6 +54,7 @@ app.add_middleware(
 app.include_router(ingest_router)
 app.include_router(events_router)
 app.include_router(alerts_router)
+app.include_router(auth_router)
 
 app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 

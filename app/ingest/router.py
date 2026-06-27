@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
-from app.auth import verify_api_key
+from app.auth import AuthUser, require_admin
 from app.decoder import engine as decoder_engine
 from app.ingest.models import RawIngestRequest
 from app.rules import engine as rule_engine
@@ -32,7 +32,7 @@ def _process_line(source: str, raw: str) -> str:
 @router.post("/raw")
 def ingest_raw(
     payload: RawIngestRequest,
-    _: str = Depends(verify_api_key),
+    _: AuthUser = Depends(require_admin),
 ):
     event_id = _process_line(payload.source, payload.raw)
     return {"status": "ok", "event_id": event_id}
@@ -42,7 +42,7 @@ def ingest_raw(
 def ingest_file(
     source: str,
     file: UploadFile,
-    _: str = Depends(verify_api_key),
+    _: AuthUser = Depends(require_admin),
 ):
     content = file.file.read().decode("utf-8", errors="replace")
     lines = [line for line in content.splitlines() if line.strip()]

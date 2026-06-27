@@ -78,3 +78,39 @@ def test_create_and_decode_token():
 def test_decode_invalid_token():
     assert decode_token("not.a.token") is None
     assert decode_token("") is None
+
+
+async def test_login_valid(client):
+    response = await client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "admin"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "access_token" in body
+    assert body["role"] == "superadmin"
+    assert body["username"] == "admin"
+
+
+async def test_login_invalid_password(client):
+    response = await client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "wrongpass"},
+    )
+    assert response.status_code == 401
+
+
+async def test_login_unknown_user(client):
+    response = await client.post(
+        "/auth/login",
+        json={"username": "nobody", "password": "x"},
+    )
+    assert response.status_code == 401
+
+
+async def test_me_endpoint(client, auth_headers):
+    response = await client.get("/auth/me", headers=auth_headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert "username" in body
+    assert "role" in body

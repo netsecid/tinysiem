@@ -81,11 +81,3 @@ def require_auth(min_role: str = "analyst"):
 require_analyst = require_auth("analyst")
 require_admin = require_auth("admin")
 require_superadmin = require_auth("superadmin")
-
-# Backward-compat shim — existing routers import this until Task 3 migrates them
-def verify_api_key(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-) -> str:
-    if credentials is None or credentials.credentials != settings.tinysiem_api_key:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
-    return credentials.credentials
