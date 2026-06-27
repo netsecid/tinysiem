@@ -68,6 +68,7 @@ async def test_update_user(client, superadmin_headers):
     )
     assert res.status_code == 200
     assert res.json()["role"] == "admin"
+    assert "password_hash" not in res.json()
 
 
 async def test_delete_user(client, superadmin_headers):
@@ -79,6 +80,17 @@ async def test_delete_user(client, superadmin_headers):
     user_id = create_res.json()["id"]
     res = await client.delete(f"/users/{user_id}", headers=superadmin_headers)
     assert res.status_code == 204
+
+
+async def test_update_user_duplicate_username(client, superadmin_headers):
+    await client.post("/users", json={"username": "orig_user", "password": "p", "role": "analyst"}, headers=superadmin_headers)
+    res2 = await client.post("/users", json={"username": "other_user", "password": "p", "role": "analyst"}, headers=superadmin_headers)
+    other_id = res2.json()["id"]
+    res = await client.put(f"/users/{other_id}", json={"username": "orig_user"}, headers=superadmin_headers)
+    assert res.status_code == 409
+    # Verify the user was NOT deleted
+    check = await client.get("/users", headers=superadmin_headers)
+    assert any(u["id"] == other_id for u in check.json()["users"])
 
 
 async def test_cannot_delete_last_superadmin(client, superadmin_headers):

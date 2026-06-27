@@ -52,12 +52,18 @@ def update_user(
     if target["role"] == "superadmin" and req.role and req.role != "superadmin":
         if duckdb_store.count_superadmins() <= 1:
             raise HTTPException(status_code=409, detail="Cannot demote the last superadmin")
+    if req.username is not None and req.username != target["username"]:
+        if duckdb_store.get_user_by_username(req.username):
+            raise HTTPException(status_code=409, detail="Username already exists")
     updated = duckdb_store.update_user(
         user_id,
         username=req.username,
         password_hash=hash_password(req.password) if req.password else None,
         role=req.role,
     )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="User not found after update")
+    updated.pop("password_hash", None)
     return updated
 
 
