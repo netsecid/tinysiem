@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TinySIEM — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0e17;--surface:#12131f;--surface2:#191a2d;--border:#252840;--border2:#323560;
+  --text:#cdd0eb;--text-dim:#7b7fa8;--text-muted:#454870;
+  --accent:#4d9fff;--accent-dim:#0d2a50;--err:#ef4444;
+  --sans:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
+}
+[data-theme="light"]{
+  --bg:#f0f2f8;--surface:#ffffff;--surface2:#f5f7fc;--border:#dde0f0;--border2:#c0c6e0;
+  --text:#1a1c2e;--text-dim:#4a4f6a;--text-muted:#9096b8;--accent:#2979ff;--accent-dim:#e3ecff;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5}
+.wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:36px 40px;width:100%;max-width:380px}
+.logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600;margin-bottom:28px;color:var(--text)}
+.logo svg{color:var(--accent);flex-shrink:0}
+.field{margin-bottom:14px}
+label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:5px}
+input[type=text],input[type=password],input[type=url]{
+  width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;
+  padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;
+  transition:border-color .15s
+}
+input:focus{border-color:var(--accent)}
+.btn{width:100%;padding:9px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.err{color:var(--err);font-size:12px;margin-top:10px;display:none}
+.theme-toggle{position:fixed;top:14px;right:14px;background:none;border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text-dim);cursor:pointer;font-size:13px}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()">◑</button>
+<div class="wrap">
+  <div class="card">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      TinySIEM
+    </div>
+    <div class="field">
+      <label for="ep">Server URL</label>
+      <input type="url" id="ep" placeholder="http://localhost:8000" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="uname">Username</label>
+      <input type="text" id="uname" placeholder="admin" autocomplete="username">
+    </div>
+    <div class="field">
+      <label for="pass">Password</label>
+      <input type="password" id="pass" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn" id="loginBtn" onclick="doLogin()">Sign in</button>
+    <div class="err" id="errMsg"></div>
+  </div>
+</div>
+<script>
+const TH = document.documentElement;
+function toggleTheme(){const t=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',t);localStorage.setItem('ts_theme',t)}
+function parseJwt(token){try{return JSON.parse(atob(token.split('.')[1]))}catch{return null}}
+function load(){
+  TH.setAttribute('data-theme', localStorage.getItem('ts_theme')||'dark');
+  document.getElementById('ep').value = localStorage.getItem('ts_ep')||'http://localhost:8000';
+  const jwt = localStorage.getItem('ts_jwt');
+  if(jwt){
+    const p = parseJwt(jwt);
+    if(p && p.exp*1000 > Date.now()){window.location.href='/ui/dashboard.html';return}
+  }
+  localStorage.removeItem('ts_jwt');
+}
+async function doLogin(){
+  const btn=document.getElementById('loginBtn');
+  const errEl=document.getElementById('errMsg');
+  const ep=(document.getElementById('ep').value.trim()||'http://localhost:8000').replace(/\/+$/,'');
+  const username=document.getElementById('uname').value.trim();
+  const password=document.getElementById('pass').value;
+  errEl.style.display='none';
+  if(!username||!password){errEl.textContent='Username and password are required.';errEl.style.display='block';return}
+  btn.disabled=true;btn.textContent='Signing in…';
+  try{
+    const res=await fetch(`${ep}/auth/login`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username,password})
+    });
+    const data=await res.json();
+    if(!res.ok){errEl.textContent=data.detail||'Login failed';errEl.style.display='block';return}
+    localStorage.setItem('ts_ep',ep);
+    localStorage.setItem('ts_jwt',data.access_token);
+    localStorage.setItem('ts_username',data.username);
+    localStorage.setItem('ts_role',data.role);
+    window.location.href='/ui/dashboard.html';
+  }catch(e){
+    errEl.textContent='Could not connect. Check the Server URL.';
+    errEl.style.display='block';
+  }finally{
+    btn.disabled=false;btn.textContent='Sign in';
+  }
+}
+document.getElementById('pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+window.addEventListener('DOMContentLoaded',load);
+</script>
+</body>
+</html>
