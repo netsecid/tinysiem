@@ -70,7 +70,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 const TH=document.documentElement;
 const S={navCollapsed:false,theme:'dark',jwt:'',ep:''};
 function parseJwt(token){try{const b64=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
-function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role')}
+function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role');localStorage.removeItem('ts_key')}
 function logout(){clearAuth();window.location.href='/ui/login.html'}
 function updateNavUser(){const el=document.getElementById('navUser');const name=localStorage.getItem('ts_username')||'';const role=localStorage.getItem('ts_role')||'';if(el) el.textContent=name+(role?' · '+role:'')}
 function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}

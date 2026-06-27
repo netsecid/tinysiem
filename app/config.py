@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     tinysiem_chroma_path: str = "/app/data/chroma_store"
     tinysiem_alerts_path: str = "/app/data/alerts/alerts.log"
     tinysiem_alert_max_mb: int = 50
-    tinysiem_jwt_secret: str = "dev-jwt-secret-change-in-production"
+    tinysiem_jwt_secret: str
     tinysiem_jwt_expiry_hours: int = 24
     tinysiem_superadmin_password: str = "admin"
 

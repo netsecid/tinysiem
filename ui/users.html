@@ -142,7 +142,7 @@ const S={navCollapsed:false,theme:'dark',jwt:'',ep:'',role:''};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function parseJwt(t){try{const b64=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
-function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role')}
+function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role');localStorage.removeItem('ts_key')}
 function logout(){clearAuth();window.location.href='/ui/login.html'}
 function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
 function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}

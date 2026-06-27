@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Current State: v0.3
 
@@ -14,14 +14,17 @@ Backend is fully implemented. Events UI (v0.2) and Alerts UI (v0.3) are both wor
 # Full rebuild (required after any Python/Dockerfile change)
 docker-compose up --build
 
-# Restart only (safe after UI-only changes — ui/ is a volume mount)
+# Restart only (safe after ui/ HTML-only changes — ui/ is a volume mount)
 docker-compose restart tinysiem
 
 # Seed test data (Python stdlib, no pip install needed)
 python scripts/ingest_test_logs.py 500
 
-# Run tests
+# Run all tests
 pytest app/tests/
+
+# Run a single test
+pytest app/tests/test_ingest.py::test_ingest_raw_returns_200
 
 # Health check
 curl http://localhost:8000/health
@@ -70,102 +73,26 @@ storage/
 rules/           → YAML rule loader + threshold/field_match evaluator
 ```
 
-### Key duckdb_store functions
-- `_build_where(**kwargs)` → shared WHERE clause builder used by all query functions
-- `query_events(limit, offset, source, source_ip, status_code, status_min, status_max, method, uri, q, start, end)` → paginated events
-- `get_event_facets(same kwargs as query_events)` → returns `{source, method, status_class, source_ip}` value/count lists for the sidebar
-- `get_event_histogram(start, end, buckets)` → time-bucketed counts for Chart.js sparkline
+### Key duckdb_store details
+- Single global `_conn` protected by `threading.Lock()` (`_lock`) — all queries must hold `_lock`
+- `_build_where(**kwargs)` → shared parameterized WHERE clause builder used by all query functions
+- `count_events_in_window(field, value, window_seconds)` enforces `_ALLOWED_FIELDS` allowlist before constructing the query — add new threshold-queryable fields there
+- DuckDB TIMESTAMP stores no timezone. All datetimes are stripped of tzinfo before insert. `_build_where` handles tz-aware datetime params by converting to naive UTC
 
 ### Events API endpoints
 | Endpoint | Notes |
 |---|---|
-| `GET /events` | Supports: source, source_ip, status_code, status_min, status_max, method, uri, q, start, end, limit, offset |
-| `GET /events/facets` | Same filter params as /events; returns dynamic sidebar data |
+| `GET /events` | source, source_ip, status_code, status_min, status_max, method, uri, q, start, end, limit, offset |
+| `GET /events/facets` | Same filter params as /events; returns `{source, method, status_class, source_ip}` value/count lists |
 | `GET /events/histogram` | start, end, buckets (10–200) |
 
 ### Alerts API endpoints
 | Endpoint | Notes |
 |---|---|
 | `GET /alerts` | Reads JSONL from `TINYSIEM_ALERTS_PATH`; filters: severity, rule_name, source_ip, q, start, end, limit, offset; sorted newest-first |
-| `GET /alerts/facets` | Reads full alerts file; returns `{severity: [...], rule_name: [...]}` counts for sidebar |
+| `GET /alerts/facets` | Reads full alerts file; returns `{severity: [...], rule_name: [...]}` counts |
 
 Alert record fields (JSONL): `alert_id`, `triggered_at` (ISO), `rule_name`, `severity`, `mitre_tactic`, `mitre_technique`, `event_id`, `source_ip`, `summary`
-
----
-
-## UI Pages
-
-Both are single self-contained HTML files. No build step, no framework. Vanilla JS + CSS. IBM Plex Sans + IBM Plex Mono from Google Fonts.
-
-### `ui/events.html` — Events / Live Log Stream
-```
-NAV (TinySIEM logo → events | Events (active) | Alerts | theme | settings)
-TOP AREA
-  search bar (field:value syntax + free text)
-  active filter chips strip
-  histogram (collapsible, Chart.js bar)
-BODY (flex row)
-  SIDEBAR (232px)
-    dynamic facet groups: Source | Status | Method | Source IP
-    each value: dot + label + count + proportion bar; click to filter
-  MAIN PANEL
-    controls bar (limit select | Refresh | Export CSV | result count | pagination)
-    events table (sticky header, expandable rows, raw modal)
-```
-
-### `ui/alerts.html` — Alerts
-```
-NAV (TinySIEM logo → events | Events | Alerts (active) | theme | settings)
-TOP AREA
-  search bar (free text)
-  active filter chips strip
-BODY (flex row)
-  SIDEBAR (232px)
-    Severity facet (critical/high/medium/low) with colored dots + proportion bars
-    Rule Name facet (top 20 rules by alert count)
-  MAIN PANEL
-    controls bar (limit select | Refresh | Export CSV | result count | pagination)
-    alerts table (triggered time | rule name | severity badge | source IP | MITRE tactic | technique | summary)
-    expandable rows with all fields
-    full detail modal (all fields + Copy as JSON)
-```
-
-### JS state object `S`
-```js
-S = {
-  ep, key,                    // API endpoint + key (localStorage)
-  tv, cs, ce,                 // time value (e.g. '1h') + custom start/end ISO
-  fq, q,                      // text-search parsed filters + free text
-  af,                         // active facet filters {source, method, status_class, source_ip}
-  limit, offset, total, page, // pagination
-  live, liveT, latest,        // live mode toggle + interval + latest ingested_at seen
-  events, hc, rawEv, histOpen // loaded events, Chart instance, raw modal event, histogram state
-}
-```
-
-### Search syntax (parsed client-side)
-- `ip:1.2.3.4` or `source_ip:` → source_ip filter
-- `source:nginx` → source filter
-- `status:404` or `status_code:` → status_code filter
-- `method:GET` → method filter
-- `uri:/api` → uri filter
-- Everything else → `q` (full-text on raw line)
-
-### Facet filter → API param mapping
-- `af.source` → `source=`
-- `af.method` → `method=`
-- `af.source_ip` → `source_ip=`
-- `af.status_class` (e.g. `'4xx'`) → `status_min=400&status_max=499`
-
-### Theme
-- `data-theme="dark"` / `data-theme="light"` on `<html>` element
-- All colors via CSS custom properties in `:root` and `[data-theme="light"]`
-- Persisted in `localStorage` key `ts_theme`
-
-### Config persistence (localStorage)
-- `ts_ep` — API endpoint URL
-- `ts_key` — API key
-- `ts_theme` — dark/light
 
 ---
 
@@ -180,6 +107,18 @@ POST /ingest/raw
   → rule engine (evaluate all YAML rules for this source)
   → alert writer (JSONL append if rule triggers)
 ```
+
+Decoders and rules are loaded at startup into module-level lists (`_decoders`, `_rules`) via `decoder_engine.load_decoders()` and `rule_engine.load_rules()` in `main.py`'s lifespan.
+
+---
+
+## UI Pages
+
+Both are single self-contained HTML files — no build step, no framework. Vanilla JS + CSS. IBM Plex Sans + IBM Plex Mono from Google Fonts.
+
+All page state lives in a module-level `S` object. Theme (`dark`/`light`) is set as `data-theme` on `<html>` and persisted in `localStorage` (`ts_theme`). API endpoint and key are also persisted (`ts_ep`, `ts_key`).
+
+Search is parsed client-side: `field:value` tokens (`ip:`, `source:`, `status:`, `method:`, `uri:`) are mapped to API params; everything else becomes `q` (full-text on `raw`).
 
 ---
 
@@ -204,8 +143,6 @@ CREATE TABLE events (
 -- Indexes: idx_ingested_at, idx_source_ip
 ```
 
-**Important:** DuckDB TIMESTAMP stores no timezone. All datetimes are stripped of tzinfo before insert. API params that are tz-aware datetimes must be converted to naive UTC in `_build_where()`.
-
 ---
 
 ## Decoder YAML format
@@ -214,16 +151,11 @@ CREATE TABLE events (
 name: nginx_access
 source: nginx
 type: regex          # regex | json | kv
-pattern: '^(?P<remote_addr>\S+) \S+ \S+ \[(?P<time_local>[^\]]+)\] "(?P<request_method>\S+) (?P<request_uri>\S+) \S+" (?P<status>\d+) (?P<body_bytes_sent>\d+|-) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+pattern: '^(?P<remote_addr>\S+)...'
 fields:
   source_ip: remote_addr
   method: request_method
-  uri: request_uri
-  status_code: status
-  response_size: body_bytes_sent
-  user_agent: http_user_agent
-  referer: http_referer
-  timestamp: time_local
+  # ... maps normalized field names to capture group names
 timestamp_field: timestamp
 timestamp_format: '%d/%b/%Y:%H:%M:%S %z'
 ```
@@ -238,7 +170,7 @@ condition:
   type: threshold    # threshold | field_match
   field: status_code
   value: 404
-  operator: eq
+  operator: eq       # eq | neq | gt | gte | lt | lte | contains
   threshold_count: 10
   window_seconds: 60
 mitre_tactic: "Discovery"
@@ -247,28 +179,43 @@ mitre_technique: "T1595"
 
 ---
 
+## Testing
+
+`pytest.ini` sets `asyncio_mode = auto` — all test functions can be `async` without extra decorators.
+
+`conftest.py` must run before any app module is imported. It:
+1. Sets `TINYSIEM_*` env vars pointing to temp dirs
+2. Stubs `chromadb` in `sys.modules` before any import resolves it
+3. Provides `client` (session-scoped `AsyncClient` via ASGI transport) and `auth_headers` fixtures
+
+Do not import `app.*` at module level in test files — conftest order dependency.
+
+---
+
 ## Security Constraints (Non-Negotiable)
 
 - All endpoints except `GET /health` require `Authorization: Bearer <TINYSIEM_API_KEY>`
 - FastAPI `/docs` and `/redoc` disabled unless `TINYSIEM_DEBUG=true`
 - Container runs as non-root `appuser`
-- nginx log volume mounted `:ro`
 - Decoder and rule YAML parsed with `yaml.safe_load()` — never `eval()`/`exec()`
 - All ingest payloads validated via Pydantic v2 (422 on malformed)
-- SQL queries use parameterized `?` placeholders throughout — no string interpolation of user values
-- CORS allows `*` origins (local tool, acceptable for v0.2)
+- SQL queries use parameterized `?` placeholders throughout — `count_events_in_window` uses `_ALLOWED_FIELDS` allowlist since field name is interpolated
+- CORS allows `*` origins (local tool, acceptable for this version)
 
 ---
 
 ## Environment Variables
 
 ```
-TINYSIEM_API_KEY       # required; long random string
-TINYSIEM_DEBUG         # false | true (enables /docs)
-TINYSIEM_DUCKDB_PATH   # /app/data/tinysiem.duckdb
-TINYSIEM_CHROMA_PATH   # /app/data/chroma_store
-TINYSIEM_ALERTS_PATH   # /app/data/alerts/alerts.log
-TINYSIEM_ALERT_MAX_MB  # 50
+TINYSIEM_API_KEY              # required; long random string (used by log shippers)
+TINYSIEM_DEBUG                # false | true (enables /docs)
+TINYSIEM_DUCKDB_PATH          # /app/data/tinysiem.duckdb
+TINYSIEM_CHROMA_PATH          # /app/data/chroma_store
+TINYSIEM_ALERTS_PATH          # /app/data/alerts/alerts.log
+TINYSIEM_ALERT_MAX_MB         # 50
+TINYSIEM_JWT_SECRET           # required; use a 64-char random string (no default — container won't start without it)
+TINYSIEM_JWT_EXPIRY_HOURS     # 24
+TINYSIEM_SUPERADMIN_PASSWORD  # initial superadmin password (only used when users table is empty); default: admin
 ```
 
 ---
