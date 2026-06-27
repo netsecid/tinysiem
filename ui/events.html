@@ -69,7 +69,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .live-dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5}
 .live-badge.on .live-dot{opacity:1;animation:pulse 1.4s infinite}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(.75)}}
-.nav-btn{margin-left:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
+.nav-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
 .nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
 
 .top-area{flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)}
@@ -507,7 +507,6 @@ const S={
 const TH=document.documentElement;
 function applyTheme(t){
   TH.setAttribute('data-theme',t);
-  document.getElementById('themeBtn').textContent=t==='dark'?'🌙':'☀️';
   localStorage.setItem('ts_theme',t);
 }
 function toggleTheme(){applyTheme(TH.getAttribute('data-theme')==='dark'?'light':'dark')}

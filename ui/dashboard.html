@@ -411,8 +411,8 @@ async function fetchAlertFeed() {
   const tbody = document.getElementById('alertFeed');
   try {
     const [crit, high] = await Promise.all([
-      api('/alerts?severity=critical&limit=5'),
-      api('/alerts?severity=high&limit=5'),
+      api('/alerts?severity=critical&limit=5&start=' + encodeURIComponent(since24h())),
+      api('/alerts?severity=high&limit=5&start=' + encodeURIComponent(since24h())),
     ]);
     const alerts = [...(crit.alerts || []), ...(high.alerts || [])]
       .sort((a, b) => b.triggered_at.localeCompare(a.triggered_at))
@@ -470,6 +470,7 @@ function load() {
   if (window.innerWidth < 768) S.navCollapsed = true;
   TH.setAttribute('data-theme', S.theme);
   applyNav();
+  if (!S.key) { openSettings(); return; }
   fetchAll();
 }
 

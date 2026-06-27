@@ -57,7 +57,7 @@ app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 
 @app.get("/", include_in_schema=False)
 def root():
-    return RedirectResponse(url="/ui/events.html")
+    return RedirectResponse(url="/ui/dashboard.html")
 
 
 @app.get("/health")
