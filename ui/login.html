@@ -65,7 +65,7 @@ input:focus{border-color:var(--accent)}
 <script>
 const TH = document.documentElement;
 function toggleTheme(){const t=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',t);localStorage.setItem('ts_theme',t)}
-function parseJwt(token){try{return JSON.parse(atob(token.split('.')[1]))}catch{return null}}
+function parseJwt(token){try{const b64=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
 function load(){
   TH.setAttribute('data-theme', localStorage.getItem('ts_theme')||'dark');
   document.getElementById('ep').value = localStorage.getItem('ts_ep')||'http://localhost:8000';
