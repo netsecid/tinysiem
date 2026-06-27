@@ -6,11 +6,13 @@
 <title>TinySIEM — Events</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/shared.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js" integrity="sha512-SIMGYRUjwY8+gKg7nn9EItdD8LCADSDfJNutF9TPrvEo86sQmFMh6MyralfIyhADlajSxqc7G0gs7+MwWF/ogQ==" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
 :root{
+  --radius: 6px;
   --bg:#0d0e17;
   --surface:#12131f;
   --surface2:#191a2d;
@@ -62,13 +64,6 @@
 
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
 
-/* ── NAV ── */
-.nav{display:flex;align-items:center;height:44px;background:var(--surface);border-bottom:1px solid var(--border);padding:0 14px;flex-shrink:0}
-.nav-logo{display:flex;align-items:center;gap:7px;font-weight:600;font-size:14px;color:var(--text);margin-right:16px;letter-spacing:-.3px;text-decoration:none}
-.nav-item{padding:0 11px;height:44px;display:flex;align-items:center;font-size:13px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;user-select:none;transition:color .15s;text-decoration:none}
-.nav-item:hover{color:var(--text)}
-.nav-item.active{color:var(--accent);border-bottom-color:var(--accent)}
-.nav-space{flex:1}
 .live-badge{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:4px;background:var(--surface3);border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:.04em;transition:all .15s;user-select:none}
 .live-badge.on{background:var(--green-dim);border-color:var(--green);color:var(--green)}
 .live-dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5}
@@ -77,8 +72,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .nav-btn{margin-left:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
 .nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
 
-/* ── APP LAYOUT ── */
-.app{display:flex;flex-direction:column;height:100vh}
 .top-area{flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)}
 .body-area{flex:1;display:flex;overflow:hidden}
 
@@ -193,7 +186,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .table-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 table{width:100%;border-collapse:collapse;table-layout:fixed}
 thead th{position:sticky;top:0;background:var(--surface2);color:var(--text-muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;z-index:2}
-tbody td{padding:4px 10px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+tbody td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
 .col-exp{width:24px}.col-time{width:150px}.col-src{width:72px}
 .col-ip{width:112px}.col-mth{width:60px}.col-uri{width:190px}
 .col-st{width:54px}.col-sz{width:62px}.col-raw{width:auto;min-width:160px}
@@ -270,35 +263,62 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
 </style>
 </head>
 <body>
-<div class="app">
+<div class="layout">
 
-<!-- NAV -->
-<nav class="nav">
-  <a class="nav-logo" href="/ui/events.html">
-    <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
-      <rect width="18" height="18" rx="4" fill="#4d9fff" opacity=".18"/>
-      <rect x="3" y="3" width="5" height="5" rx="1" fill="#4d9fff"/>
-      <rect x="10" y="3" width="5" height="2" rx="1" fill="#4d9fff" opacity=".55"/>
-      <rect x="10" y="7" width="3" height="1.2" rx=".6" fill="#4d9fff" opacity=".35"/>
-      <rect x="3" y="10" width="12" height="1.5" rx=".75" fill="#4d9fff" opacity=".45"/>
-      <rect x="3" y="13" width="8" height="1.5" rx=".75" fill="#4d9fff" opacity=".25"/>
-    </svg>
-    TinySIEM
-  </a>
-  <a class="nav-item active" href="/ui/events.html">Events</a>
-  <a class="nav-item" href="/ui/alerts.html">Alerts</a>
-  <div class="nav-space"></div>
-  <div class="live-badge" id="liveBadge" onclick="toggleLive()">
-    <span class="live-dot"></span>LIVE
+<!-- LEFT NAV -->
+<nav class="sidenav" id="sidenav">
+  <div class="sidenav-header">
+    <a href="/ui/dashboard.html" class="sidenav-logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span class="sidenav-logo-text">TinySIEM</span>
+    </a>
+    <button class="sidenav-collapse-btn" onclick="toggleNav()" title="Toggle sidebar">
+      <svg id="collapseIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
   </div>
-  <button class="nav-btn" id="themeBtn" title="Toggle theme" onclick="toggleTheme()">🌙</button>
-  <button class="nav-btn" title="Settings" onclick="openCfg()">
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" opacity=".75">
-      <path d="M7 9a2 2 0 100-4 2 2 0 000 4z"/>
-      <path fill-rule="evenodd" d="M5.67.5h2.66l.38 1.52a4.98 4.98 0 011.3.75l1.5-.5 1.33 2.3-1.14 1.07a5 5 0 010 1.72l1.14 1.07-1.33 2.3-1.5-.5a4.98 4.98 0 01-1.3.75L8.33 13.5H5.67l-.38-1.52a4.98 4.98 0 01-1.3-.75l-1.5.5L1.16 9.43l1.14-1.07a5 5 0 010-1.72L1.16 5.57l1.33-2.3 1.5.5a4.98 4.98 0 011.3-.75L5.67.5zM7 4.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z" clip-rule="evenodd"/>
-    </svg>
-  </button>
+  <ul class="sidenav-items">
+    <li><a href="/ui/dashboard.html" class="nav-link" title="Home">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span class="nav-link-label">Home</span>
+    </a></li>
+    <li><a href="/ui/events.html" class="nav-link active" title="Events">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      <span class="nav-link-label">Events</span>
+    </a></li>
+    <li><a href="/ui/alerts.html" class="nav-link" title="Alerts">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="nav-link-label">Alerts</span>
+    </a></li>
+    <li><a href="/ui/rules.html" class="nav-link" title="Rules">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span class="nav-link-label">Rules</span>
+    </a></li>
+    <li><a href="/ui/parsers.html" class="nav-link" title="Parsers">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      <span class="nav-link-label">Parsers</span>
+    </a></li>
+    <li><a href="/ui/configuration.html" class="nav-link" title="Configuration">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      <span class="nav-link-label">Configuration</span>
+    </a></li>
+  </ul>
+  <div class="sidenav-footer">
+    <button class="nav-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">&#x25D1;</button>
+    <span class="sidenav-user">v0.4</span>
+  </div>
 </nav>
+
+<!-- MAIN WRAP -->
+<div class="main-wrap">
+  <div class="topbar">
+    <span class="topbar-title">Events</span>
+    <div class="topbar-right">
+      <div class="live-badge" id="liveBadge" onclick="toggleLive()">
+        <span class="live-dot"></span>LIVE
+      </div>
+      <button class="nav-btn" onclick="openCfg()" title="Settings">&#9881;</button>
+    </div>
+  </div>
 
 <!-- TOP AREA: search + histogram -->
 <div class="top-area">
@@ -418,6 +438,8 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
     </div>
   </div><!-- /main-panel -->
 </div><!-- /body-area -->
+  </div><!-- /.main-wrap -->
+</div><!-- /.layout -->
 
 <!-- RAW MODAL -->
 <div class="modal-bg" id="rawModal" onclick="onRawBg(event)">
@@ -478,6 +500,7 @@ const S={
   live:false, liveT:null, latest:null,
   events:[], hc:null, rawEv:null,
   histOpen:true,
+  navCollapsed: false,
 };
 
 // ── THEME ─────────────────────────────────────────────────────────────
@@ -488,6 +511,25 @@ function applyTheme(t){
   localStorage.setItem('ts_theme',t);
 }
 function toggleTheme(){applyTheme(TH.getAttribute('data-theme')==='dark'?'light':'dark')}
+
+// ── NAV COLLAPSE ──────────────────────────────────────────────────────
+function toggleNav() {
+  S.navCollapsed = !S.navCollapsed;
+  localStorage.setItem('ts_nav_collapsed', String(S.navCollapsed));
+  applyNav();
+}
+
+function applyNav() {
+  const nav = document.getElementById('sidenav');
+  const icon = document.getElementById('collapseIcon');
+  if (S.navCollapsed) {
+    nav.classList.add('collapsed');
+    icon.innerHTML = '<polyline points="9 18 15 12 9 6"/>';
+  } else {
+    nav.classList.remove('collapsed');
+    icon.innerHTML = '<polyline points="15 18 9 12 15 6"/>';
+  }
+}
 
 // ── HISTOGRAM TOGGLE ──────────────────────────────────────────────────
 function toggleHist(){
@@ -504,6 +546,9 @@ function loadCfg(){
   S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
   S.key=localStorage.getItem('ts_key')||'';
   applyTheme(localStorage.getItem('ts_theme')||'dark');
+  S.navCollapsed = localStorage.getItem('ts_nav_collapsed') === 'true';
+  if (window.innerWidth < 768) S.navCollapsed = true;
+  applyNav();
 }
 function saveCfg(){
   S.ep=document.getElementById('cfgEp').value.trim().replace(/\/$/,'');
