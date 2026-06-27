@@ -6,6 +6,12 @@ async def test_list_users_requires_superadmin(client, analyst_headers):
     assert res.status_code == 403
 
 
+async def test_list_users_requires_superadmin_not_admin(client, auth_headers):
+    # auth_headers uses the global API key which maps to role=admin
+    res = await client.get("/users", headers=auth_headers)
+    assert res.status_code == 403
+
+
 async def test_list_users_as_superadmin(client, superadmin_headers):
     res = await client.get("/users", headers=superadmin_headers)
     assert res.status_code == 200
@@ -76,10 +82,24 @@ async def test_delete_user(client, superadmin_headers):
 
 
 async def test_cannot_delete_last_superadmin(client, superadmin_headers):
-    # Find the admin user created by ensure_superadmin
+    # Create a fresh superadmin to use as our isolated test subject
+    create_res = await client.post(
+        "/users",
+        json={"username": "sole_sadmin_test", "password": "pass", "role": "superadmin"},
+        headers=superadmin_headers,
+    )
+    assert create_res.status_code == 201
+    new_id = create_res.json()["id"]
+
+    # Delete all other superadmins except our new one so it's the only one
     users_res = await client.get("/users", headers=superadmin_headers)
-    users = users_res.json()["users"]
-    admins = [u for u in users if u["role"] == "superadmin"]
-    if len(admins) == 1:
-        res = await client.delete(f"/users/{admins[0]['id']}", headers=superadmin_headers)
-        assert res.status_code == 409
+    other_superadmins = [
+        u for u in users_res.json()["users"]
+        if u["role"] == "superadmin" and u["id"] != new_id
+    ]
+    for u in other_superadmins:
+        await client.delete(f"/users/{u['id']}", headers=superadmin_headers)
+
+    # Now our new user should be the sole superadmin — deletion must be rejected
+    res = await client.delete(f"/users/{new_id}", headers=superadmin_headers)
+    assert res.status_code == 409
