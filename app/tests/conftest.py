@@ -14,6 +14,8 @@ os.environ["TINYSIEM_DUCKDB_PATH"] = _tmp + "/test.duckdb"
 os.environ["TINYSIEM_CHROMA_PATH"] = _tmp + "/chroma"
 os.environ["TINYSIEM_ALERTS_PATH"] = _tmp + "/alerts/alerts.log"
 os.environ["TINYSIEM_DEBUG"] = "false"
+os.environ["TINYSIEM_JWT_SECRET"] = "test-jwt-secret-for-tests"
+os.environ["TINYSIEM_SUPERADMIN_PASSWORD"] = "admin"
 
 # ── 2. Stub chromadb before any import resolves it ───────────────────────────
 _mock_collection = MagicMock()
@@ -34,6 +36,13 @@ from httpx import ASGITransport, AsyncClient
 
 TEST_KEY = "test-api-key"
 AUTH_HEADERS = {"Authorization": f"Bearer {TEST_KEY}"}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _init_db():
+    """Initialize DuckDB once per session so tests can use duckdb_store directly."""
+    from app.storage import duckdb_store
+    duckdb_store.init_db(os.environ["TINYSIEM_DUCKDB_PATH"])
 
 
 @pytest_asyncio.fixture(scope="session")

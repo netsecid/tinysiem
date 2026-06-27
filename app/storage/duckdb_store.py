@@ -1,6 +1,7 @@
 import json
 import logging
 import threading
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -43,6 +44,15 @@ def init_db(path: Optional[str] = None) -> None:
         """)
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_ingested_at ON events (ingested_at)")
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_source_ip ON events (source_ip)")
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id            VARCHAR PRIMARY KEY,
+                username      VARCHAR UNIQUE NOT NULL,
+                password_hash VARCHAR NOT NULL,
+                role          VARCHAR NOT NULL,
+                created_at    TIMESTAMP NOT NULL
+            )
+        """)
 
 
 def close_db() -> None:
@@ -279,3 +289,109 @@ def get_event_histogram(start: datetime, end: datetime, buckets: int = 60) -> li
         ).fetchall()
 
     return [{"ts": int(r[0]) * 1000, "count": r[1]} for r in rows]
+
+
+# ── User store ────────────────────────────────────────────────────────────────
+
+def _user_row_to_dict(row: tuple, include_hash: bool = False) -> dict:
+    base = {
+        "id": row[0],
+        "username": row[1],
+        "role": row[3],
+        "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
+    }
+    if include_hash:
+        base["password_hash"] = row[2]
+    return base
+
+
+def create_user(username: str, password_hash: str, role: str) -> dict:
+    user_id = str(uuid.uuid4())
+    now = datetime.utcnow()
+    with _lock:
+        _get_conn().execute(
+            "INSERT INTO users VALUES (?, ?, ?, ?, ?)",
+            [user_id, username, password_hash, role, now],
+        )
+    return {"id": user_id, "username": username, "role": role, "created_at": now.isoformat()}
+
+
+def get_user_by_username(username: str) -> dict | None:
+    with _lock:
+        row = _get_conn().execute(
+            "SELECT id, username, password_hash, role, created_at FROM users WHERE username = ?",
+            [username],
+        ).fetchone()
+    return _user_row_to_dict(row, include_hash=True) if row else None
+
+
+def get_user_by_id(user_id: str) -> dict | None:
+    with _lock:
+        row = _get_conn().execute(
+            "SELECT id, username, password_hash, role, created_at FROM users WHERE id = ?",
+            [user_id],
+        ).fetchone()
+    return _user_row_to_dict(row, include_hash=True) if row else None
+
+
+def list_users() -> list[dict]:
+    with _lock:
+        rows = _get_conn().execute(
+            "SELECT id, username, password_hash, role, created_at FROM users ORDER BY created_at"
+        ).fetchall()
+    return [_user_row_to_dict(r) for r in rows]
+
+
+def update_user(
+    user_id: str,
+    username: str = None,
+    password_hash: str = None,
+    role: str = None,
+) -> dict | None:
+    # Fetch full row first (includes password_hash and created_at raw value)
+    with _lock:
+        row = _get_conn().execute(
+            "SELECT id, username, password_hash, role, created_at FROM users WHERE id = ?",
+            [user_id],
+        ).fetchone()
+    if row is None:
+        return None
+    new_username = username if username is not None else row[1]
+    new_role = role if role is not None else row[3]
+    new_hash = password_hash if password_hash is not None else row[2]
+    created_at = row[4]
+    # DuckDB 1.1.x has an ART index bug that raises spurious duplicate-key errors
+    # on UPDATE for tables with primary keys; DELETE + INSERT is the safe workaround.
+    with _lock:
+        conn = _get_conn()
+        conn.execute("DELETE FROM users WHERE id=?", [user_id])
+        conn.execute(
+            "INSERT INTO users VALUES (?, ?, ?, ?, ?)",
+            [user_id, new_username, new_hash, new_role, created_at],
+        )
+    return get_user_by_id(user_id)
+
+
+def delete_user(user_id: str) -> bool:
+    if get_user_by_id(user_id) is None:
+        return False
+    with _lock:
+        _get_conn().execute("DELETE FROM users WHERE id=?", [user_id])
+    return True
+
+
+def count_superadmins() -> int:
+    with _lock:
+        result = _get_conn().execute(
+            "SELECT COUNT(*) FROM users WHERE role='superadmin'"
+        ).fetchone()
+    return result[0] if result else 0
+
+
+def ensure_superadmin(password_hash: str) -> None:
+    """Create 'admin' superadmin if no users exist yet."""
+    with _lock:
+        count = _get_conn().execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if count == 0:
+        create_user("admin", password_hash, "superadmin")
+        logger.info("Created initial superadmin user 'admin'")
