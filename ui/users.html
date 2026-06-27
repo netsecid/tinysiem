@@ -139,6 +139,8 @@ tr:hover td{background:var(--surface2)}
 const TH=document.documentElement;
 const S={navCollapsed:false,theme:'dark',jwt:'',ep:'',role:''};
 
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
 function parseJwt(t){try{return JSON.parse(atob(t.split('.')[1]))}catch{return null}}
 function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role')}
 function logout(){clearAuth();window.location.href='/ui/login.html'}
@@ -153,7 +155,10 @@ async function api(path,opts={}){
   return res;
 }
 
-function roleBadge(role){return `<span class="role-badge role-${role}">${role}</span>`}
+function roleBadge(role){return `<span class="role-badge role-${esc(role)}">${esc(role)}</span>`}
+
+function openEditModalFromBtn(btn){openEditModal(btn.dataset.id,btn.dataset.username,btn.dataset.role)}
+function deleteUserFromBtn(btn){deleteUser(btn.dataset.id,btn.dataset.username)}
 
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 function openAddModal(){document.getElementById('addUsername').value='';document.getElementById('addPassword').value='';document.getElementById('addRole').value='analyst';document.getElementById('addErr').style.display='none';document.getElementById('addModal').classList.add('open')}
@@ -209,12 +214,12 @@ async function loadUsers(){
   const data=await res.json();
   const users=data.users||[];
   const rows=users.map(u=>`<tr>
-    <td style="font-family:var(--mono)">${u.username}</td>
-    <td>${roleBadge(u.role)}</td>
-    <td style="font-family:var(--mono);color:var(--text-dim)">${(u.created_at||'').slice(0,10)}</td>
+    <td style="font-family:var(--mono)">${esc(u.username)}</td>
+    <td>${roleBadge(esc(u.role))}</td>
+    <td style="font-family:var(--mono);color:var(--text-dim)">${esc((u.created_at||'').slice(0,10))}</td>
     <td style="display:flex;gap:6px">
-      <button class="btn-sm" onclick="openEditModal('${u.id}','${u.username}','${u.role}')">Edit</button>
-      <button class="btn-sm btn-danger" onclick="deleteUser('${u.id}','${u.username}')">Delete</button>
+      <button class="btn-sm" data-id="${esc(u.id)}" data-username="${esc(u.username)}" data-role="${esc(u.role)}" onclick="openEditModalFromBtn(this)">Edit</button>
+      <button class="btn-sm btn-danger" data-id="${esc(u.id)}" data-username="${esc(u.username)}" onclick="deleteUserFromBtn(this)">Delete</button>
     </td>
   </tr>`).join('');
   content.innerHTML=`
