@@ -304,6 +304,7 @@ async function fetchStatCards(start) {
       api('/alerts?severity=critical&start=' + encodeURIComponent(start) + '&limit=1'),
       api('/alerts?severity=high&start='     + encodeURIComponent(start) + '&limit=1'),
     ]);
+    if(!evts || !alrts || !crit || !high) return;
     document.getElementById('valEvents').textContent   = fmtNum(evts.total);
     document.getElementById('valAlerts').textContent   = fmtNum(alrts.total);
     document.getElementById('valCritical').textContent = fmtNum(crit.total);
@@ -319,6 +320,7 @@ async function fetchSeverityPanel() {
   const el = document.getElementById('sevPanel');
   try {
     const d = await api('/alerts/facets');
+    if(!d) return;
     const sevs = d.severity || [];
     if (!sevs.length) { el.innerHTML = '<div class="empty-state">No alerts yet</div>'; return; }
     const max = Math.max(1, ...sevs.map(s => s.count));
@@ -340,6 +342,7 @@ async function fetchSeverityPanel() {
 async function fetchHistogram(start, end) {
   try {
     const d = await api('/events/histogram?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end) + '&buckets=48');
+    if(!d) return;
     renderHistogram(d);
   } catch(_) {}
 }
@@ -383,6 +386,7 @@ async function fetchAlertFeed() {
       api('/alerts?severity=critical&limit=5&start=' + encodeURIComponent(since24h())),
       api('/alerts?severity=high&limit=5&start=' + encodeURIComponent(since24h())),
     ]);
+    if(!crit || !high) return;
     const alerts = [...(crit.alerts || []), ...(high.alerts || [])]
       .sort((a, b) => b.triggered_at.localeCompare(a.triggered_at))
       .slice(0, 10);
@@ -407,6 +411,7 @@ async function fetchTopIPs() {
   const tbody = document.getElementById('topIPs');
   try {
     const d = await api('/events/facets');
+    if(!d) return;
     const ips = (d.source_ip || []).slice(0, 5);
     if (!ips.length) { tbody.innerHTML = `<tr><td colspan="2" class="empty-state">No data</td></tr>`; return; }
     tbody.innerHTML = ips.map(ip =>
@@ -421,6 +426,7 @@ async function fetchTopRules() {
   const tbody = document.getElementById('topRules');
   try {
     const d = await api('/alerts/facets');
+    if(!d) return;
     const rules = (d.rule_name || []).slice(0, 5);
     if (!rules.length) { tbody.innerHTML = `<tr><td colspan="2" class="empty-state">No data</td></tr>`; return; }
     tbody.innerHTML = rules.map(r =>
