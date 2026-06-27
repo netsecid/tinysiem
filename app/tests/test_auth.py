@@ -1,6 +1,7 @@
 import pytest
 from app.password import hash_password, verify_password
 from app.storage import duckdb_store
+from app.auth import create_token, decode_token, AuthUser
 
 
 def test_hash_and_verify():
@@ -62,3 +63,18 @@ def test_ensure_superadmin_only_runs_when_empty(client):
     duckdb_store.ensure_superadmin(hash_password("whatever"))
     after = duckdb_store.list_users()
     assert len(after) == len(before)
+
+
+def test_create_and_decode_token():
+    token = create_token("uid-1", "alice", "admin")
+    assert isinstance(token, str)
+    payload = decode_token(token)
+    assert payload is not None
+    assert payload["sub"] == "uid-1"
+    assert payload["username"] == "alice"
+    assert payload["role"] == "admin"
+
+
+def test_decode_invalid_token():
+    assert decode_token("not.a.token") is None
+    assert decode_token("") is None
