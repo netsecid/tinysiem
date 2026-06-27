@@ -1,0 +1,260 @@
+/* TinySIEM shared design tokens and nav component */
+
+/* ── SEVERITY TOKENS ── */
+:root {
+  --severity-critical: #ef4444;
+  --severity-high:     #f97316;
+  --severity-medium:   #eab308;
+  --severity-low:      #3b82f6;
+  --severity-critical-bg: rgba(239,68,68,.12);
+  --severity-high-bg:     rgba(249,115,22,.12);
+  --severity-medium-bg:   rgba(234,179,8,.12);
+  --severity-low-bg:      rgba(59,130,246,.12);
+
+  /* Nav dimensions */
+  --nav-w: 220px;
+  --nav-collapsed-w: 56px;
+  --radius: 6px;
+}
+
+/* ── LAYOUT ── */
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.main-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── LEFT NAV ── */
+.sidenav {
+  width: var(--nav-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+  overflow: hidden;
+}
+
+.sidenav.collapsed { width: var(--nav-collapsed-w); }
+
+.sidenav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 10px 14px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sidenav-logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  letter-spacing: -.3px;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidenav-logo-text {
+  opacity: 1;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.sidenav.collapsed .sidenav-logo-text { opacity: 0; width: 0; overflow: hidden; }
+
+.sidenav-collapse-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+
+.sidenav-collapse-btn:hover { color: var(--text); background: var(--surface3); }
+
+.sidenav-items {
+  list-style: none;
+  padding: 8px 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidenav-items::-webkit-scrollbar { width: 3px; }
+.sidenav-items::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin: 1px 8px;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-radius: var(--radius);
+  border-left: 2px solid transparent;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background .12s, color .12s;
+}
+
+.nav-link:hover { background: var(--surface3); color: var(--text); }
+
+.nav-link.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-left-color: var(--accent);
+}
+
+.nav-link svg { flex-shrink: 0; }
+
+.nav-link-label {
+  opacity: 1;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.sidenav.collapsed .nav-link { justify-content: center; margin: 1px 6px; padding: 8px; }
+.sidenav.collapsed .nav-link-label { opacity: 0; width: 0; overflow: hidden; }
+
+.sidenav-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sidenav-user {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 1;
+  transition: opacity 0.15s;
+}
+
+.sidenav.collapsed .sidenav-user { opacity: 0; width: 0; overflow: hidden; }
+
+/* ── TOPBAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  height: 44px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.topbar-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.topbar-search { flex: 1; }
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+
+.stat-card.critical { border-left-color: var(--severity-critical); }
+.stat-card.high     { border-left-color: var(--severity-high); }
+
+.stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1;
+}
+
+.stat-card.critical .stat-value { color: var(--severity-critical); }
+.stat-card.high .stat-value     { color: var(--severity-high); }
+
+/* ── SEVERITY BADGES ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+
+.badge.critical { background: var(--severity-critical-bg); color: var(--severity-critical); }
+.badge.high     { background: var(--severity-high-bg);     color: var(--severity-high); }
+.badge.medium   { background: var(--severity-medium-bg);   color: var(--severity-medium); }
+.badge.low      { background: var(--severity-low-bg);      color: var(--severity-low); }
+
+/* ── SEVERITY DOTS (for facet bars) ── */
+.dot-critical { background: var(--severity-critical) !important; }
+.dot-high     { background: var(--severity-high) !important; }
+.dot-medium   { background: var(--severity-medium) !important; }
+.dot-low      { background: var(--severity-low) !important; }
+
+/* ── RESPONSIVE: auto-collapse below 768px ── */
+@media (max-width: 768px) {
+  .sidenav { width: var(--nav-collapsed-w); }
+  .sidenav-logo-text,
+  .nav-link-label,
+  .sidenav-user { opacity: 0; width: 0; overflow: hidden; }
+  .sidenav .nav-link { justify-content: center; margin: 1px 6px; padding: 8px; }
+  .sidenav .sidenav-collapse-btn { display: none; }
+}
