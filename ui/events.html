@@ -249,17 +249,6 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
 .rm-btn:hover{color:var(--text);border-color:var(--accent)}
 .rm-btn.ok{color:var(--green);border-color:var(--green)}
 
-/* ── CFG MODAL ── */
-.cfg-modal{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:22px;width:400px;max-width:94vw}
-.cfg-modal h2{font-size:14px;font-weight:600;margin-bottom:2px}
-.cfg-modal p{color:var(--text-muted);font-size:12px;margin-bottom:16px}
-.fg{margin-bottom:12px}
-.fg label{display:block;font-size:10.5px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
-.fg input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12.5px;padding:6px 9px}
-.fg input:focus{outline:none;border-color:var(--accent)}
-.cfg-foot{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
-.btn-p{padding:6px 16px;background:var(--accent);border:none;border-radius:5px;color:#fff;font-size:13px;font-weight:500;cursor:pointer}
-.btn-s{padding:6px 16px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);font-size:13px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -304,7 +293,8 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
   </ul>
   <div class="sidenav-footer">
     <button class="nav-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">&#x25D1;</button>
-    <span class="sidenav-user">v0.4</span>
+    <span class="sidenav-user" id="navUser"></span>
+    <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">⏏</button>
   </div>
 </nav>
 
@@ -316,7 +306,6 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
       <div class="live-badge" id="liveBadge" onclick="toggleLive()">
         <span class="live-dot"></span>LIVE
       </div>
-      <button class="nav-btn" onclick="openCfg()" title="Settings">&#9881;</button>
     </div>
   </div>
 
@@ -466,33 +455,23 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
   </div>
 </div>
 
-<!-- CFG MODAL -->
-<div class="modal-bg" id="cfgModal" onclick="onCfgBg(event)">
-  <div class="cfg-modal">
-    <h2>Connect to TinySIEM</h2>
-    <p>Set your API endpoint and key to start streaming events.</p>
-    <div class="fg">
-      <label>API Endpoint</label>
-      <input type="text" id="cfgEp" value="http://localhost:8000">
-    </div>
-    <div class="fg">
-      <label>API Key</label>
-      <input type="password" id="cfgKey" placeholder="your-api-key"
-        onkeydown="if(event.key==='Enter')saveCfg()">
-    </div>
-    <div class="cfg-foot">
-      <button class="btn-s" onclick="closeCfg()">Cancel</button>
-      <button class="btn-p" onclick="saveCfg()">Connect</button>
-    </div>
-  </div>
-</div>
-
 <div class="overlay" id="overlay" onclick="closeTime()"></div>
 
 <script>
+// ── AUTH HELPERS ──────────────────────────────────────────────────────
+function parseJwt(token){try{const b64=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
+function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role')}
+function logout(){clearAuth();window.location.href='/ui/login.html'}
+function updateNavUser(){
+  const el=document.getElementById('navUser');
+  const name=localStorage.getItem('ts_username')||'';
+  const role=localStorage.getItem('ts_role')||'';
+  if(el) el.textContent=name+(role?' · '+role:'');
+}
+
 // ── STATE ──────────────────────────────────────────────────────────────
 const S={
-  ep:'http://localhost:8000', key:'',
+  ep:'http://localhost:8000', jwt:'',
   tv:'1h', cs:null, ce:null,           // time
   fq:{}, q:'',                          // text search filters
   af:{},                                // active facet filters {source, method, status_class, source_ip}
@@ -540,30 +519,6 @@ function toggleHist(){
     :'<svg width="11" height="11" viewBox="0 0 10 10" fill="none"><path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> Show histogram';
 }
 
-// ── CONFIG ────────────────────────────────────────────────────────────
-function loadCfg(){
-  S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
-  S.key=localStorage.getItem('ts_key')||'';
-  applyTheme(localStorage.getItem('ts_theme')||'dark');
-  S.navCollapsed = localStorage.getItem('ts_nav_collapsed') === 'true';
-  if (window.innerWidth < 768) S.navCollapsed = true;
-  applyNav();
-}
-function saveCfg(){
-  S.ep=document.getElementById('cfgEp').value.trim().replace(/\/$/,'');
-  S.key=document.getElementById('cfgKey').value.trim();
-  localStorage.setItem('ts_ep',S.ep);
-  localStorage.setItem('ts_key',S.key);
-  closeCfg();
-  boot();
-}
-function openCfg(){
-  document.getElementById('cfgEp').value=S.ep;
-  document.getElementById('cfgKey').value=S.key;
-  document.getElementById('cfgModal').classList.add('show');
-}
-function closeCfg(){document.getElementById('cfgModal').classList.remove('show')}
-function onCfgBg(e){if(e.target===e.currentTarget)closeCfg()}
 
 // ── TIME ──────────────────────────────────────────────────────────────
 const TLABELS={'15m':'Last 15 minutes','30m':'Last 30 minutes','1h':'Last 1 hour',
@@ -710,7 +665,7 @@ function buildSidebar(facets){
 }
 
 // ── API ───────────────────────────────────────────────────────────────
-function hdrs(){return{'Authorization':`Bearer ${S.key}`}}
+function hdrs(){return{'Authorization':`Bearer ${S.jwt}`}}
 function buildQS(extra={}){
   const tr=timeRange(),p=new URLSearchParams();
   // text search filters
@@ -741,6 +696,7 @@ function buildQS(extra={}){
 }
 async function get(path,qs){
   const r=await fetch(`${S.ep}${path}?${qs}`,{headers:hdrs()});
+  if(r.status===401){clearAuth();window.location.href='/ui/login.html';return null}
   if(!r.ok)throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
@@ -1024,10 +980,21 @@ function xtra(s){try{return JSON.parse(s||'{}')}catch{return{}}}
 function copyT(s){navigator.clipboard.writeText(s).catch(()=>{})}
 
 // ── INIT ──────────────────────────────────────────────────────────────
-loadCfg();
-if(!S.key){openCfg()}else{boot()}
+(function init(){
+  applyTheme(localStorage.getItem('ts_theme')||'dark');
+  S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';
+  if(window.innerWidth<768) S.navCollapsed=true;
+  applyNav();
+  S.jwt=localStorage.getItem('ts_jwt')||'';
+  S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
+  if(!S.jwt){window.location.href='/ui/login.html';return}
+  const _p=parseJwt(S.jwt);
+  if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  updateNavUser();
+  boot();
+})();
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeRaw();closeCfg();closeTime()}
+  if(e.key==='Escape'){closeRaw();closeTime()}
 });
 </script>
 </body>

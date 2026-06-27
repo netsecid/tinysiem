@@ -102,17 +102,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 
 .refresh-ts{font-family:var(--mono);font-size:11px;color:var(--text-muted)}
 
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center}
-.modal-overlay.show{display:flex}
-.modal{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:20px;min-width:320px;max-width:440px;width:100%}
-.modal h3{font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px}
-.modal label{display:block;font-size:11px;color:var(--text-muted);margin-bottom:3px}
-.modal input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;margin-bottom:10px}
-.modal input:focus{outline:none;border-color:var(--accent)}
-.modal-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
-.modal-btn{padding:5px 14px;border-radius:4px;font-size:12px;cursor:pointer;border:1px solid var(--border2);background:var(--surface3);color:var(--text)}
-.modal-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.modal-btn:hover{opacity:.85}
 </style>
 </head>
 <body>
@@ -156,7 +145,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
     </ul>
     <div class="sidenav-footer">
       <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">◑</button>
-      <span class="sidenav-user">v0.4</span>
+      <span class="sidenav-user" id="navUser"></span>
+      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">⏏</button>
     </div>
   </nav>
 
@@ -166,7 +156,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <div class="topbar-right">
         <span class="refresh-ts" id="refreshTs"></span>
         <button class="nav-btn" onclick="fetchAll()" title="Refresh">↻</button>
-        <button class="nav-btn" onclick="openSettings()" title="Settings">⚙</button>
       </div>
     </div>
 
@@ -236,23 +225,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   </div>
 </div>
 
-<div class="modal-overlay" id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
-  <div class="modal">
-    <h3>Settings</h3>
-    <label>API Endpoint</label>
-    <input type="text" id="settingsEp" placeholder="http://localhost:8000">
-    <label>API Key</label>
-    <input type="password" id="settingsKey" placeholder="Bearer token">
-    <div class="modal-btns">
-      <button class="modal-btn" onclick="closeSettings()">Cancel</button>
-      <button class="modal-btn primary" onclick="saveSettings()">Save</button>
-    </div>
-  </div>
-</div>
-
 <script>
 const TH = document.documentElement;
-const S = { ep: '', key: '', theme: 'dark', navCollapsed: false, hc: null };
+const S = { ep: '', jwt: '', theme: 'dark', navCollapsed: false, hc: null };
+
+function parseJwt(token){try{const b64=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
+function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role')}
+function logout(){clearAuth();window.location.href='/ui/login.html'}
+function updateNavUser(){
+  const el=document.getElementById('navUser');
+  const name=localStorage.getItem('ts_username')||'';
+  const role=localStorage.getItem('ts_role')||'';
+  if(el) el.textContent=name+(role?' · '+role:'');
+}
 
 function toggleNav() {
   S.navCollapsed = !S.navCollapsed;
@@ -278,25 +263,9 @@ function toggleTheme() {
   localStorage.setItem('ts_theme', S.theme);
 }
 
-function openSettings() {
-  document.getElementById('settingsEp').value = S.ep;
-  document.getElementById('settingsKey').value = S.key;
-  document.getElementById('settingsOverlay').classList.add('show');
-}
-function closeSettings() {
-  document.getElementById('settingsOverlay').classList.remove('show');
-}
-function saveSettings() {
-  S.ep = document.getElementById('settingsEp').value.trim().replace(/\/$/, '');
-  S.key = document.getElementById('settingsKey').value.trim();
-  localStorage.setItem('ts_ep', S.ep);
-  localStorage.setItem('ts_key', S.key);
-  closeSettings();
-  fetchAll();
-}
-
 async function api(path) {
-  const r = await fetch(S.ep + path, { headers: { 'Authorization': 'Bearer ' + S.key } });
+  const r = await fetch(S.ep + path, { headers: { 'Authorization': 'Bearer ' + S.jwt } });
+  if (r.status === 401) { clearAuth(); window.location.href = '/ui/login.html'; return null; }
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
@@ -463,14 +432,17 @@ async function fetchTopRules() {
 }
 
 function load() {
-  S.ep    = localStorage.getItem('ts_ep')    || 'http://localhost:8000';
-  S.key   = localStorage.getItem('ts_key')   || '';
   S.theme = localStorage.getItem('ts_theme') || 'dark';
   S.navCollapsed = localStorage.getItem('ts_nav_collapsed') === 'true';
   if (window.innerWidth < 768) S.navCollapsed = true;
   TH.setAttribute('data-theme', S.theme);
   applyNav();
-  if (!S.key) { openSettings(); return; }
+  S.jwt = localStorage.getItem('ts_jwt') || '';
+  S.ep  = localStorage.getItem('ts_ep')  || 'http://localhost:8000';
+  if (!S.jwt) { window.location.href = '/ui/login.html'; return; }
+  const _p = parseJwt(S.jwt);
+  if (!_p || _p.exp * 1000 < Date.now()) { clearAuth(); window.location.href = '/ui/login.html'; return; }
+  updateNavUser();
   fetchAll();
 }
 

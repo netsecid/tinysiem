@@ -207,17 +207,6 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
 .rm-btn:hover{color:var(--text);border-color:var(--accent)}
 .rm-btn.ok{color:var(--green);border-color:var(--green)}
 
-/* ── CFG MODAL ── */
-.cfg-modal{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:22px;width:400px;max-width:94vw}
-.cfg-modal h2{font-size:14px;font-weight:600;margin-bottom:2px}
-.cfg-modal p{color:var(--text-muted);font-size:12px;margin-bottom:16px}
-.fg{margin-bottom:12px}
-.fg label{display:block;font-size:10.5px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
-.fg input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12.5px;padding:6px 9px}
-.fg input:focus{outline:none;border-color:var(--accent)}
-.cfg-foot{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
-.btn-p{padding:6px 16px;background:var(--accent);border:none;border-radius:5px;color:#fff;font-size:13px;font-weight:500;cursor:pointer}
-.btn-s{padding:6px 16px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);font-size:13px;cursor:pointer}
 
 /* error state */
 .sb-error{padding:12px;font-size:11px;color:var(--red)}
@@ -264,16 +253,14 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
     </ul>
     <div class="sidenav-footer">
       <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">◑</button>
-      <span class="sidenav-user">v0.4</span>
+      <span class="sidenav-user" id="navUser"></span>
+      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">⏏</button>
     </div>
   </nav>
 
   <div class="main-wrap">
     <div class="topbar">
       <span class="topbar-title">Alerts</span>
-      <div class="topbar-right">
-        <button class="nav-btn" onclick="openCfg()" title="Settings">⚙</button>
-      </div>
     </div>
 
 <!-- TOP AREA -->
@@ -388,31 +375,21 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
   </div>
 </div>
 
-<!-- CFG MODAL -->
-<div class="modal-bg" id="cfgModal" onclick="onCfgBg(event)">
-  <div class="cfg-modal">
-    <h2>Connect to TinySIEM</h2>
-    <p>Set your API endpoint and key.</p>
-    <div class="fg">
-      <label>API Endpoint</label>
-      <input type="text" id="cfgEp" value="http://localhost:8000">
-    </div>
-    <div class="fg">
-      <label>API Key</label>
-      <input type="password" id="cfgKey" placeholder="your-api-key"
-        onkeydown="if(event.key==='Enter')saveCfg()">
-    </div>
-    <div class="cfg-foot">
-      <button class="btn-s" onclick="closeCfg()">Cancel</button>
-      <button class="btn-p" onclick="saveCfg()">Connect</button>
-    </div>
-  </div>
-</div>
-
 <script>
+// ── AUTH HELPERS ──────────────────────────────────────────────────────
+function parseJwt(token){try{const b64=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
+function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role')}
+function logout(){clearAuth();window.location.href='/ui/login.html'}
+function updateNavUser(){
+  const el=document.getElementById('navUser');
+  const name=localStorage.getItem('ts_username')||'';
+  const role=localStorage.getItem('ts_role')||'';
+  if(el) el.textContent=name+(role?' · '+role:'');
+}
+
 // ── STATE ──────────────────────────────────────────────────────────────
 const S={
-  ep:'http://localhost:8000', key:'',
+  ep:'http://localhost:8000', jwt:'',
   q:'',
   af:{},   // active facet filters {severity, rule_name}
   limit:100, offset:0, total:0, page:1,
@@ -453,9 +430,12 @@ function applyNav(){
   S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';
   if(window.innerWidth<768) S.navCollapsed=true;
   applyNav();
+  S.jwt=localStorage.getItem('ts_jwt')||'';
   S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
-  S.key=localStorage.getItem('ts_key')||'';
-  if(!S.key){openCfg();return;}
+  if(!S.jwt){window.location.href='/ui/login.html';return}
+  const _p=parseJwt(S.jwt);
+  if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  updateNavUser();
   fetchFacets();
   fetchAlerts();
 })();
@@ -487,14 +467,21 @@ function buildQS(){
   return p.toString();
 }
 
+// ── API ────────────────────────────────────────────────────────────────
+async function api(path){
+  const res=await fetch(S.ep+path,{headers:{Authorization:`Bearer ${S.jwt}`}});
+  if(res.status===401){clearAuth();window.location.href='/ui/login.html';return null}
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 // ── FETCH ALERTS ───────────────────────────────────────────────────────
 async function fetchAlerts(){
   const tbody=document.getElementById('tbody');
   tbody.innerHTML='<tr class="empty-row"><td colspan="8"><span class="spinner"></span>Loading…</td></tr>';
   try{
-    const r=await fetch(`${S.ep}/alerts?${buildQS()}`,{headers:{Authorization:`Bearer ${S.key}`}});
-    if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-    const d=await r.json();
+    const d=await api(`/alerts?${buildQS()}`);
+    if(!d) return;
     S.total=d.total; S.alerts=d.alerts;
     renderTable(d.alerts);
     updatePager();
@@ -507,9 +494,8 @@ async function fetchAlerts(){
 // ── FETCH FACETS ───────────────────────────────────────────────────────
 async function fetchFacets(){
   try{
-    const r=await fetch(`${S.ep}/alerts/facets`,{headers:{Authorization:`Bearer ${S.key}`}});
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d=await r.json();
+    const d=await api('/alerts/facets');
+    if(!d) return;
     buildSidebar(d);
   }catch(e){
     document.getElementById('sidebarContent').innerHTML=
@@ -729,24 +715,6 @@ function exportCSV(){
   URL.revokeObjectURL(url);
 }
 
-// ── CFG MODAL ──────────────────────────────────────────────────────────
-function openCfg(){
-  document.getElementById('cfgEp').value=S.ep;
-  document.getElementById('cfgKey').value=S.key;
-  document.getElementById('cfgModal').classList.add('show');
-}
-function closeCfg(){document.getElementById('cfgModal').classList.remove('show')}
-function onCfgBg(e){if(e.target.id==='cfgModal') closeCfg()}
-function saveCfg(){
-  S.ep=document.getElementById('cfgEp').value.replace(/\/+$/,'');
-  S.key=document.getElementById('cfgKey').value.trim();
-  localStorage.setItem('ts_ep',S.ep);
-  localStorage.setItem('ts_key',S.key);
-  closeCfg();
-  fetchFacets();
-  fetchAlerts();
-}
-
 // ── UTILS ──────────────────────────────────────────────────────────────
 function esc(s){
   if(s==null) return '';
@@ -764,7 +732,7 @@ function fmtTime(ts){
 
 // keyboard shortcuts
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeDetail();closeCfg();}
+  if(e.key==='Escape') closeDetail();
 });
 </script>
 </body>

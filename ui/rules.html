@@ -51,7 +51,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
     </ul>
     <div class="sidenav-footer">
       <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">◑</button>
-      <span class="sidenav-user">v0.4</span>
+      <span class="sidenav-user" id="navUser"></span>
+      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">⏏</button>
     </div>
   </nav>
   <div class="main-wrap">
@@ -67,11 +68,27 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 </div>
 <script>
 const TH=document.documentElement;
-const S={navCollapsed:false,theme:'dark'};
+const S={navCollapsed:false,theme:'dark',jwt:'',ep:''};
+function parseJwt(token){try{const b64=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
+function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role')}
+function logout(){clearAuth();window.location.href='/ui/login.html'}
+function updateNavUser(){const el=document.getElementById('navUser');const name=localStorage.getItem('ts_username')||'';const role=localStorage.getItem('ts_role')||'';if(el) el.textContent=name+(role?' · '+role:'')}
 function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
 function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}
 function toggleTheme(){S.theme=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',S.theme);localStorage.setItem('ts_theme',S.theme)}
-function load(){S.theme=localStorage.getItem('ts_theme')||'dark';S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';if(window.innerWidth<768)S.navCollapsed=true;TH.setAttribute('data-theme',S.theme);applyNav()}
+function load(){
+  S.theme=localStorage.getItem('ts_theme')||'dark';
+  S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';
+  if(window.innerWidth<768)S.navCollapsed=true;
+  TH.setAttribute('data-theme',S.theme);
+  applyNav();
+  S.jwt=localStorage.getItem('ts_jwt')||'';
+  S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
+  if(!S.jwt){window.location.href='/ui/login.html';return}
+  const _p=parseJwt(S.jwt);
+  if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  updateNavUser();
+}
 window.addEventListener('DOMContentLoaded',load);
 </script>
 </body>
