@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TinySIEM — Users</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0e17;--surface:#12131f;--surface2:#191a2d;--surface3:#1f2138;
+  --border:#252840;--border2:#323560;--text:#cdd0eb;--text-dim:#7b7fa8;
+  --text-muted:#454870;--accent:#4d9fff;--accent-dim:#0d2a50;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+[data-theme="light"]{
+  --bg:#f0f2f8;--surface:#ffffff;--surface2:#f5f7fc;--surface3:#eaecf5;
+  --border:#dde0f0;--border2:#c0c6e0;--text:#1a1c2e;--text-dim:#4a4f6a;
+  --text-muted:#9096b8;--accent:#2979ff;--accent-dim:#e3ecff;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
+.nav-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
+.nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
+.content{flex:1;overflow-y:auto;padding:20px 24px}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.page-title{font-size:15px;font-weight:600}
+.btn-primary{padding:7px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-primary:hover{opacity:.85}
+.btn-sm{padding:4px 10px;background:none;border:1px solid var(--border2);border-radius:3px;font-size:11px;color:var(--text-dim);cursor:pointer}
+.btn-sm:hover{color:var(--text);background:var(--surface3)}
+.btn-danger{border-color:#ef4444;color:#ef4444}
+.btn-danger:hover{background:rgba(239,68,68,.1)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);padding:8px 12px;border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface2)}
+.role-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.role-superadmin{background:rgba(77,159,255,.15);color:#4d9fff}
+.role-admin{background:rgba(234,179,8,.12);color:#eab308}
+.role-analyst{background:rgba(59,130,246,.12);color:#3b82f6}
+.access-denied{display:flex;flex-direction:column;align-items:center;justify-content:center;height:60%;gap:10px;color:var(--text-muted)}
+/* Modal */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100;display:none}
+.modal-backdrop.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:24px 28px;width:360px;max-width:90vw}
+.modal-title{font-size:14px;font-weight:600;margin-bottom:18px}
+.modal-field{margin-bottom:12px}
+.modal-field label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:4px}
+.modal-field input,.modal-field select{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:7px 9px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none}
+.modal-field input:focus,.modal-field select:focus{border-color:var(--accent)}
+.modal-field select option{background:var(--surface)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.modal-err{color:#ef4444;font-size:11px;margin-top:8px;display:none}
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidenav" id="sidenav">
+    <div class="sidenav-header">
+      <a href="/ui/dashboard.html" class="sidenav-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span class="sidenav-logo-text">TinySIEM</span>
+      </a>
+      <button class="sidenav-collapse-btn" onclick="toggleNav()" title="Toggle sidebar">
+        <svg id="collapseIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+    <ul class="sidenav-items">
+      <li><a href="/ui/dashboard.html" class="nav-link" title="Home"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span class="nav-link-label">Home</span></a></li>
+      <li><a href="/ui/events.html" class="nav-link" title="Events"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span class="nav-link-label">Events</span></a></li>
+      <li><a href="/ui/alerts.html" class="nav-link" title="Alerts"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="nav-link-label">Alerts</span></a></li>
+      <li><a href="/ui/rules.html" class="nav-link" title="Rules"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span class="nav-link-label">Rules</span></a></li>
+      <li><a href="/ui/parsers.html" class="nav-link" title="Parsers"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span class="nav-link-label">Parsers</span></a></li>
+      <li><a href="/ui/configuration.html" class="nav-link" title="Configuration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg><span class="nav-link-label">Configuration</span></a></li>
+    </ul>
+    <div class="sidenav-footer">
+      <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">◑</button>
+      <span class="sidenav-user" id="navUser"></span>
+      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">⏏</button>
+    </div>
+  </nav>
+  <div class="main-wrap">
+    <div class="topbar">
+      <span class="topbar-title">Users</span>
+    </div>
+    <div class="content" id="content">
+      <!-- populated by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-backdrop" id="addModal">
+  <div class="modal">
+    <div class="modal-title">Add User</div>
+    <div class="modal-field"><label>Username</label><input type="text" id="addUsername" autocomplete="off"></div>
+    <div class="modal-field"><label>Password</label><input type="password" id="addPassword" autocomplete="new-password"></div>
+    <div class="modal-field"><label>Role</label>
+      <select id="addRole">
+        <option value="analyst">analyst</option>
+        <option value="admin">admin</option>
+        <option value="superadmin">superadmin</option>
+      </select>
+    </div>
+    <div class="modal-err" id="addErr"></div>
+    <div class="modal-actions">
+      <button class="btn-sm" onclick="closeModal('addModal')">Cancel</button>
+      <button class="btn-primary" onclick="submitAdd()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-backdrop" id="editModal">
+  <div class="modal">
+    <div class="modal-title">Edit User</div>
+    <input type="hidden" id="editId">
+    <div class="modal-field"><label>Username</label><input type="text" id="editUsername" autocomplete="off"></div>
+    <div class="modal-field"><label>New Password <span style="font-weight:400;text-transform:none">(leave blank to keep)</span></label><input type="password" id="editPassword" autocomplete="new-password"></div>
+    <div class="modal-field"><label>Role</label>
+      <select id="editRole">
+        <option value="analyst">analyst</option>
+        <option value="admin">admin</option>
+        <option value="superadmin">superadmin</option>
+      </select>
+    </div>
+    <div class="modal-err" id="editErr"></div>
+    <div class="modal-actions">
+      <button class="btn-sm" onclick="closeModal('editModal')">Cancel</button>
+      <button class="btn-primary" onclick="submitEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TH=document.documentElement;
+const S={navCollapsed:false,theme:'dark',jwt:'',ep:'',role:''};
+
+function parseJwt(t){try{return JSON.parse(atob(t.split('.')[1]))}catch{return null}}
+function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role')}
+function logout(){clearAuth();window.location.href='/ui/login.html'}
+function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
+function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}
+function toggleTheme(){S.theme=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',S.theme);localStorage.setItem('ts_theme',S.theme)}
+function updateNavUser(){const el=document.getElementById('navUser');const name=localStorage.getItem('ts_username')||'';const role=localStorage.getItem('ts_role')||'';if(el)el.textContent=name+(role?' · '+role:'')}
+
+async function api(path,opts={}){
+  const res=await fetch(S.ep+path,{...opts,headers:{...opts.headers,'Authorization':'Bearer '+S.jwt}});
+  if(res.status===401){clearAuth();window.location.href='/ui/login.html';return null}
+  return res;
+}
+
+function roleBadge(role){return `<span class="role-badge role-${role}">${role}</span>`}
+
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+function openAddModal(){document.getElementById('addUsername').value='';document.getElementById('addPassword').value='';document.getElementById('addRole').value='analyst';document.getElementById('addErr').style.display='none';document.getElementById('addModal').classList.add('open')}
+function openEditModal(id,username,role){document.getElementById('editId').value=id;document.getElementById('editUsername').value=username;document.getElementById('editPassword').value='';document.getElementById('editRole').value=role;document.getElementById('editErr').style.display='none';document.getElementById('editModal').classList.add('open')}
+
+async function submitAdd(){
+  const username=document.getElementById('addUsername').value.trim();
+  const password=document.getElementById('addPassword').value;
+  const role=document.getElementById('addRole').value;
+  const errEl=document.getElementById('addErr');
+  errEl.style.display='none';
+  if(!username||!password){errEl.textContent='Username and password are required.';errEl.style.display='block';return}
+  const res=await api('/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,role})});
+  if(!res)return;
+  if(!res.ok){const d=await res.json();errEl.textContent=d.detail||'Error';errEl.style.display='block';return}
+  closeModal('addModal');
+  loadUsers();
+}
+
+async function submitEdit(){
+  const id=document.getElementById('editId').value;
+  const username=document.getElementById('editUsername').value.trim()||undefined;
+  const password=document.getElementById('editPassword').value||undefined;
+  const role=document.getElementById('editRole').value;
+  const errEl=document.getElementById('editErr');
+  errEl.style.display='none';
+  const body={role};
+  if(username)body.username=username;
+  if(password)body.password=password;
+  const res=await api(`/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res)return;
+  if(!res.ok){const d=await res.json();errEl.textContent=d.detail||'Error';errEl.style.display='block';return}
+  closeModal('editModal');
+  loadUsers();
+}
+
+async function deleteUser(id,username){
+  if(!confirm(`Delete user "${username}"? This cannot be undone.`))return;
+  const res=await api(`/users/${id}`,{method:'DELETE'});
+  if(!res)return;
+  if(!res.ok){const d=await res.json();alert(d.detail||'Error');return}
+  loadUsers();
+}
+
+async function loadUsers(){
+  const content=document.getElementById('content');
+  if(S.role!=='superadmin'){
+    content.innerHTML='<div class="access-denied"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg><span>Superadmin access required to manage users.</span></div>';
+    return;
+  }
+  const res=await api('/users');
+  if(!res)return;
+  const data=await res.json();
+  const users=data.users||[];
+  const rows=users.map(u=>`<tr>
+    <td style="font-family:var(--mono)">${u.username}</td>
+    <td>${roleBadge(u.role)}</td>
+    <td style="font-family:var(--mono);color:var(--text-dim)">${(u.created_at||'').slice(0,10)}</td>
+    <td style="display:flex;gap:6px">
+      <button class="btn-sm" onclick="openEditModal('${u.id}','${u.username}','${u.role}')">Edit</button>
+      <button class="btn-sm btn-danger" onclick="deleteUser('${u.id}','${u.username}')">Delete</button>
+    </td>
+  </tr>`).join('');
+  content.innerHTML=`
+    <div class="page-header">
+      <span class="page-title">Users</span>
+      <button class="btn-primary" onclick="openAddModal()">+ Add User</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:24px">No users found.</td></tr>'}</tbody></table>
+    </div>`;
+}
+
+function load(){
+  S.theme=localStorage.getItem('ts_theme')||'dark';
+  S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';
+  S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
+  S.jwt=localStorage.getItem('ts_jwt')||'';
+  S.role=localStorage.getItem('ts_role')||'';
+  if(!S.jwt){window.location.href='/ui/login.html';return}
+  const p=parseJwt(S.jwt);
+  if(!p||p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  if(window.innerWidth<768)S.navCollapsed=true;
+  TH.setAttribute('data-theme',S.theme);
+  applyNav();
+  updateNavUser();
+  loadUsers();
+}
+window.addEventListener('DOMContentLoaded',load);
+</script>
+</body>
+</html>
