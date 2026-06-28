@@ -73,3 +73,8 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok", "version": settings.tinysiem_version}
+
+
+if settings.tinysiem_mcp_enabled:
+    from app.mcp_server.server import build_mcp_app
+    app.mount("/mcp", build_mcp_app())

@@ -11,6 +11,7 @@ python-multipart==0.0.12
 aiofiles==24.1.0
 pyyaml==6.0.2
 anthropic==0.40.0
+mcp[server]==1.0.0
 PyJWT==2.9.0
 passlib[bcrypt]==1.7.4
 structlog==24.4.0
