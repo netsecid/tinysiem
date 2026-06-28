@@ -1,0 +1,153 @@
+import re
+from pathlib import Path
+from typing import Optional
+
+import yaml
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel
+
+from app.auth import AuthUser, require_admin, require_analyst
+from app.decoder import engine as decoder_engine
+
+router = APIRouter(prefix="/parsers", tags=["parsers"])
+
+_DECODERS_DIR = Path(__file__).parent.parent / "decoder" / "decoders"
+_CUSTOM_DIR = _DECODERS_DIR / "custom"
+_REQUIRED_KEYS = {"name", "source", "type", "pattern", "fields"}
+_VALID_NAME = re.compile(r'^[a-z0-9][a-z0-9\-_]{0,63}$')
+
+
+def _check_name(name: str) -> None:
+    if not _VALID_NAME.match(name):
+        raise HTTPException(
+            status_code=422,
+            detail="Name must be lowercase alphanumeric, hyphens or underscores only",
+        )
+
+
+def _list_parser_files() -> list[tuple[Path, bool]]:
+    files = []
+    for p in sorted(_DECODERS_DIR.glob("*.yaml")):
+        files.append((p, False))
+    if _CUSTOM_DIR.exists():
+        for p in sorted(_CUSTOM_DIR.glob("*.yaml")):
+            files.append((p, True))
+    return files
+
+
+def _get_parser_file(name: str) -> tuple[Optional[Path], bool]:
+    custom = _CUSTOM_DIR / f"{name}.yaml"
+    if custom.exists():
+        return custom, True
+    builtin = _DECODERS_DIR / f"{name}.yaml"
+    if builtin.exists():
+        return builtin, False
+    return None, False
+
+
+def _validate_parser_yaml(yaml_text: str) -> dict:
+    try:
+        data = yaml.safe_load(yaml_text)
+    except yaml.YAMLError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid YAML: {exc}")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422, detail="YAML must be a mapping")
+    missing = _REQUIRED_KEYS - data.keys()
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Missing required keys: {', '.join(sorted(missing))}",
+        )
+    return data
+
+
+class ParserRequest(BaseModel):
+    name: str
+    yaml_text: str
+
+
+class TestRequest(BaseModel):
+    log_line: str
+
+
+@router.get("")
+def list_parsers(_: AuthUser = Depends(require_analyst)):
+    result = []
+    for path, is_custom in _list_parser_files():
+        try:
+            data = yaml.safe_load(path.read_text())
+            result.append({
+                "name": path.stem,
+                "source": data.get("source", ""),
+                "type": data.get("type", ""),
+                "is_custom": is_custom,
+            })
+        except Exception:
+            pass
+    return {"parsers": result}
+
+
+@router.post("", status_code=201)
+def create_parser(req: ParserRequest, _: AuthUser = Depends(require_admin)):
+    _check_name(req.name)
+    _validate_parser_yaml(req.yaml_text)
+    dest = _CUSTOM_DIR / f"{req.name}.yaml"
+    if dest.exists():
+        raise HTTPException(status_code=409, detail="Parser already exists")
+    _CUSTOM_DIR.mkdir(exist_ok=True)
+    dest.write_text(req.yaml_text)
+    decoder_engine.load_decoders()
+    return {"name": req.name, "status": "created"}
+
+
+@router.post("/{name}/test")
+def test_parser(name: str, req: TestRequest, _: AuthUser = Depends(require_analyst)):
+    _check_name(name)
+    path, _ = _get_parser_file(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Parser not found")
+    try:
+        decoder = yaml.safe_load(path.read_text())
+    except yaml.YAMLError as exc:
+        raise HTTPException(status_code=422, detail=f"Parser YAML invalid: {exc}")
+    event = decoder_engine.decode_with(decoder, req.log_line)
+    if event is None:
+        return {"matched": False, "fields": {}}
+    fields = {k: v for k, v in event.items() if k not in ("id", "ingested_at", "raw", "source")}
+    return {"matched": True, "fields": fields}
+
+
+@router.get("/{name}")
+def get_parser(name: str, _: AuthUser = Depends(require_analyst)):
+    _check_name(name)
+    path, _ = _get_parser_file(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Parser not found")
+    return {"name": name, "yaml_text": path.read_text()}
+
+
+@router.put("/{name}")
+def update_parser(name: str, req: ParserRequest, _: AuthUser = Depends(require_admin)):
+    _check_name(name)
+    path, is_custom = _get_parser_file(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Parser not found")
+    if not is_custom:
+        raise HTTPException(status_code=403, detail="Cannot modify built-in parsers")
+    _validate_parser_yaml(req.yaml_text)
+    path.write_text(req.yaml_text)
+    decoder_engine.load_decoders()
+    return {"name": name, "status": "updated"}
+
+
+@router.delete("/{name}", status_code=204)
+def delete_parser(name: str, _: AuthUser = Depends(require_admin)):
+    _check_name(name)
+    path, is_custom = _get_parser_file(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Parser not found")
+    if not is_custom:
+        raise HTTPException(status_code=403, detail="Cannot delete built-in parsers")
+    path.unlink()
+    decoder_engine.load_decoders()
+    return Response(status_code=204)

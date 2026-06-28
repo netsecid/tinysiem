@@ -16,6 +16,8 @@ os.environ["TINYSIEM_ALERTS_PATH"] = _tmp + "/alerts/alerts.log"
 os.environ["TINYSIEM_DEBUG"] = "false"
 os.environ["TINYSIEM_JWT_SECRET"] = "test-jwt-secret-for-tests"
 os.environ["TINYSIEM_SUPERADMIN_PASSWORD"] = "admin"
+os.environ["TINYSIEM_CLAUDE_API_KEY"] = ""
+os.environ["TINYSIEM_MCP_ENABLED"] = "false"
 
 # ── 2. Stub chromadb before any import resolves it ───────────────────────────
 _mock_collection = MagicMock()
@@ -73,4 +75,11 @@ def superadmin_headers():
 def analyst_headers():
     from app.auth import create_token
     token = create_token("test-analyst", "analyst", "analyst")
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def admin_headers():
+    from app.auth import create_token
+    token = create_token("test-admin", "admin", "admin")
     return {"Authorization": f"Bearer {token}"}
