@@ -12,7 +12,7 @@
 :root{
   --bg:#0d0e17;--surface:#12131f;--surface2:#191a2d;--surface3:#1f2138;
   --border:#252840;--border2:#323560;--text:#cdd0eb;--text-dim:#7b7fa8;
-  --text-muted:#454870;--accent:#4d9fff;--accent-dim:#0d2a50;
+  --text-muted:#454870;--accent:#4d9fff;--accent-dim:#0d2a50;--err:#ef4444;--ok:#22c55e;
   --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
 }
 [data-theme="light"]{
@@ -23,10 +23,33 @@
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
 .nav-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
 .nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
-.shell-body{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px}
-.shell-title{font-size:18px;font-weight:600;color:var(--text-dim)}
-.shell-desc{font-size:13px;color:var(--text-muted);max-width:380px;text-align:center;line-height:1.6}
-.shell-tag{font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--border2);color:var(--text-muted);margin-top:4px}
+.parsers-body{flex:1;display:flex;overflow:hidden}
+.list-panel{width:260px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto}
+.list-panel table{width:100%;border-collapse:collapse}
+.list-panel th{padding:8px 12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:1}
+.list-panel td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle;cursor:pointer}
+tr.selected td,.list-panel tr:hover td{background:var(--accent-dim)}
+.badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;background:var(--surface2);color:var(--text-dim);font-family:var(--mono)}
+.badge-custom{background:#0d2a0d;color:var(--ok)}
+.detail-panel{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+.detail-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px}
+.section-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:8px}
+.yaml-area{width:100%;min-height:180px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:10px;color:var(--text);font-family:var(--mono);font-size:12px;line-height:1.5;resize:vertical;outline:none}
+.yaml-area:focus{border-color:var(--accent)}
+.yaml-area[readonly]{opacity:.7;cursor:default}
+.row-actions{display:flex;gap:8px;margin-top:8px}
+.btn{padding:5px 12px;border-radius:4px;border:none;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border2)}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.msg{font-size:12px;padding:6px 10px;border-radius:4px;display:none;margin-top:8px}
+.msg-ok{background:#0d2a0d;color:var(--ok)}
+.msg-err{background:#2a0d0d;color:var(--err)}
+.hr{border:none;border-top:1px solid var(--border);margin:4px 0}
+.line-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:7px 10px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;margin-bottom:8px}
+.line-input:focus{border-color:var(--accent)}
+.test-result{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;font-family:var(--mono);font-size:12px;min-height:48px;color:var(--text-dim);white-space:pre-wrap;word-break:break-all;margin-top:8px}
 </style>
 </head>
 <body>
@@ -50,32 +73,222 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <li><a href="/ui/configuration.html" class="nav-link" title="Configuration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg><span class="nav-link-label">Configuration</span></a></li>
     </ul>
     <div class="sidenav-footer">
-      <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">◑</button>
+      <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">&#9681;</button>
       <span class="sidenav-user" id="navUser"></span>
-      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">⏏</button>
+      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">&#9167;</button>
     </div>
   </nav>
   <div class="main-wrap">
     <div class="topbar">
       <span class="topbar-title">Parsers</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary" id="newBtn" onclick="newParser()" style="display:none">+ New Parser</button>
+      </div>
     </div>
-    <div class="shell-body">
-      <div class="shell-title">Log Parsers</div>
-      <div class="shell-desc">Create and manage YAML log decoders. Paste a raw log sample to generate a parser automatically. AI-assisted parser generation coming in v0.6.</div>
-      <span class="shell-tag">Coming in v0.6</span>
+    <div class="parsers-body">
+      <div class="list-panel">
+        <table>
+          <thead><tr><th>Name</th><th>Source</th><th>Type</th></tr></thead>
+          <tbody id="parserList"><tr><td colspan="3" style="color:var(--text-muted);padding:16px">Loading&hellip;</td></tr></tbody>
+        </table>
+      </div>
+      <div id="detailWrap" style="flex:1;display:flex;overflow:hidden">
+        <div class="detail-empty" id="detailEmpty">Select a parser to view or edit</div>
+        <div class="detail-panel" id="detailPanel" style="display:none"></div>
+      </div>
     </div>
   </div>
 </div>
 <script>
 const TH=document.documentElement;
-const S={navCollapsed:false,theme:'dark',jwt:'',ep:''};
-function parseJwt(token){try{const b64=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
+const S={navCollapsed:false,theme:'dark',jwt:'',ep:'',role:'',selected:null};
+
+function parseJwt(t){try{const b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b))}catch{return null}}
 function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role');localStorage.removeItem('ts_key')}
 function logout(){clearAuth();window.location.href='/ui/login.html'}
-function updateNavUser(){const el=document.getElementById('navUser');const name=localStorage.getItem('ts_username')||'';const role=localStorage.getItem('ts_role')||'';if(el) el.textContent=name+(role?' · '+role:'')}
+function updateNavUser(){const el=document.getElementById('navUser');const name=localStorage.getItem('ts_username')||'';const role=localStorage.getItem('ts_role')||'';if(el)el.textContent=name+(role?' \xb7 '+role:'')}
 function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
 function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}
 function toggleTheme(){S.theme=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',S.theme);localStorage.setItem('ts_theme',S.theme)}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+async function api(path,opts={}){
+  const res=await fetch(S.ep+path,{headers:{'Authorization':'Bearer '+S.jwt,'Content-Type':'application/json'},...opts});
+  if(res.status===401){logout();return null}
+  return res;
+}
+
+function showDetail(html){
+  document.getElementById('detailEmpty').style.display='none';
+  const dp=document.getElementById('detailPanel');
+  dp.style.display='flex';
+  dp.innerHTML=html;
+}
+function showEmpty(){
+  document.getElementById('detailEmpty').style.display='flex';
+  document.getElementById('detailPanel').style.display='none';
+}
+function showMsg(id,text,type){const el=document.getElementById(id);if(!el)return;el.textContent=text;el.className='msg msg-'+(type==='ok'?'ok':'err');el.style.display='block';setTimeout(()=>{if(el)el.style.display='none'},3500)}
+
+async function loadParsers(){
+  const r=await api('/parsers');
+  if(!r)return;
+  const data=await r.json();
+  const tbody=document.getElementById('parserList');
+  if(!data.parsers.length){tbody.innerHTML='<tr><td colspan="3" style="color:var(--text-muted);padding:16px">No parsers found</td></tr>';return}
+  tbody.innerHTML=data.parsers.map(p=>`
+    <tr onclick="selectParser('${esc(p.name)}',${p.is_custom})" class="${S.selected===p.name?'selected':''}">
+      <td style="font-family:var(--mono);font-size:11px">${esc(p.name)}</td>
+      <td>${esc(p.source)}</td>
+      <td><span class="badge ${p.is_custom?'badge-custom':''}">${esc(p.type)}</span></td>
+    </tr>`).join('');
+}
+
+async function selectParser(name,isCustom){
+  S.selected=name;
+  document.querySelectorAll('#parserList tr').forEach(tr=>{
+    tr.classList.toggle('selected',tr.querySelector('td')?.textContent===name);
+  });
+  const r=await api('/parsers/'+encodeURIComponent(name));
+  if(!r)return;
+  const data=await r.json();
+  const canEdit=isCustom&&(S.role==='admin'||S.role==='superadmin');
+  const canGen=S.role==='admin'||S.role==='superadmin';
+  showDetail(`
+    <div style="flex:1;display:flex;flex-direction:column;gap:16px">
+      <div>
+        <div class="section-title">YAML</div>
+        <textarea class="yaml-area" id="yamlEditor" ${canEdit?'':'readonly'}>${esc(data.yaml_text)}</textarea>
+        ${canEdit?`<div class="row-actions">
+          <button class="btn btn-primary" onclick="saveParser('${esc(name)}')">Save</button>
+          <button class="btn btn-secondary" onclick="deleteParser('${esc(name)}')">Delete</button>
+        </div>`:''}
+        <div class="msg" id="editMsg"></div>
+      </div>
+      <hr class="hr">
+      <div>
+        <div class="section-title">Test Parser</div>
+        <input class="line-input" id="testInput" placeholder="Paste a log line&hellip;">
+        <div class="row-actions">
+          <button class="btn btn-secondary" onclick="testParser('${esc(name)}')">Test</button>
+        </div>
+        <div class="test-result" id="testResult">Results appear here</div>
+      </div>
+      ${canGen?`<hr class="hr">
+      <div>
+        <div class="section-title">AI Generator</div>
+        <textarea class="yaml-area" id="genSample" style="min-height:80px" placeholder="Paste a raw log sample to generate a parser&hellip;"></textarea>
+        <div class="row-actions">
+          <button class="btn btn-secondary" id="genBtn" onclick="generateParser()">Generate with Claude</button>
+        </div>
+        <div id="genPreviewWrap" style="display:none;margin-top:12px">
+          <div class="section-title">Preview (review before using)</div>
+          <textarea class="yaml-area" id="genPreview" style="min-height:160px"></textarea>
+          <div class="row-actions">
+            <button class="btn btn-primary" onclick="useGenerated()">Use this YAML</button>
+          </div>
+        </div>
+        <div class="msg" id="genMsg"></div>
+      </div>`:''}
+    </div>
+  `);
+}
+
+function newParser(){
+  S.selected=null;
+  document.querySelectorAll('#parserList tr').forEach(tr=>tr.classList.remove('selected'));
+  showDetail(`
+    <div style="flex:1;display:flex;flex-direction:column;gap:16px">
+      <div>
+        <div class="section-title">New Parser</div>
+        <input class="line-input" id="newName" placeholder="parser-name (kebab-case)">
+        <textarea class="yaml-area" id="yamlEditor" style="min-height:200px" placeholder="Paste YAML or generate below&hellip;"></textarea>
+        <div class="row-actions">
+          <button class="btn btn-primary" onclick="createParser()">Create</button>
+        </div>
+        <div class="msg" id="editMsg"></div>
+      </div>
+      <hr class="hr">
+      <div>
+        <div class="section-title">AI Generator</div>
+        <textarea class="yaml-area" id="genSample" style="min-height:80px" placeholder="Paste a raw log sample&hellip;"></textarea>
+        <div class="row-actions">
+          <button class="btn btn-secondary" id="genBtn" onclick="generateParser()">Generate with Claude</button>
+        </div>
+        <div id="genPreviewWrap" style="display:none;margin-top:12px">
+          <div class="section-title">Preview</div>
+          <textarea class="yaml-area" id="genPreview" style="min-height:160px"></textarea>
+          <div class="row-actions">
+            <button class="btn btn-primary" onclick="useGenerated()">Use this YAML</button>
+          </div>
+        </div>
+        <div class="msg" id="genMsg"></div>
+      </div>
+    </div>
+  `);
+}
+
+async function createParser(){
+  const name=document.getElementById('newName')?.value.trim();
+  const yaml=document.getElementById('yamlEditor')?.value;
+  if(!name||!yaml){showMsg('editMsg','Name and YAML are required','err');return}
+  const r=await api('/parsers',{method:'POST',body:JSON.stringify({name,yaml_text:yaml})});
+  if(!r)return;
+  const data=await r.json();
+  if(r.ok){showMsg('editMsg','Created','ok');await loadParsers();selectParser(name,true)}
+  else showMsg('editMsg',data.detail||'Error','err');
+}
+
+async function saveParser(name){
+  const yaml=document.getElementById('yamlEditor')?.value;
+  const r=await api('/parsers/'+encodeURIComponent(name),{method:'PUT',body:JSON.stringify({name,yaml_text:yaml})});
+  if(!r)return;
+  const data=await r.json();
+  if(r.ok)showMsg('editMsg','Saved','ok');
+  else showMsg('editMsg',data.detail||'Error','err');
+}
+
+async function deleteParser(name){
+  if(!confirm('Delete parser "'+name+'"?'))return;
+  const r=await api('/parsers/'+encodeURIComponent(name),{method:'DELETE'});
+  if(!r)return;
+  if(r.ok){S.selected=null;showEmpty();await loadParsers()}
+}
+
+async function testParser(name){
+  const line=document.getElementById('testInput')?.value;
+  const result=document.getElementById('testResult');
+  if(!line){result.textContent='Enter a log line above';return}
+  result.textContent='Testing…';
+  const r=await api('/parsers/'+encodeURIComponent(name)+'/test',{method:'POST',body:JSON.stringify({log_line:line})});
+  if(!r)return;
+  const data=await r.json();
+  if(!r.ok){result.textContent='Error: '+(data.detail||r.status);return}
+  if(!data.matched){result.textContent='No match';return}
+  result.textContent=JSON.stringify(data.fields,null,2);
+}
+
+async function generateParser(){
+  const sample=document.getElementById('genSample')?.value;
+  const btn=document.getElementById('genBtn');
+  const wrap=document.getElementById('genPreviewWrap');
+  if(!sample){showMsg('genMsg','Paste a log sample first','err');return}
+  btn.disabled=true;btn.textContent='Generating…';
+  const r=await api('/parsers/generate',{method:'POST',body:JSON.stringify({log_sample:sample})});
+  btn.disabled=false;btn.textContent='Generate with Claude';
+  if(!r)return;
+  const data=await r.json();
+  if(!r.ok){showMsg('genMsg',data.detail||'Error','err');return}
+  document.getElementById('genPreview').value=data.yaml_text;
+  wrap.style.display='block';
+}
+
+function useGenerated(){
+  const yaml=document.getElementById('genPreview')?.value;
+  const editor=document.getElementById('yamlEditor');
+  if(editor)editor.value=yaml;
+}
+
 function load(){
   S.theme=localStorage.getItem('ts_theme')||'dark';
   S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';
@@ -85,9 +298,12 @@ function load(){
   S.jwt=localStorage.getItem('ts_jwt')||'';
   S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
   if(!S.jwt){window.location.href='/ui/login.html';return}
-  const _p=parseJwt(S.jwt);
-  if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  const p=parseJwt(S.jwt);
+  if(!p||p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  S.role=p.role||'';
   updateNavUser();
+  if(S.role==='admin'||S.role==='superadmin')document.getElementById('newBtn').style.display='inline-flex';
+  loadParsers();
 }
 window.addEventListener('DOMContentLoaded',load);
 </script>
