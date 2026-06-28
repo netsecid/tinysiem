@@ -24,7 +24,7 @@ def load_decoders(decoders_dir: Optional[Path] = None) -> None:
         decoders_dir = Path(__file__).parent / "decoders"
 
     _decoders = {}
-    for yaml_file in decoders_dir.glob("*.yaml"):
+    for yaml_file in sorted(decoders_dir.glob("*.yaml")):
         try:
             with open(yaml_file) as f:
                 decoder = yaml.safe_load(f)
@@ -34,6 +34,19 @@ def load_decoders(decoders_dir: Optional[Path] = None) -> None:
                 logger.info(f"Loaded decoder '{decoder.get('name')}' for source '{source}'")
         except Exception as exc:
             logger.warning(f"Failed to load decoder {yaml_file}: {exc}")
+
+    custom_dir = decoders_dir / "custom"
+    if custom_dir.exists():
+        for yaml_file in sorted(custom_dir.glob("*.yaml")):
+            try:
+                with open(yaml_file) as f:
+                    decoder = yaml.safe_load(f)
+                source = decoder.get("source")
+                if source:
+                    _decoders[source] = decoder
+                    logger.info(f"Loaded custom decoder '{decoder.get('name')}' for source '{source}'")
+            except Exception as exc:
+                logger.warning(f"Failed to load custom decoder {yaml_file}: {exc}")
 
 
 def decode(source: str, raw: str) -> Optional[dict]:
@@ -163,3 +176,18 @@ def _decode_kv(decoder: dict, source: str, raw: str) -> Optional[dict]:
     fields = decoder.get("fields", {})
     _apply_fields(event, fields, data)
     return event
+
+
+def decode_with(decoder: dict, raw: str) -> Optional[dict]:
+    dtype = decoder.get("type", "regex")
+    source = decoder.get("source", "_test")
+    try:
+        if dtype == "regex":
+            return _decode_regex(decoder, source, raw)
+        if dtype == "json":
+            return _decode_json(decoder, source, raw)
+        if dtype == "kv":
+            return _decode_kv(decoder, source, raw)
+    except Exception as exc:
+        logger.warning(f"decode_with error: {exc}")
+    return None

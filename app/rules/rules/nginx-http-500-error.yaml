@@ -1,4 +1,4 @@
-name: http_500_error
+name: nginx-http-500-error
 description: "Server-side error detected"
 severity: high
 source: nginx

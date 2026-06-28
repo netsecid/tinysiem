@@ -18,7 +18,7 @@ def load_rules(rules_dir: Optional[Path] = None) -> None:
         rules_dir = Path(__file__).parent / "rules"
 
     _rules = []
-    for yaml_file in rules_dir.glob("*.yaml"):
+    for yaml_file in sorted(rules_dir.glob("*.yaml")):
         try:
             with open(yaml_file) as f:
                 rule = yaml.safe_load(f)
@@ -26,6 +26,17 @@ def load_rules(rules_dir: Optional[Path] = None) -> None:
             logger.info(f"Loaded rule '{rule.get('name')}'")
         except Exception as exc:
             logger.warning(f"Failed to load rule {yaml_file}: {exc}")
+
+    custom_dir = rules_dir / "custom"
+    if custom_dir.exists():
+        for yaml_file in sorted(custom_dir.glob("*.yaml")):
+            try:
+                with open(yaml_file) as f:
+                    rule = yaml.safe_load(f)
+                _rules.append(rule)
+                logger.info(f"Loaded custom rule '{rule.get('name')}'")
+            except Exception as exc:
+                logger.warning(f"Failed to load custom rule {yaml_file}: {exc}")
 
 
 def evaluate(event: dict) -> None:

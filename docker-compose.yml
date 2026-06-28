@@ -10,8 +10,12 @@ services:
   tinysiem:
     build: ./app
     env_file: .env
+    environment:
+      TINYSIEM_CLAUDE_API_KEY: ""
+      TINYSIEM_MCP_ENABLED: "false"
     volumes:
       - ./logs:/app/logs:ro
+      - ./ui:/app/ui:ro
       - tinysiem_data:/app/data
     ports:
       - "8000:8000"
