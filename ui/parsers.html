@@ -137,7 +137,7 @@ async function loadParsers(){
   const tbody=document.getElementById('parserList');
   if(!data.parsers.length){tbody.innerHTML='<tr><td colspan="3" style="color:var(--text-muted);padding:16px">No parsers found</td></tr>';return}
   tbody.innerHTML=data.parsers.map(p=>`
-    <tr onclick="selectParser('${esc(p.name)}',${p.is_custom})" class="${S.selected===p.name?'selected':''}">
+    <tr data-name="${esc(p.name)}" data-custom="${p.is_custom}" class="${S.selected===p.name?'selected':''}">
       <td style="font-family:var(--mono);font-size:11px">${esc(p.name)}</td>
       <td>${esc(p.source)}</td>
       <td><span class="badge ${p.is_custom?'badge-custom':''}">${esc(p.type)}</span></td>
@@ -160,8 +160,8 @@ async function selectParser(name,isCustom){
         <div class="section-title">YAML</div>
         <textarea class="yaml-area" id="yamlEditor" ${canEdit?'':'readonly'}>${esc(data.yaml_text)}</textarea>
         ${canEdit?`<div class="row-actions">
-          <button class="btn btn-primary" onclick="saveParser('${esc(name)}')">Save</button>
-          <button class="btn btn-secondary" onclick="deleteParser('${esc(name)}')">Delete</button>
+          <button class="btn btn-primary" onclick="saveParser()">Save</button>
+          <button class="btn btn-secondary" onclick="deleteParser()">Delete</button>
         </div>`:''}
         <div class="msg" id="editMsg"></div>
       </div>
@@ -170,7 +170,7 @@ async function selectParser(name,isCustom){
         <div class="section-title">Test Parser</div>
         <input class="line-input" id="testInput" placeholder="Paste a log line&hellip;">
         <div class="row-actions">
-          <button class="btn btn-secondary" onclick="testParser('${esc(name)}')">Test</button>
+          <button class="btn btn-secondary" onclick="testParser()">Test</button>
         </div>
         <div class="test-result" id="testResult">Results appear here</div>
       </div>
@@ -239,7 +239,8 @@ async function createParser(){
   else showMsg('editMsg',data.detail||'Error','err');
 }
 
-async function saveParser(name){
+async function saveParser(){
+  const name=S.selected;if(!name)return;
   const yaml=document.getElementById('yamlEditor')?.value;
   const r=await api('/parsers/'+encodeURIComponent(name),{method:'PUT',body:JSON.stringify({name,yaml_text:yaml})});
   if(!r)return;
@@ -248,14 +249,16 @@ async function saveParser(name){
   else showMsg('editMsg',data.detail||'Error','err');
 }
 
-async function deleteParser(name){
+async function deleteParser(){
+  const name=S.selected;if(!name)return;
   if(!confirm('Delete parser "'+name+'"?'))return;
   const r=await api('/parsers/'+encodeURIComponent(name),{method:'DELETE'});
   if(!r)return;
   if(r.ok){S.selected=null;showEmpty();await loadParsers()}
 }
 
-async function testParser(name){
+async function testParser(){
+  const name=S.selected;if(!name)return;
   const line=document.getElementById('testInput')?.value;
   const result=document.getElementById('testResult');
   if(!line){result.textContent='Enter a log line above';return}
@@ -303,6 +306,10 @@ function load(){
   S.role=p.role||'';
   updateNavUser();
   if(S.role==='admin'||S.role==='superadmin')document.getElementById('newBtn').style.display='inline-flex';
+  document.getElementById('parserList').addEventListener('click',e=>{
+    const tr=e.target.closest('tr[data-name]');
+    if(tr)selectParser(tr.dataset.name,tr.dataset.custom==='true');
+  });
   loadParsers();
 }
 window.addEventListener('DOMContentLoaded',load);

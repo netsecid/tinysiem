@@ -142,7 +142,7 @@ async function loadRules(){
   const tbody=document.getElementById('ruleList');
   if(!data.rules.length){tbody.innerHTML='<tr><td colspan="3" style="color:var(--text-muted);padding:16px">No rules found</td></tr>';return}
   tbody.innerHTML=data.rules.map(rule=>`
-    <tr onclick="selectRule('${esc(rule.name)}',${rule.is_custom})" class="${S.selected===rule.name?'selected':''}">
+    <tr data-name="${esc(rule.name)}" data-custom="${rule.is_custom}" class="${S.selected===rule.name?'selected':''}">
       <td style="font-family:var(--mono);font-size:11px">${esc(rule.name)}${rule.is_custom?'<span class="badge-custom">custom</span>':''}</td>
       <td><span class="${sevClass(rule.severity)}">${esc(rule.severity)}</span></td>
       <td>${esc(rule.source)}</td>
@@ -165,8 +165,8 @@ async function selectRule(name,isCustom){
         <div class="section-title">YAML</div>
         <textarea class="yaml-area" id="yamlEditor" ${canEdit?'':'readonly'}>${esc(data.yaml_text)}</textarea>
         ${canEdit?`<div class="row-actions">
-          <button class="btn btn-primary" onclick="saveRule('${esc(name)}')">Save</button>
-          <button class="btn btn-secondary" onclick="deleteRule('${esc(name)}')">Delete</button>
+          <button class="btn btn-primary" onclick="saveRule()">Save</button>
+          <button class="btn btn-secondary" onclick="deleteRule()">Delete</button>
         </div>`:''}
         <div class="msg" id="editMsg"></div>
       </div>
@@ -237,7 +237,8 @@ async function createRule(){
   else showMsg('editMsg',data.detail||'Error','err');
 }
 
-async function saveRule(name){
+async function saveRule(){
+  const name=S.selected;if(!name)return;
   const yaml=document.getElementById('yamlEditor')?.value;
   const r=await api('/rules/'+encodeURIComponent(name),{method:'PUT',body:JSON.stringify({name,yaml_text:yaml})});
   if(!r)return;
@@ -246,7 +247,8 @@ async function saveRule(name){
   else showMsg('editMsg',data.detail||'Error','err');
 }
 
-async function deleteRule(name){
+async function deleteRule(){
+  const name=S.selected;if(!name)return;
   if(!confirm('Delete rule "'+name+'"?'))return;
   const r=await api('/rules/'+encodeURIComponent(name),{method:'DELETE'});
   if(!r)return;
@@ -289,6 +291,10 @@ function load(){
   S.role=p.role||'';
   updateNavUser();
   if(S.role==='admin'||S.role==='superadmin')document.getElementById('newBtn').style.display='inline-flex';
+  document.getElementById('ruleList').addEventListener('click',e=>{
+    const tr=e.target.closest('tr[data-name]');
+    if(tr)selectRule(tr.dataset.name,tr.dataset.custom==='true');
+  });
   loadRules();
 }
 window.addEventListener('DOMContentLoaded',load);
