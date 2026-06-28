@@ -175,3 +175,22 @@ async def test_invalid_parser_name_rejected(client, admin_headers):
         headers=admin_headers,
     )
     assert r.status_code == 422
+
+
+async def test_generate_parser_no_api_key(client, admin_headers):
+    r = await client.post(
+        "/parsers/generate",
+        json={"log_sample": "192.168.1.1 GET /test 200"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 503
+    assert "TINYSIEM_CLAUDE_API_KEY" in r.json()["detail"]
+
+
+async def test_generate_parser_analyst_forbidden(client, analyst_headers):
+    r = await client.post(
+        "/parsers/generate",
+        json={"log_sample": "192.168.1.1 GET /test 200"},
+        headers=analyst_headers,
+    )
+    assert r.status_code == 403

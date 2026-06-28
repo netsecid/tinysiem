@@ -126,3 +126,13 @@ async def test_invalid_rule_name_rejected(client, admin_headers):
         headers=admin_headers,
     )
     assert r.status_code == 422
+
+
+async def test_generate_rule_no_api_key(client, admin_headers):
+    r = await client.post(
+        "/rules/generate",
+        json={"description": "alert when 500 errors spike", "source": "nginx"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 503
+    assert "TINYSIEM_CLAUDE_API_KEY" in r.json()["detail"]

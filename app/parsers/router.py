@@ -117,6 +117,29 @@ def test_parser(name: str, req: TestRequest, _: AuthUser = Depends(require_analy
     return {"matched": True, "fields": fields}
 
 
+class GenerateParserRequest(BaseModel):
+    log_sample: str
+
+
+@router.post("/generate")
+def generate_parser_endpoint(req: GenerateParserRequest, _: AuthUser = Depends(require_admin)):
+    from app.ai.claude import generate_parser
+    try:
+        yaml_text = generate_parser(req.log_sample)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
+    try:
+        _validate_parser_yaml(yaml_text)
+    except HTTPException:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Generated YAML failed validation. Raw output:\n{yaml_text}",
+        )
+    return {"yaml_text": yaml_text, "preview": True}
+
+
 @router.get("/{name}")
 def get_parser(name: str, _: AuthUser = Depends(require_analyst)):
     _check_name(name)

@@ -90,6 +90,30 @@ def list_rules(_: AuthUser = Depends(require_analyst)):
     return {"rules": result}
 
 
+class GenerateRuleRequest(BaseModel):
+    description: str
+    source: str
+
+
+@router.post("/generate")
+def generate_rule_endpoint(req: GenerateRuleRequest, _: AuthUser = Depends(require_admin)):
+    from app.ai.claude import generate_rule
+    try:
+        yaml_text = generate_rule(req.description, req.source)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
+    try:
+        _validate_rule_yaml(yaml_text)
+    except HTTPException:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Generated YAML failed validation. Raw output:\n{yaml_text}",
+        )
+    return {"yaml_text": yaml_text, "preview": True}
+
+
 @router.get("/{name}")
 def get_rule(name: str, _: AuthUser = Depends(require_analyst)):
     _check_name(name)
