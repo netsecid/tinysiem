@@ -22,9 +22,27 @@ dist/
 .venv/
 venv/
 
-# Claude Code local settings
+# Claude Code local settings (machine-specific, not for sharing)
 .claude/settings.local.json
+.claude/settings.local.json.bak
+
+# AI tool state (local only)
+.superpowers/
+
+# AI-generated plans and specs (internal working docs, not project source)
+docs/superpowers/
+
+# Data directory (named Docker volume, never in repo)
+data/
 
 # OS
 .DS_Store
 Thumbs.db
+.DS_Store?
+._*
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
