@@ -30,10 +30,15 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("TinySIEM starting up")
     duckdb_store.init_db()
+    duckdb_store.init_alert_triage_table()
     chroma_store.init_chroma()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
     duckdb_store.ensure_superadmin(hash_password(settings.tinysiem_superadmin_password))
+    from app.retention.archiver import start_retention_thread
+    from app.reports.generator import start_report_scheduler
+    start_retention_thread()
+    start_report_scheduler()
     yield
     logger.info("TinySIEM shutting down")
     duckdb_store.close_db()
@@ -54,6 +59,10 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+from app.notifications.router import router as notifications_router
+from app.retention.router import router as retention_router
+from app.reports.router import router as reports_router
+
 app.include_router(ingest_router)
 app.include_router(events_router)
 app.include_router(alerts_router)
@@ -61,6 +70,9 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(parsers_router)
 app.include_router(rules_crud_router)
+app.include_router(notifications_router)
+app.include_router(retention_router)
+app.include_router(reports_router)
 
 app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 

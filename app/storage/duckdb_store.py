@@ -291,6 +291,97 @@ def get_event_histogram(start: datetime, end: datetime, buckets: int = 60) -> li
     return [{"ts": int(r[0]) * 1000, "count": r[1]} for r in rows]
 
 
+# ── Alert triage store ────────────────────────────────────────────────────────
+
+def init_alert_triage_table() -> None:
+    with _lock:
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS alert_triage (
+                alert_id    VARCHAR PRIMARY KEY,
+                status      VARCHAR NOT NULL DEFAULT 'open',
+                notes       TEXT    NOT NULL DEFAULT '',
+                assigned_to VARCHAR NOT NULL DEFAULT '',
+                updated_at  TIMESTAMP,
+                updated_by  VARCHAR NOT NULL DEFAULT ''
+            )
+        """)
+
+
+def get_triage_map() -> dict:
+    with _lock:
+        rows = _conn.execute(
+            "SELECT alert_id, status, notes, assigned_to, updated_at, updated_by FROM alert_triage"
+        ).fetchall()
+    return {
+        row[0]: {
+            "status": row[1],
+            "notes": row[2],
+            "assigned_to": row[3],
+            "updated_at": row[4].isoformat() if row[4] else None,
+            "updated_by": row[5],
+        }
+        for row in rows
+    }
+
+
+def upsert_triage(alert_id: str, status: str, notes: str, assigned_to: str, updated_by: str) -> None:
+    with _lock:
+        _conn.execute("""
+            INSERT INTO alert_triage (alert_id, status, notes, assigned_to, updated_at, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (alert_id) DO UPDATE SET
+                status = excluded.status,
+                notes = excluded.notes,
+                assigned_to = excluded.assigned_to,
+                updated_at = excluded.updated_at,
+                updated_by = excluded.updated_by
+        """, [alert_id, status, notes, assigned_to, datetime.utcnow(), updated_by])
+
+
+def query_events_for_archive(cutoff: datetime, limit: int = 5000) -> list[dict]:
+    with _lock:
+        rows = _conn.execute(
+            "SELECT id, source, ingested_at, event_time, source_ip, method, uri, "
+            "status_code, response_size, user_agent, referer, raw, extra "
+            "FROM events WHERE ingested_at < ? ORDER BY ingested_at LIMIT ?",
+            [cutoff, limit]
+        ).fetchall()
+    cols = ["id", "source", "ingested_at", "event_time", "source_ip", "method",
+            "uri", "status_code", "response_size", "user_agent", "referer", "raw", "extra"]
+    result = []
+    for row in rows:
+        d = dict(zip(cols, row))
+        for f in ("ingested_at", "event_time"):
+            if d[f] is not None and hasattr(d[f], "isoformat"):
+                d[f] = d[f].isoformat()
+        result.append(d)
+    return result
+
+
+def delete_events_by_ids(ids: list[str]) -> int:
+    if not ids:
+        return 0
+    placeholders = ",".join("?" * len(ids))
+    with _lock:
+        _conn.execute(f"DELETE FROM events WHERE id IN ({placeholders})", ids)
+    return len(ids)
+
+
+def count_all_events() -> int:
+    with _lock:
+        return _conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+
+
+def count_events_in_window_range(start: datetime, end: datetime) -> int:
+    s = start.replace(tzinfo=None) if start.tzinfo else start
+    e = end.replace(tzinfo=None) if end.tzinfo else end
+    with _lock:
+        return _conn.execute(
+            "SELECT COUNT(*) FROM events WHERE ingested_at >= ? AND ingested_at <= ?",
+            [s, e]
+        ).fetchone()[0]
+
+
 # ── User store ────────────────────────────────────────────────────────────────
 
 def _user_row_to_dict(row: tuple, include_hash: bool = False) -> dict:

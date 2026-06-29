@@ -18,6 +18,10 @@ os.environ["TINYSIEM_JWT_SECRET"] = "test-jwt-secret-for-tests"
 os.environ["TINYSIEM_SUPERADMIN_PASSWORD"] = "admin"
 os.environ["TINYSIEM_CLAUDE_API_KEY"] = ""
 os.environ["TINYSIEM_MCP_ENABLED"] = "false"
+os.environ["TINYSIEM_ARCHIVE_PATH"] = _tmp + "/archive"
+os.environ["TINYSIEM_SMTP_HOST"] = ""
+os.environ["TINYSIEM_WEBHOOK_URL"] = ""
+os.environ["TINYSIEM_REPORT_SCHEDULE"] = "disabled"
 
 # ── 2. Stub chromadb before any import resolves it ───────────────────────────
 _mock_collection = MagicMock()
@@ -46,6 +50,7 @@ def _init_db():
     from app.password import hash_password
     from app.storage import duckdb_store
     duckdb_store.init_db(os.environ["TINYSIEM_DUCKDB_PATH"])
+    duckdb_store.init_alert_triage_table()
     duckdb_store.ensure_superadmin(hash_password(os.environ["TINYSIEM_SUPERADMIN_PASSWORD"]))
 
 

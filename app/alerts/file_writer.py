@@ -59,3 +59,10 @@ def write_alert(rule: dict, event: dict) -> None:
                     fcntl.flock(fh, fcntl.LOCK_UN)
     except Exception as exc:
         logger.error(f"Failed to write alert: {exc}")
+        return
+
+    try:
+        from app.notifications.sender import notify
+        notify(alert)
+    except Exception as exc:
+        logger.error(f"Notification dispatch failed: {exc}")

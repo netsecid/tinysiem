@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 # Copy source into /app/ — this becomes the 'app' Python package
 COPY . /app/
 
-RUN mkdir -p /app/data /app/logs /app/decoder/decoders/custom /app/rules/rules/custom \
+RUN mkdir -p /app/data /app/data/archive /app/logs /app/decoder/decoders/custom /app/rules/rules/custom \
     && chown -R appuser:appuser /app
 
 USER appuser
