@@ -132,3 +132,7 @@ docker-compose restart tinysiem
 ```bash
 docker-compose exec -w /app tinysiem pytest tests/ -v
 ```
+
+---
+
+→ [Troubleshooting](troubleshooting.md) — common errors and fixes

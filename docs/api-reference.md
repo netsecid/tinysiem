@@ -280,3 +280,7 @@ Requires `superadmin` role for create/delete; `admin` for list/get.
 | `POST` | `/reports/send` | admin | Email report |
 | `POST` | `/notifications/test` | admin | Send test notification |
 | `GET` | `/notifications/config` | admin | Notification config |
+
+---
+
+→ [Troubleshooting](troubleshooting.md) — common errors and fixes

@@ -128,3 +128,7 @@ The correlation engine tracks state in memory. State is cleared on container res
 On the Rules page, click **Generate with AI**, describe the detection scenario in plain English, and TinySIEM will produce a working rule YAML. Requires `TINYSIEM_CLAUDE_API_KEY` to be set.
 
 Example prompt: *"Alert when the same IP makes more than 20 POST requests to /login in 30 seconds"*
+
+---
+
+→ [Troubleshooting](troubleshooting.md) — common errors and fixes

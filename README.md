@@ -112,6 +112,7 @@ Log source (nginx / syslog / Beats / curl)
 | [Rules](docs/rules.md) | YAML format, condition types, MITRE tagging, correlation rules |
 | [Configuration](docs/configuration.md) | All environment variables |
 | [Development](docs/development.md) | Running tests, architecture details, project structure |
+| [Troubleshooting](docs/troubleshooting.md) | Common errors and fixes for startup, auth, ingest, rules, UI |
 
 ---
 

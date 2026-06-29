@@ -147,3 +147,7 @@ Jun 29 10:00:00 host kernel: [DROPPED] IN=eth0 SRC=1.2.3.4 DST=10.0.0.1 PROTO=TC
 ## AI-Assisted Generation
 
 On the Parsers page, click **Generate with AI**, paste a log sample, and TinySIEM will produce a working decoder YAML using the Claude API. Requires `TINYSIEM_CLAUDE_API_KEY` to be set.
+
+---
+
+→ [Troubleshooting](troubleshooting.md) — common errors and fixes

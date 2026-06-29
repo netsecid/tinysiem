@@ -110,3 +110,7 @@ openssl rand -hex 32   # TINYSIEM_JWT_SECRET
 | Variable | Default | Description |
 |---|---|---|
 | `TINYSIEM_DEBUG` | `false` | Enable FastAPI `/docs` and `/redoc`. Never enable in production. |
+
+---
+
+→ [Troubleshooting](troubleshooting.md) — common errors and fixes

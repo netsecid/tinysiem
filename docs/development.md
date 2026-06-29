@@ -159,3 +159,7 @@ Page-level conventions:
 - JWT decoded client-side via `parseJwt()` for role checks and expiry
 - `api(path)` helper handles auth headers and 401 → redirect to login
 - `esc(s)` for all user-controlled strings inserted into HTML
+
+---
+
+→ [Troubleshooting](troubleshooting.md) — common errors and fixes
