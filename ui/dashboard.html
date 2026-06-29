@@ -180,6 +180,22 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         </div>
       </div>
 
+      <div class="stat-row">
+        <div class="stat-card" style="cursor:pointer" onclick="location.href='/ui/alerts.html?status=open'">
+          <div class="stat-label">Open Alerts</div>
+          <div class="stat-value" id="valOpen" style="color:var(--text-dim)">—</div>
+        </div>
+        <div class="stat-card" style="cursor:pointer" onclick="location.href='/ui/alerts.html?status=investigating'">
+          <div class="stat-label">Investigating</div>
+          <div class="stat-value" id="valInvestigating" style="color:#f59e0b">—</div>
+        </div>
+        <div class="stat-card" style="cursor:pointer" onclick="location.href='/ui/alerts.html?status=resolved'">
+          <div class="stat-label">Resolved</div>
+          <div class="stat-value" id="valResolved" style="color:var(--green)">—</div>
+        </div>
+        <div class="stat-card" style="background:none;border-color:transparent;box-shadow:none"></div>
+      </div>
+
       <div class="panel-row r40-60">
         <div class="card">
           <div class="panel-title">Alert Severity</div>
@@ -292,6 +308,7 @@ async function fetchAll() {
     fetchAlertFeed(),
     fetchTopIPs(),
     fetchTopRules(),
+    fetchTriageSummary(),
   ]);
   document.getElementById('refreshTs').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
@@ -435,6 +452,16 @@ async function fetchTopRules() {
         <td class="col-cnt">${fmtNum(r.count)}</td>
       </tr>`).join('');
   } catch(_) { tbody.innerHTML = `<tr><td colspan="2" class="empty-state">Failed to load</td></tr>`; }
+}
+
+async function fetchTriageSummary() {
+  try {
+    const d = await api('/alerts/triage-summary');
+    if(!d) return;
+    document.getElementById('valOpen').textContent = fmtNum(d.open);
+    document.getElementById('valInvestigating').textContent = fmtNum(d.investigating);
+    document.getElementById('valResolved').textContent = fmtNum(d.resolved);
+  } catch(_) {}
 }
 
 function load() {

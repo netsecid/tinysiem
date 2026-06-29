@@ -208,6 +208,11 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
 .rm-btn.ok{color:var(--green);border-color:var(--green)}
 
 
+/* ── TRIAGE STATUS BADGES ── */
+.st-open{display:inline-flex;align-items:center;padding:1px 6px;border-radius:3px;font-family:var(--mono);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;border:1px solid #6b7280;background:rgba(107,114,128,.12)}
+.st-investigating{display:inline-flex;align-items:center;padding:1px 6px;border-radius:3px;font-family:var(--mono);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--yellow);border:1px solid var(--yellow);background:var(--yellow-dim)}
+.st-resolved{display:inline-flex;align-items:center;padding:1px 6px;border-radius:3px;font-family:var(--mono);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--green);border:1px solid var(--green);background:var(--green-dim)}
+
 /* error state */
 .sb-error{padding:12px;font-size:11px;color:var(--red)}
 </style>
@@ -327,17 +332,17 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
     <div class="table-scroll">
       <table>
         <colgroup>
-          <col class="col-exp"><col class="col-time"><col class="col-rule">
+          <col class="col-exp"><col style="width:100px"><col class="col-time"><col class="col-rule">
           <col class="col-sev"><col class="col-ip"><col class="col-mitre">
           <col class="col-tech"><col class="col-sum">
         </colgroup>
         <thead><tr>
-          <th></th><th>Triggered</th><th>Rule</th>
+          <th></th><th>Status</th><th>Triggered</th><th>Rule</th>
           <th>Severity</th><th>Source IP</th><th>MITRE Tactic</th>
           <th>Technique</th><th>Summary</th>
         </tr></thead>
         <tbody id="tbody">
-          <tr class="empty-row"><td colspan="8"><span class="spinner"></span>Loading…</td></tr>
+          <tr class="empty-row"><td colspan="9"><span class="spinner"></span>Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -478,7 +483,7 @@ async function api(path){
 // ── FETCH ALERTS ───────────────────────────────────────────────────────
 async function fetchAlerts(){
   const tbody=document.getElementById('tbody');
-  tbody.innerHTML='<tr class="empty-row"><td colspan="8"><span class="spinner"></span>Loading…</td></tr>';
+  tbody.innerHTML='<tr class="empty-row"><td colspan="9"><span class="spinner"></span>Loading…</td></tr>';
   try{
     const d=await api(`/alerts?${buildQS()}`);
     if(!d) return;
@@ -594,17 +599,19 @@ function renderChips(){
 function renderTable(alerts){
   const tbody=document.getElementById('tbody');
   if(!alerts.length){
-    tbody.innerHTML='<tr class="empty-row"><td colspan="8">No alerts found</td></tr>';
+    tbody.innerHTML='<tr class="empty-row"><td colspan="9">No alerts found</td></tr>';
     return;
   }
   tbody.innerHTML='';
   alerts.forEach((al,i)=>{
     const tr=document.createElement('tr');
     tr.className='dr';
+    tr.dataset.ai=i;
     tr.onclick=()=>toggleExpand(tr,al,i);
     const t=fmtTime(al.triggered_at);
     tr.innerHTML=`
       <td><span style="color:var(--text-muted);font-size:10px">▶</span></td>
+      <td>${statusBadge(al.status)}</td>
       <td><span style="font-family:var(--mono);font-size:11.5px">${t}</span></td>
       <td style="font-family:var(--mono);font-size:12px">${esc(al.rule_name||'—')}</td>
       <td>${sevBadge(al.severity)}</td>
@@ -639,10 +646,36 @@ function toggleExpand(tr,al,i){
       <span class="ef-k">${k}</span>
       <span class="ef-v">${esc(al[k]||'—')}</span>
     </div>`).join('');
-  exp.innerHTML=`<td colspan="8"><div class="exp-body">
+  const curStatus=al.status||'open';
+  const optOpen=curStatus==='open'?'selected':'';
+  const optInv=curStatus==='investigating'?'selected':'';
+  const optRes=curStatus==='resolved'?'selected':'';
+  exp.innerHTML=`<td colspan="9"><div class="exp-body">
     <div class="exp-grid">${fieldRows}</div>
     <div style="display:flex;gap:7px;margin-top:8px">
       <button class="ctrl-btn" onclick="openDetail(${i})">View Full Detail</button>
+    </div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Triage</div>
+      <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Status</div>
+          <select id="trStatus_${i}" class="ctrl-sel" style="width:140px">
+            <option value="open" ${optOpen}>Open</option>
+            <option value="investigating" ${optInv}>Investigating</option>
+            <option value="resolved" ${optRes}>Resolved</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Notes</div>
+          <textarea id="trNotes_${i}" style="width:100%;height:52px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11.5px;padding:5px 8px;resize:vertical;outline:none" placeholder="Investigation notes…">${esc(al.notes||'')}</textarea>
+        </div>
+        <div style="min-width:130px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Assigned to</div>
+          <input id="trAssigned_${i}" type="text" class="ctrl-sel" style="width:100%;height:28px;padding:3px 7px" value="${esc(al.assigned_to||'')}" placeholder="username">
+        </div>
+      </div>
+      <button id="trSaveBtn_${i}" class="ctrl-btn" style="margin-top:8px" onclick="event.stopPropagation();saveTriage('${al.alert_id}',${i})">Save Triage</button>
     </div>
   </div></td>`;
   tr.parentNode.insertBefore(exp,tr.nextSibling);
@@ -680,6 +713,44 @@ function copyDetailJSON(){
 function sevBadge(sev){
   const s=(sev||'unknown').toLowerCase();
   return `<span class="badge sev-${s}">${esc(s)}</span>`;
+}
+
+// ── STATUS BADGE ────────────────────────────────────────────────────────
+function statusBadge(st){
+  const s=(st||'open').toLowerCase();
+  const label={'open':'open','investigating':'invstg','resolved':'resolved'}[s]||s;
+  return `<span class="st-${s}">${esc(label)}</span>`;
+}
+
+// ── SAVE TRIAGE ─────────────────────────────────────────────────────────
+async function saveTriage(alertId,i){
+  const statusEl=document.getElementById('trStatus_'+i);
+  const notesEl=document.getElementById('trNotes_'+i);
+  const assignedEl=document.getElementById('trAssigned_'+i);
+  const btn=document.getElementById('trSaveBtn_'+i);
+  if(!statusEl||!btn) return;
+  btn.textContent='Saving…';
+  try{
+    const res=await fetch(S.ep+'/alerts/'+alertId,{
+      method:'PATCH',
+      headers:{Authorization:'Bearer '+S.jwt,'Content-Type':'application/json'},
+      body:JSON.stringify({status:statusEl.value,notes:notesEl.value,assigned_to:assignedEl.value}),
+    });
+    if(res.ok){
+      const updated=await res.json();
+      if(S.alerts[i]) S.alerts[i]=updated;
+      const row=document.querySelector('tr.dr[data-ai="'+i+'"]');
+      if(row) row.cells[1].innerHTML=statusBadge(updated.status);
+      btn.textContent='Saved ✓'; btn.style.color='var(--green)';
+      setTimeout(()=>{btn.textContent='Save Triage';btn.style.color=''},2000);
+    } else {
+      btn.textContent='Error'; btn.style.color='var(--red)';
+      setTimeout(()=>{btn.textContent='Save Triage';btn.style.color=''},2000);
+    }
+  }catch(_){
+    btn.textContent='Error'; btn.style.color='var(--red)';
+    setTimeout(()=>{btn.textContent='Save Triage';btn.style.color=''},2000);
+  }
 }
 
 // ── PAGER ──────────────────────────────────────────────────────────────

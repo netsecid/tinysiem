@@ -10,19 +10,48 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d0e17;--surface:#12131f;--surface2:#191a2d;--surface3:#1f2138;
+  --bg:#0d0e17;--surface:#12131f;--surface2:#191a2d;--surface3:#1f2138;--surface4:#252845;
   --border:#252840;--border2:#323560;--text:#cdd0eb;--text-dim:#7b7fa8;
   --text-muted:#454870;--accent:#4d9fff;--accent-dim:#0d2a50;
+  --green:#3ddc84;--green-dim:#0a2e1c;--red:#e85555;--red-dim:#320c0c;
+  --yellow:#f5c842;--yellow-dim:#322800;
   --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
 }
 [data-theme="light"]{
-  --bg:#f0f2f8;--surface:#ffffff;--surface2:#f5f7fc;--surface3:#eaecf5;
+  --bg:#f0f2f8;--surface:#ffffff;--surface2:#f5f7fc;--surface3:#eaecf5;--surface4:#e0e3f0;
   --border:#dde0f0;--border2:#c0c6e0;--text:#1a1c2e;--text-dim:#4a4f6a;
   --text-muted:#9096b8;--accent:#2979ff;--accent-dim:#e3ecff;
+  --green:#1a8a4a;--green-dim:#eaf7ef;--red:#c0392b;--red-dim:#fde8e6;
+  --yellow:#c47800;--yellow-dim:#fff4d6;
 }
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
 .nav-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
 .nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
+.cfg-body{flex:1;overflow-y:auto;padding:20px 24px}
+.cfg-body::-webkit-scrollbar{width:6px}
+.cfg-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.cfg-inner{max-width:680px;display:flex;flex-direction:column;gap:16px}
+.section-label{font-size:11.5px;font-weight:600;color:var(--text-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em}
+.kv-table{width:100%;border-collapse:collapse}
+.kv-table td{padding:6px 0;vertical-align:top}
+.kv-table td:first-child{color:var(--text-muted);width:180px;font-size:12.5px}
+.kv-table td:last-child{font-family:var(--mono);font-size:12px;color:var(--text)}
+.badge-ok{display:inline-flex;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;background:var(--green-dim);color:var(--green);border:1px solid var(--green)}
+.badge-off{display:inline-flex;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;background:var(--surface4);color:var(--text-muted);border:1px solid var(--border2)}
+.btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.btn-prim{padding:5px 14px;background:var(--accent);border:none;border-radius:5px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .12s}
+.btn-prim:hover{opacity:.85}
+.btn-sec{padding:5px 14px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);font-size:12px;cursor:pointer;transition:all .12s}
+.btn-sec:hover{color:var(--text);border-color:var(--accent)}
+.msg{margin-top:8px;font-family:var(--mono);font-size:11.5px;padding:5px 9px;border-radius:4px;display:none}
+.msg.ok{display:block;background:var(--green-dim);color:var(--green);border:1px solid var(--green)}
+.msg.err{display:block;background:var(--red-dim);color:var(--red);border:1px solid var(--red)}
+.msg.info{display:block;background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent)}
+.arch-table{width:100%;border-collapse:collapse;margin-top:8px}
+.arch-table th{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:4px 8px;border-bottom:1px solid var(--border);text-align:left}
+.arch-table td{padding:5px 8px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11.5px}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -55,34 +84,60 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
     <div class="topbar">
       <span class="topbar-title">Configuration</span>
     </div>
-    <div class="content" style="flex:1;overflow-y:auto;padding:20px 24px">
-      <div style="max-width:600px;display:flex;flex-direction:column;gap:16px">
+    <div class="cfg-body">
+      <div class="cfg-inner">
 
+        <!-- Instance Info -->
         <div class="card">
-          <div class="stat-label" style="margin-bottom:12px">Instance Info</div>
-          <table style="width:100%;border-collapse:collapse">
-            <tr><td style="padding:6px 0;color:var(--text-muted);width:180px">Version</td><td style="font-family:var(--mono);font-size:12px" id="cfgVersion">—</td></tr>
-            <tr><td style="padding:6px 0;color:var(--text-muted)">Signed in as</td><td style="font-family:var(--mono);font-size:12px" id="cfgUser">—</td></tr>
-            <tr><td style="padding:6px 0;color:var(--text-muted)">Role</td><td style="font-family:var(--mono);font-size:12px" id="cfgRole">—</td></tr>
+          <div class="section-label">Instance Info</div>
+          <table class="kv-table">
+            <tr><td>Version</td><td id="cfgVersion">—</td></tr>
+            <tr><td>Signed in as</td><td id="cfgUser">—</td></tr>
+            <tr><td>Role</td><td id="cfgRole">—</td></tr>
           </table>
         </div>
 
-        <div class="card" id="usersCard">
-          <div class="stat-label" style="margin-bottom:8px">Users &amp; Access</div>
+        <!-- Users & Access (superadmin only) -->
+        <div class="card" id="usersCard" style="display:none">
+          <div class="section-label">Users &amp; Access</div>
           <div style="color:var(--text-dim);font-size:12px;margin-bottom:12px">Create and manage user accounts, assign roles, and control access.</div>
-          <a href="/ui/users.html" style="display:inline-block;padding:7px 14px;background:var(--accent);color:#fff;border-radius:4px;font-size:12px;font-weight:600;text-decoration:none">Manage Users</a>
+          <a href="/ui/users.html" class="btn-prim" style="text-decoration:none;display:inline-block">Manage Users</a>
         </div>
 
-        <div class="card">
-          <div class="stat-label" style="margin-bottom:8px">Log Retention</div>
-          <div style="color:var(--text-dim);font-size:12px">Automated archival of events older than 30 days — coming in v0.7.</div>
-          <span style="display:inline-block;margin-top:8px;font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--border2);color:var(--text-muted)">Coming in v0.7</span>
+        <!-- Notifications (admin+) -->
+        <div class="card" id="notifCard" style="display:none">
+          <div class="section-label">Alert Notifications</div>
+          <div id="notifContent" style="color:var(--text-muted);font-size:12px"><span class="spinner"></span>Loading…</div>
+          <div class="btn-row" id="notifBtns" style="display:none">
+            <button class="btn-sec" onclick="testNotify('email')">Test Email</button>
+            <button class="btn-sec" onclick="testNotify('webhook')">Test Webhook</button>
+            <button class="btn-sec" onclick="testNotify('all')">Test Both</button>
+          </div>
+          <div class="msg" id="notifMsg"></div>
+          <div style="margin-top:10px;font-size:11px;color:var(--text-muted)">Configured via environment variables — container restart required to apply changes.</div>
         </div>
 
+        <!-- Log Retention (admin+) -->
+        <div class="card" id="retentionCard" style="display:none">
+          <div class="section-label">Log Retention</div>
+          <div id="retentionContent" style="color:var(--text-muted);font-size:12px"><span class="spinner"></span>Loading…</div>
+          <div class="btn-row" id="retentionBtns" style="display:none">
+            <button class="btn-prim" onclick="runRetention()">Archive Now</button>
+          </div>
+          <div class="msg" id="retentionMsg"></div>
+        </div>
+
+        <!-- Reports (analyst+) -->
         <div class="card">
-          <div class="stat-label" style="margin-bottom:8px">Alert Notifications</div>
-          <div style="color:var(--text-dim);font-size:12px">Email and webhook delivery for triggered alerts — coming in v0.7.</div>
-          <span style="display:inline-block;margin-top:8px;font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--border2);color:var(--text-muted)">Coming in v0.7</span>
+          <div class="section-label">Reports</div>
+          <div style="color:var(--text-dim);font-size:12px;margin-bottom:12px">Download or email a summary report of events, alerts, and top source IPs.</div>
+          <div class="btn-row">
+            <a class="btn-sec" id="dlDaily" onclick="downloadReport('daily')" style="cursor:pointer">Download Daily Report</a>
+            <a class="btn-sec" id="dlWeekly" onclick="downloadReport('weekly')" style="cursor:pointer">Download Weekly Report</a>
+            <button class="btn-sec" id="sendReport" style="display:none" onclick="sendReport()">Email Report Now</button>
+          </div>
+          <div class="msg" id="reportMsg"></div>
+          <div style="margin-top:10px;font-size:11px;color:var(--text-muted)">Scheduled email delivery configured via TINYSIEM_REPORT_SCHEDULE environment variable.</div>
         </div>
 
       </div>
@@ -91,28 +146,148 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 </div>
 <script>
 const TH=document.documentElement;
-const S={navCollapsed:false,theme:'dark',jwt:'',ep:''};
+const S={navCollapsed:false,theme:'dark',jwt:'',ep:'',role:''};
+
 function parseJwt(token){try{const b64=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
 function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role');localStorage.removeItem('ts_key')}
 function logout(){clearAuth();window.location.href='/ui/login.html'}
-function updateNavUser(){const el=document.getElementById('navUser');const name=localStorage.getItem('ts_username')||'';const role=localStorage.getItem('ts_role')||'';if(el) el.textContent=name+(role?' · '+role:'')}
+function updateNavUser(){const el=document.getElementById('navUser');const name=localStorage.getItem('ts_username')||'';const role=localStorage.getItem('ts_role')||'';if(el)el.textContent=name+(role?' · '+role:'')}
 function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
 function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}
 function toggleTheme(){S.theme=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',S.theme);localStorage.setItem('ts_theme',S.theme)}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
 async function api(path,opts={}){
-  const res=await fetch(S.ep+path,{...opts,headers:{...opts.headers,'Authorization':'Bearer '+S.jwt}});
+  const res=await fetch(S.ep+path,{...opts,headers:{...opts.headers,'Authorization':'Bearer '+S.jwt,'Content-Type':'application/json'}});
   if(res.status===401){clearAuth();window.location.href='/ui/login.html';return null}
   return res;
 }
-async function loadConfig(){
-  const res=await api('/auth/me');
-  if(!res)return;
-  const me=await res.json();
-  document.getElementById('cfgVersion').textContent='v0.5.0';
-  document.getElementById('cfgUser').textContent=me.username;
-  document.getElementById('cfgRole').textContent=me.role;
-  if(me.role!=='superadmin')document.getElementById('usersCard').style.display='none';
+
+function showMsg(id,text,type){
+  const el=document.getElementById(id);
+  el.className='msg '+type;
+  el.textContent=text;
+  setTimeout(()=>{el.className='msg';el.textContent=''},5000);
 }
+
+async function loadConfig(){
+  const [healthRes,meRes]=await Promise.all([
+    fetch(S.ep+'/health'),
+    api('/auth/me'),
+  ]);
+  if(healthRes.ok){
+    const h=await healthRes.json();
+    document.getElementById('cfgVersion').textContent='v'+h.version;
+  }
+  if(meRes){
+    const me=await meRes.json();
+    document.getElementById('cfgUser').textContent=me.username;
+    document.getElementById('cfgRole').textContent=me.role;
+    S.role=me.role;
+    if(me.role==='superadmin') document.getElementById('usersCard').style.display='';
+    if(me.role==='admin'||me.role==='superadmin'){
+      document.getElementById('notifCard').style.display='';
+      document.getElementById('retentionCard').style.display='';
+      document.getElementById('sendReport').style.display='';
+      loadNotifications();
+      loadRetention();
+    }
+  }
+}
+
+async function loadNotifications(){
+  const res=await api('/notifications/config');
+  if(!res) return;
+  const d=await res.json();
+  const content=document.getElementById('notifContent');
+  content.innerHTML=`<table class="kv-table">
+    <tr><td>Email</td><td>${d.email_enabled?'<span class="badge-ok">Enabled</span>':'<span class="badge-off">Disabled</span>'}</td></tr>
+    ${d.email_enabled?`<tr><td>SMTP host</td><td>${esc(d.smtp_host)}:${esc(String(d.smtp_port))}</td></tr>
+    <tr><td>From</td><td>${esc(d.smtp_from||d.smtp_host)}</td></tr>
+    <tr><td>To</td><td>${esc(d.smtp_to)}</td></tr>
+    <tr><td>TLS</td><td>${d.smtp_tls?'STARTTLS':'Plain'}</td></tr>`:''}
+    <tr><td>Webhook</td><td>${d.webhook_enabled?'<span class="badge-ok">Enabled</span>':'<span class="badge-off">Disabled</span>'}</td></tr>
+    <tr><td>Min severity</td><td>${esc(d.min_severity)}</td></tr>
+  </table>`;
+  document.getElementById('notifBtns').style.display='flex';
+}
+
+async function testNotify(channel){
+  const res=await api('/notifications/test',{method:'POST',body:JSON.stringify({channel})});
+  if(!res) return;
+  const d=await res.json();
+  const parts=[];
+  if(d.email) parts.push('Email: '+d.email);
+  if(d.webhook) parts.push('Webhook: '+d.webhook);
+  showMsg('notifMsg',parts.join(' | ')||'Done','info');
+}
+
+async function loadRetention(){
+  const res=await api('/retention/status');
+  if(!res) return;
+  const d=await res.json();
+  const content=document.getElementById('retentionContent');
+  const lastRun=d.last_run?new Date(d.last_run).toLocaleString():'Never';
+  let archiveRows='<tr><td colspan="3" style="color:var(--text-muted);font-size:11px;padding:8px">No archive files yet</td></tr>';
+  if(d.archive_files&&d.archive_files.length){
+    archiveRows=d.archive_files.map(f=>`<tr>
+      <td>${esc(f.name)}</td>
+      <td style="text-align:right">${esc(String(f.size_mb))} MB</td>
+      <td style="text-align:right;color:var(--text-muted)">${esc(new Date(f.created).toLocaleDateString())}</td>
+    </tr>`).join('');
+  }
+  content.innerHTML=`<table class="kv-table" style="margin-bottom:10px">
+    <tr><td>Retention window</td><td>${esc(String(d.retention_days))} days</td></tr>
+    <tr><td>Online events</td><td>${esc(Number(d.online_events).toLocaleString())}</td></tr>
+    <tr><td>Last archive run</td><td>${esc(lastRun)}</td></tr>
+    <tr><td>Last archived</td><td>${esc(String(d.last_archived))} events</td></tr>
+    <tr><td>Archive path</td><td>${esc(d.archive_path)}</td></tr>
+  </table>
+  <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 4px">Archive Files (${d.archive_files?d.archive_files.length:0})</div>
+  <table class="arch-table">
+    <thead><tr><th>File</th><th style="text-align:right">Size</th><th style="text-align:right">Created</th></tr></thead>
+    <tbody>${archiveRows}</tbody>
+  </table>`;
+  document.getElementById('retentionBtns').style.display='flex';
+}
+
+async function runRetention(){
+  const btn=document.querySelector('#retentionBtns .btn-prim');
+  btn.textContent='Archiving…';btn.disabled=true;
+  const res=await api('/retention/run',{method:'POST'});
+  btn.textContent='Archive Now';btn.disabled=false;
+  if(!res) return;
+  const d=await res.json();
+  showMsg('retentionMsg',`Archived ${d.archived} events. Files: ${(d.files||[]).join(', ')||'none'}`,'ok');
+  loadRetention();
+}
+
+function downloadReport(period){
+  const a=document.createElement('a');
+  a.href=S.ep+'/reports/download?period='+period;
+  a.setAttribute('download','');
+  const headers={Authorization:'Bearer '+S.jwt};
+  fetch(a.href,{headers}).then(r=>{
+    if(!r.ok){showMsg('reportMsg','Download failed: HTTP '+r.status,'err');return}
+    const cd=r.headers.get('content-disposition')||'';
+    const match=cd.match(/filename="([^"]+)"/);
+    const filename=match?match[1]:'tinysiem-report.html';
+    return r.blob().then(blob=>{
+      const url=URL.createObjectURL(blob);
+      const dl=document.createElement('a');
+      dl.href=url;dl.download=filename;dl.click();
+      URL.revokeObjectURL(url);
+    });
+  }).catch(e=>showMsg('reportMsg','Error: '+e.message,'err'));
+}
+
+async function sendReport(){
+  const res=await api('/reports/send?period=daily',{method:'POST'});
+  if(!res) return;
+  if(res.ok) showMsg('reportMsg','Report sent via email','ok');
+  else showMsg('reportMsg','Send failed: HTTP '+res.status,'err');
+}
+
 function load(){
   S.theme=localStorage.getItem('ts_theme')||'dark';
   S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';
