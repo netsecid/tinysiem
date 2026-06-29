@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from app.audit import store as audit
 from app.auth import AuthUser, require_admin
 from app.notifications.sender import send_email, send_webhook
 
@@ -16,7 +17,7 @@ class TestBody(BaseModel):
 
 
 @router.post("/test")
-def test_notification(body: TestBody, _: AuthUser = Depends(require_admin)):
+def test_notification(body: TestBody, actor: AuthUser = Depends(require_admin)):
     alert = {
         "alert_id": str(uuid.uuid4()),
         "rule_name": "test-notification",
@@ -40,6 +41,12 @@ def test_notification(body: TestBody, _: AuthUser = Depends(require_admin)):
             result["webhook"] = "sent"
         except Exception as e:
             result["webhook"] = f"error: {e}"
+    audit.log_event(
+        "system.notification", "test", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="system",
+        detail={"channel": body.channel, "result": result},
+    )
     return result
 
 

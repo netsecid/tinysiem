@@ -54,6 +54,7 @@ def _init_db():
     from app.storage import duckdb_store
     duckdb_store.init_db(os.environ["TINYSIEM_DUCKDB_PATH"])
     duckdb_store.init_alert_triage_table()
+    duckdb_store.init_audit_table()
     duckdb_store.ensure_superadmin(hash_password(os.environ["TINYSIEM_SUPERADMIN_PASSWORD"]))
 
 

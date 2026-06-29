@@ -170,4 +170,16 @@ def patch_alert(
     existing["status"] = new_status
     existing["notes"] = new_notes
     existing["assigned_to"] = new_assigned
+    from app.audit import store as audit
+    audit.log_event(
+        "alert.triage", "triage", "success",
+        actor=current_user.username, actor_role=current_user.role,
+        resource_type="alert", resource_id=alert_id,
+        detail={
+            "alert_id": alert_id,
+            "new_status": new_status,
+            "assigned_to": new_assigned,
+            "notes_updated": body.notes is not None,
+        },
+    )
     return existing

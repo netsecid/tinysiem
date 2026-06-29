@@ -1,14 +1,16 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.decoder import engine as decoder_engine
 from app.alerts.router import router as alerts_router
+from app.audit.router import router as audit_router
 from app.auth_router import router as auth_router
 from app.events.router import router as events_router
 from app.ingest.router import router as ingest_router
@@ -31,6 +33,7 @@ async def lifespan(app: FastAPI):
     logger.info("TinySIEM starting up")
     duckdb_store.init_db()
     duckdb_store.init_alert_triage_table()
+    duckdb_store.init_audit_table()
     chroma_store.init_chroma()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
@@ -58,9 +61,32 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def audit_http_exception(request: Request, exc: HTTPException):
+    """Log 4xx/5xx errors to audit log (except auth/health/ui noise)."""
+    path = request.url.path
+    skip = path.startswith("/ui") or path == "/health" or path == "/auth/login"
+    if exc.status_code >= 400 and not skip:
+        from app.audit import store as audit
+        audit.log_event(
+            "error.api",
+            "error",
+            "error",
+            detail={
+                "method": request.method,
+                "path": path,
+                "status_code": exc.status_code,
+                "error": str(exc.detail)[:500],
+            },
+            error_msg=str(exc.detail)[:500],
+        )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
 
 from app.notifications.router import router as notifications_router
 from app.retention.router import router as retention_router
@@ -76,6 +102,7 @@ app.include_router(rules_crud_router)
 app.include_router(notifications_router)
 app.include_router(retention_router)
 app.include_router(reports_router)
+app.include_router(audit_router)
 
 app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 

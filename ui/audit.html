@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TinySIEM — Audit Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0d0e17;--surface:#12131f;--surface2:#191a2d;--surface3:#1f2138;--surface4:#252845;
+  --border:#252840;--border2:#323560;--text:#cdd0eb;--text-dim:#7b7fa8;--text-muted:#454870;
+  --accent:#4d9fff;--accent-dim:#0d2a50;--green:#3ddc84;--green-dim:#0a2e1c;
+  --yellow:#f5c842;--yellow-dim:#322800;--orange:#f07832;--orange-dim:#2a1800;
+  --red:#e85555;--red-dim:#320c0c;--teal:#2dd4bf;--purple:#a78bfa;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+[data-theme="light"]{
+  --bg:#f0f2f8;--surface:#ffffff;--surface2:#f5f7fc;--surface3:#eaecf5;--surface4:#e0e3f0;
+  --border:#dde0f0;--border2:#c0c6e0;--text:#1a1c2e;--text-dim:#4a4f6a;--text-muted:#9096b8;
+  --accent:#2979ff;--accent-dim:#e3ecff;--green:#1a8a4a;--green-dim:#eaf7ef;
+  --yellow:#c47800;--yellow-dim:#fff4d6;--orange:#b84800;--orange-dim:#fff0e0;
+  --red:#c0392b;--red-dim:#fde8e6;--teal:#0a7a6a;--purple:#5a2ed0;
+}
+
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
+
+.nav-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
+.nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
+
+/* ── SEARCH / FILTER BAR ── */
+.top-area{flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)}
+.filter-bar{display:flex;align-items:center;gap:6px;padding:8px 14px;flex-wrap:wrap}
+.search-wrap{display:flex;align-items:center;background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:0 10px;gap:7px;transition:border-color .15s;min-width:200px;flex:1}
+.search-wrap:focus-within{border-color:var(--accent)}
+.search-icon{color:var(--text-muted);flex-shrink:0;opacity:.7;font-size:13px}
+.search-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:var(--mono);font-size:12.5px;padding:6px 0}
+.search-input::placeholder{color:var(--text-muted)}
+.filter-sel{background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--sans);font-size:12px;padding:5px 9px;cursor:pointer;height:32px;min-width:110px}
+.filter-sel:focus{outline:none;border-color:var(--accent)}
+.filter-btn{padding:0 14px;height:32px;background:var(--accent);border:none;border-radius:5px;color:#fff;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
+.filter-btn:hover{opacity:.88}
+.filter-clear{padding:0 10px;height:32px;background:none;border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);font-size:12px;cursor:pointer}
+.filter-clear:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
+
+/* active chip strip */
+.active-filters{display:flex;gap:5px;padding:0 14px 8px;flex-wrap:wrap;min-height:0}
+.active-filters:empty{padding:0}
+.filter-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;background:var(--accent-dim);border:1px solid var(--accent);border-radius:3px;font-family:var(--mono);font-size:11px;color:var(--accent)}
+.chip-rm{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;line-height:1;padding:0;opacity:.6}
+.chip-rm:hover{opacity:1}
+
+/* ── BODY AREA ── */
+.body-area{flex:1;display:flex;overflow:hidden}
+
+/* ── SIDEBAR / FACETS ── */
+.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.sb-head{padding:10px 12px 6px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sb-clear{background:none;border:none;color:var(--text-muted);font-size:11px;cursor:pointer;padding:0}
+.sb-clear:hover{color:var(--accent)}
+.facet-group{border-bottom:1px solid var(--border)}
+.facet-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 12px 6px;cursor:pointer;user-select:none}
+.facet-hdr:hover{background:var(--surface3)}
+.facet-title{font-size:11.5px;font-weight:600;color:var(--text-dim);display:flex;align-items:center;gap:5px}
+.facet-chevron{color:var(--text-muted);transition:transform .2s;font-size:10px}
+.facet-group.open .facet-chevron{transform:rotate(0)}
+.facet-group:not(.open) .facet-chevron{transform:rotate(-90deg)}
+.facet-body{display:none;padding:0 8px 8px}
+.facet-group.open .facet-body{display:block}
+.fv{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:4px;cursor:pointer;transition:background .1s}
+.fv:hover{background:var(--surface3)}
+.fv.active{background:var(--accent-dim)}
+.fv-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--border2)}
+.fv-label{flex:1;font-size:12px;color:var(--text-dim);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fv.active .fv-label{color:var(--accent)}
+.fv-count{font-size:11px;color:var(--text-muted);font-family:var(--mono);flex-shrink:0}
+.fv-inner{flex:1;min-width:0}
+.fv-bar-wrap{width:100%;height:2px;background:var(--border);border-radius:1px;margin-top:2px}
+.fv-bar{height:100%;border-radius:1px;min-width:2px}
+.facet-empty{padding:4px 6px 8px;font-size:11px;color:var(--text-muted)}
+
+/* ── MAIN PANEL ── */
+.main-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ── CONTROLS BAR ── */
+.controls{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0}
+.ctrl-sel{background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:3px 7px;cursor:pointer;height:26px}
+.ctrl-sel:focus{outline:none;border-color:var(--accent)}
+.ctrl-btn{display:flex;align-items:center;gap:4px;padding:0 9px;height:26px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-size:12px;cursor:pointer;transition:all .12s;white-space:nowrap}
+.ctrl-btn:hover{color:var(--text);background:var(--surface4)}
+.ctrl-space{flex:1}
+.result-info{font-family:var(--mono);font-size:11.5px;color:var(--text-muted)}
+.result-info b{color:var(--text);font-weight:500}
+.pager{display:flex;align-items:center;gap:3px}
+.page-btn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:13px;transition:all .12s}
+.page-btn:hover:not(:disabled){color:var(--text);border-color:var(--accent)}
+.page-btn:disabled{opacity:.3;cursor:default}
+.page-info{font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:0 5px;min-width:48px;text-align:center}
+
+/* ── TABLE ── */
+.table-scroll{flex:1;overflow:auto}
+.table-scroll::-webkit-scrollbar{width:6px;height:6px}
+.table-scroll::-webkit-scrollbar-track{background:var(--surface)}
+.table-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{position:sticky;top:0;background:var(--surface2);color:var(--text-muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;z-index:2}
+tbody td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+.col-exp{width:24px}.col-time{width:148px}.col-etype{width:160px}.col-actor{width:120px}
+.col-role{width:90px}.col-res{width:120px}.col-action{width:100px}.col-status{width:80px}.col-dur{width:70px}
+tr.dr{cursor:pointer;transition:background .08s}
+tr.dr:hover{background:var(--surface3)}
+tr.dr.open{background:var(--surface3)}
+tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid var(--border2);white-space:normal}
+.exp-body{padding:12px 14px 14px 32px}
+.exp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;margin-bottom:10px}
+.ef{padding:5px 8px;background:var(--surface3);border:1px solid var(--border);border-radius:4px}
+.ef-k{font-size:9.5px;color:var(--text-muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:1px}
+.ef-v{font-family:var(--mono);font-size:11.5px;color:var(--text);word-break:break-all}
+.detail-json{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px 12px;font-family:var(--mono);font-size:11.5px;color:var(--text-dim);white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;margin-top:8px}
+
+/* ── STATUS BADGES ── */
+.badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:3px;font-family:var(--mono);font-size:11px;font-weight:600;line-height:16px;text-transform:uppercase;letter-spacing:.04em}
+.st-success{background:var(--green-dim);color:var(--green);border:1px solid var(--green)}
+.st-failure{background:var(--red-dim);color:var(--red);border:1px solid var(--red)}
+.st-error{background:var(--orange-dim);color:var(--orange);border:1px solid var(--orange)}
+
+/* event type dots */
+.dot-auth{background:var(--accent)}
+.dot-user{background:var(--teal)}
+.dot-parser{background:var(--purple)}
+.dot-rule{background:var(--yellow)}
+.dot-alert{background:var(--orange)}
+.dot-ai{background:var(--green)}
+.dot-system{background:var(--text-muted)}
+.dot-error{background:var(--red)}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:7px}
+.empty-row td{text-align:center;padding:52px;color:var(--text-muted);font-size:12.5px}
+.admin-only-msg{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:14px;flex-direction:column;gap:12px}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Left Nav -->
+  <nav class="sidenav" id="sidenav">
+    <div class="sidenav-header">
+      <a href="/ui/dashboard.html" class="sidenav-logo" title="TinySIEM">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span class="sidenav-logo-text">TinySIEM</span>
+      </a>
+      <button class="sidenav-collapse-btn" onclick="toggleNav()" title="Collapse nav">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="collapseIcon"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+    <ul class="sidenav-items">
+      <li><a href="/ui/dashboard.html" class="nav-link" title="Home">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span class="nav-link-label">Home</span>
+      </a></li>
+      <li><a href="/ui/events.html" class="nav-link" title="Events">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span class="nav-link-label">Events</span>
+      </a></li>
+      <li><a href="/ui/alerts.html" class="nav-link" title="Alerts">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="nav-link-label">Alerts</span>
+      </a></li>
+      <li><a href="/ui/rules.html" class="nav-link" title="Rules">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span class="nav-link-label">Rules</span>
+      </a></li>
+      <li><a href="/ui/parsers.html" class="nav-link" title="Parsers">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <span class="nav-link-label">Parsers</span>
+      </a></li>
+      <li><a href="/ui/audit.html" class="nav-link active" title="Audit Log">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span class="nav-link-label">Audit Log</span>
+      </a></li>
+      <li><a href="/ui/configuration.html" class="nav-link" title="Configuration">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        <span class="nav-link-label">Configuration</span>
+      </a></li>
+    </ul>
+    <div class="sidenav-footer">
+      <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">◑</button>
+      <span class="sidenav-user" id="navUser"></span>
+      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">⏏</button>
+    </div>
+  </nav>
+
+  <div class="main-wrap">
+    <div class="topbar">
+      <span class="topbar-title">Audit Log</span>
+      <div class="topbar-right">
+        <span class="result-info" id="refreshTs"></span>
+        <button class="nav-btn" onclick="doSearch()" title="Refresh">↻</button>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="top-area">
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input class="search-input" id="qInput" placeholder="Search actor, event type, details…" onkeydown="if(event.key==='Enter')doSearch()">
+        </div>
+        <select class="filter-sel" id="etypeFilter" onchange="doSearch()">
+          <option value="">All Event Types</option>
+          <option value="auth.login">auth.login</option>
+          <option value="user.create">user.create</option>
+          <option value="user.update">user.update</option>
+          <option value="user.delete">user.delete</option>
+          <option value="parser.create">parser.create</option>
+          <option value="parser.update">parser.update</option>
+          <option value="parser.delete">parser.delete</option>
+          <option value="parser.test">parser.test</option>
+          <option value="parser.generate">parser.generate</option>
+          <option value="rule.create">rule.create</option>
+          <option value="rule.update">rule.update</option>
+          <option value="rule.delete">rule.delete</option>
+          <option value="rule.generate">rule.generate</option>
+          <option value="alert.triage">alert.triage</option>
+          <option value="ai.call">ai.call</option>
+          <option value="system.notification">system.notification</option>
+          <option value="system.retention">system.retention</option>
+          <option value="system.report">system.report</option>
+          <option value="error.api">error.api</option>
+        </select>
+        <select class="filter-sel" id="statusFilter" onchange="doSearch()">
+          <option value="">All Statuses</option>
+          <option value="success">success</option>
+          <option value="failure">failure</option>
+          <option value="error">error</option>
+        </select>
+        <select class="filter-sel" id="rangeFilter" onchange="doSearch()">
+          <option value="24h">Last 24h</option>
+          <option value="7d">Last 7d</option>
+          <option value="30d">Last 30d</option>
+          <option value="all">All time</option>
+        </select>
+        <button class="filter-clear" onclick="clearFilters()">Clear</button>
+        <button class="filter-btn" onclick="doSearch()">Search</button>
+      </div>
+      <div class="active-filters" id="chips"></div>
+    </div>
+
+    <!-- Body -->
+    <div class="body-area" id="bodyArea">
+      <!-- Facet sidebar -->
+      <div class="sidebar" id="sidebar">
+        <div class="sb-head">
+          Filters
+          <button class="sb-clear" onclick="clearFilters()">Clear all</button>
+        </div>
+        <div class="facet-group open" id="facet-event_type">
+          <div class="facet-hdr" data-group="event_type">
+            <span class="facet-title">Event Type <span class="facet-chevron">▾</span></span>
+          </div>
+          <div class="facet-body" id="fv-event_type"><div class="facet-empty">Loading…</div></div>
+        </div>
+        <div class="facet-group open" id="facet-actor">
+          <div class="facet-hdr" data-group="actor">
+            <span class="facet-title">Actor <span class="facet-chevron">▾</span></span>
+          </div>
+          <div class="facet-body" id="fv-actor"><div class="facet-empty">Loading…</div></div>
+        </div>
+        <div class="facet-group open" id="facet-status">
+          <div class="facet-hdr" data-group="status">
+            <span class="facet-title">Status <span class="facet-chevron">▾</span></span>
+          </div>
+          <div class="facet-body" id="fv-status"><div class="facet-empty">Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- Main table panel -->
+      <div class="main-panel">
+        <div class="controls">
+          <select class="ctrl-sel" id="limitSel" onchange="S.limit=+this.value;S.page=0;doSearch()">
+            <option value="50">50 / page</option>
+            <option value="100" selected>100 / page</option>
+            <option value="200">200 / page</option>
+          </select>
+          <div class="ctrl-space"></div>
+          <span class="result-info" id="resultInfo"></span>
+          <div class="pager">
+            <button class="page-btn" id="prevBtn" onclick="prevPage()" disabled title="Previous">‹</button>
+            <span class="page-info" id="pageInfo">—</span>
+            <button class="page-btn" id="nextBtn" onclick="nextPage()" disabled title="Next">›</button>
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table id="auditTable">
+            <thead>
+              <tr>
+                <th class="col-exp"></th>
+                <th class="col-time">Time</th>
+                <th class="col-etype">Event Type</th>
+                <th class="col-actor">Actor</th>
+                <th class="col-role">Role</th>
+                <th class="col-res">Resource</th>
+                <th class="col-action">Action</th>
+                <th class="col-status">Status</th>
+                <th class="col-dur">ms</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr class="empty-row"><td colspan="9"><span class="spinner"></span>Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin-only blocked view -->
+    <div class="admin-only-msg" id="blockedMsg" style="display:none">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+      <span>Audit Log is restricted to admin and superadmin roles.</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const TH = document.documentElement;
+const S = {
+  ep: '', jwt: '', theme: 'dark', navCollapsed: false,
+  page: 0, limit: 100, total: 0,
+  facetActor: '', facetEtype: '', facetStatus: '',
+};
+
+function parseJwt(t){try{const b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b))}catch{return null}}
+function clearAuth(){['ts_jwt','ts_username','ts_role','ts_key'].forEach(k=>localStorage.removeItem(k))}
+function logout(){clearAuth();window.location.href='/ui/login.html'}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function fmtTime(iso){if(!iso)return'—';const d=new Date(iso+(iso.endsWith('Z')?'':'Z'));return d.toLocaleString([],{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+
+function updateNavUser(){
+  const el=document.getElementById('navUser');
+  const name=localStorage.getItem('ts_username')||'';
+  const role=localStorage.getItem('ts_role')||'';
+  if(el) el.textContent=name+(role?' · '+role:'');
+}
+function toggleNav(){
+  S.navCollapsed=!S.navCollapsed;
+  localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));
+  applyNav();
+}
+function applyNav(){
+  const nav=document.getElementById('sidenav');
+  const icon=document.getElementById('collapseIcon');
+  if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}
+  else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}
+}
+function toggleTheme(){
+  S.theme=TH.getAttribute('data-theme')==='dark'?'light':'dark';
+  TH.setAttribute('data-theme',S.theme);
+  localStorage.setItem('ts_theme',S.theme);
+}
+
+async function api(path, opts={}){
+  const r=await fetch(S.ep+path,{headers:{'Authorization':'Bearer '+S.jwt},...opts});
+  if(r.status===401){clearAuth();window.location.href='/ui/login.html';return null;}
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+function rangeStart(){
+  const v=document.getElementById('rangeFilter').value;
+  if(v==='all')return null;
+  const ms={'24h':86400000,'7d':604800000,'30d':2592000000}[v]||86400000;
+  return new Date(Date.now()-ms).toISOString();
+}
+
+function buildQuery(){
+  const q=document.getElementById('qInput').value.trim();
+  const et=S.facetEtype||document.getElementById('etypeFilter').value;
+  const st=S.facetStatus||document.getElementById('statusFilter').value;
+  const actor=S.facetActor;
+  const start=rangeStart();
+  const params=new URLSearchParams();
+  if(q) params.set('q',q);
+  if(et) params.set('event_type',et);
+  if(st) params.set('status',st);
+  if(actor) params.set('actor',actor);
+  if(start) params.set('start',start);
+  params.set('limit',String(S.limit));
+  params.set('offset',String(S.page*S.limit));
+  return params;
+}
+
+async function doSearch(){
+  S.page=0;
+  await fetchData();
+  await fetchFacets();
+}
+
+async function fetchData(){
+  const tbody=document.getElementById('tbody');
+  tbody.innerHTML='<tr class="empty-row"><td colspan="9"><span class="spinner"></span>Loading…</td></tr>';
+  document.getElementById('resultInfo').textContent='';
+  try{
+    const params=buildQuery();
+    const d=await api('/audit?'+params.toString());
+    if(!d)return;
+    S.total=d.total;
+    renderTable(d.items);
+    updatePager();
+    document.getElementById('refreshTs').textContent='Updated '+new Date().toLocaleTimeString();
+    renderChips();
+  }catch(e){
+    tbody.innerHTML=`<tr class="empty-row"><td colspan="9">Error: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function dotClass(et){
+  if(!et)return'';
+  const prefix=et.split('.')[0];
+  return'dot-'+({'auth':'auth','user':'user','parser':'parser','rule':'rule','alert':'alert','ai':'ai','system':'system','error':'error'}[prefix]||'system');
+}
+
+function statusBadge(s){
+  const cls={'success':'st-success','failure':'st-failure','error':'st-error'}[s]||'';
+  return`<span class="badge ${cls}">${esc(s)}</span>`;
+}
+
+function renderTable(items){
+  const tbody=document.getElementById('tbody');
+  if(!items.length){
+    tbody.innerHTML='<tr class="empty-row"><td colspan="9">No audit events found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=items.map((row,i)=>`
+    <tr class="dr" data-i="${i}" data-open="0">
+      <td class="col-exp" style="text-align:center;color:var(--text-muted);font-size:10px">▶</td>
+      <td class="col-time" style="font-family:var(--mono);font-size:11.5px">${esc(fmtTime(row.ts))}</td>
+      <td class="col-etype"><span style="display:inline-flex;align-items:center;gap:5px"><span class="fv-dot ${dotClass(row.event_type)}"></span><span style="font-family:var(--mono);font-size:11.5px">${esc(row.event_type)}</span></span></td>
+      <td class="col-actor" style="font-family:var(--mono);font-size:12px">${esc(row.actor||'—')}</td>
+      <td class="col-role" style="font-size:11.5px;color:var(--text-dim)">${esc(row.actor_role||'—')}</td>
+      <td class="col-res" style="font-family:var(--mono);font-size:11.5px">${row.resource_type?esc(row.resource_type+(row.resource_id?' / '+row.resource_id:'')):'—'}</td>
+      <td class="col-action" style="font-family:var(--mono);font-size:11.5px">${esc(row.action||'—')}</td>
+      <td class="col-status">${statusBadge(row.status)}</td>
+      <td class="col-dur" style="font-family:var(--mono);font-size:11.5px;color:var(--text-dim)">${row.duration_ms!=null?row.duration_ms:'—'}</td>
+    </tr>
+    <tr class="expand-row" id="exp-${i}" style="display:none">
+      <td colspan="9">
+        <div class="exp-body">
+          <div class="exp-grid">
+            ${row.ip_address?`<div class="ef"><span class="ef-k">IP Address</span><span class="ef-v">${esc(row.ip_address)}</span></div>`:''}
+            ${row.duration_ms!=null?`<div class="ef"><span class="ef-k">Duration</span><span class="ef-v">${row.duration_ms} ms</span></div>`:''}
+            ${row.error_msg?`<div class="ef"><span class="ef-k">Error</span><span class="ef-v" style="color:var(--red)">${esc(row.error_msg)}</span></div>`:''}
+            <div class="ef"><span class="ef-k">Event ID</span><span class="ef-v">${esc(row.id)}</span></div>
+          </div>
+          ${row.detail?`<div class="ef-k" style="margin-bottom:4px">Detail</div><div class="detail-json">${esc(JSON.stringify(row.detail,null,2))}</div>`:''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  // Store items for expand
+  tbody._items = items;
+
+  // Row click → expand
+  tbody.querySelectorAll('tr.dr').forEach(tr=>{
+    tr.addEventListener('click', ()=>{
+      const i=tr.dataset.i;
+      const expRow=document.getElementById('exp-'+i);
+      const open=tr.dataset.open==='1';
+      tr.dataset.open=open?'0':'1';
+      tr.classList.toggle('open',!open);
+      tr.querySelector('td.col-exp').textContent=open?'▶':'▼';
+      expRow.style.display=open?'none':'';
+    });
+  });
+}
+
+function updatePager(){
+  const pages=Math.max(1,Math.ceil(S.total/S.limit));
+  const cur=S.page+1;
+  document.getElementById('pageInfo').textContent=`${cur} / ${pages}`;
+  document.getElementById('prevBtn').disabled=S.page===0;
+  document.getElementById('nextBtn').disabled=S.page>=pages-1;
+  const from=S.total?S.page*S.limit+1:0;
+  const to=Math.min((S.page+1)*S.limit,S.total);
+  document.getElementById('resultInfo').innerHTML=
+    S.total?`<b>${from}–${to}</b> of <b>${S.total}</b>`:'<b>0</b> results';
+}
+
+function prevPage(){if(S.page>0){S.page--;fetchData();}}
+function nextPage(){if((S.page+1)*S.limit<S.total){S.page++;fetchData();}}
+
+async function fetchFacets(){
+  const start=rangeStart();
+  const params=new URLSearchParams();
+  if(start) params.set('start',start);
+  try{
+    const d=await api('/audit/facets?'+params.toString());
+    if(!d)return;
+    renderFacets('event_type',d.event_type||[]);
+    renderFacets('actor',d.actor||[]);
+    renderFacets('status',d.status||[]);
+  }catch(_){}
+}
+
+function renderFacets(key, items){
+  const el=document.getElementById('fv-'+key);
+  if(!items.length){el.innerHTML='<div class="facet-empty">None</div>';return;}
+  const max=Math.max(1,...items.map(x=>x.count));
+  const active=(key==='event_type'?S.facetEtype:key==='actor'?S.facetActor:S.facetStatus);
+  const colors={
+    auth:'var(--accent)',user:'var(--teal)',parser:'var(--purple)',rule:'var(--yellow)',
+    alert:'var(--orange)',ai:'var(--green)',system:'var(--text-muted)',error:'var(--red)',
+    success:'var(--green)',failure:'var(--red)',status_error:'var(--orange)',
+  };
+  function dotClr(v){
+    if(key==='status') return v==='success'?'var(--green)':v==='failure'?'var(--red)':'var(--orange)';
+    const p=(v||'').split('.')[0];
+    return colors[p]||'var(--border2)';
+  }
+  el.innerHTML=items.slice(0,12).map(item=>{
+    const pct=Math.round(item.count/max*100);
+    const isActive=active===item.value;
+    return`<div class="fv${isActive?' active':''}" data-key="${esc(key)}" data-val="${esc(item.value)}">
+      <span class="fv-dot" style="background:${dotClr(item.value)}"></span>
+      <div class="fv-inner">
+        <div style="display:flex;justify-content:space-between">
+          <span class="fv-label">${esc(item.value)}</span>
+          <span class="fv-count">${item.count}</span>
+        </div>
+        <div class="fv-bar-wrap"><div class="fv-bar" style="width:${pct}%;background:${dotClr(item.value)}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.fv').forEach(fv=>{
+    fv.addEventListener('click',()=>{
+      const k=fv.dataset.key, v=fv.dataset.val;
+      if(k==='event_type') S.facetEtype=(S.facetEtype===v?'':v);
+      else if(k==='actor') S.facetActor=(S.facetActor===v?'':v);
+      else if(k==='status') S.facetStatus=(S.facetStatus===v?'':v);
+      S.page=0;
+      fetchData();
+      fetchFacets();
+      renderChips();
+    });
+  });
+}
+
+function renderChips(){
+  const chips=document.getElementById('chips');
+  const items=[];
+  const q=document.getElementById('qInput').value.trim();
+  const et=document.getElementById('etypeFilter').value;
+  const st=document.getElementById('statusFilter').value;
+  if(q) items.push({label:`q: ${q}`,rm:()=>{document.getElementById('qInput').value='';doSearch();}});
+  if(et) items.push({label:`type: ${et}`,rm:()=>{document.getElementById('etypeFilter').value='';doSearch();}});
+  if(st) items.push({label:`status: ${st}`,rm:()=>{document.getElementById('statusFilter').value='';doSearch();}});
+  if(S.facetActor) items.push({label:`actor: ${S.facetActor}`,rm:()=>{S.facetActor='';doSearch();}});
+  if(S.facetEtype) items.push({label:`type: ${S.facetEtype}`,rm:()=>{S.facetEtype='';doSearch();}});
+  if(S.facetStatus) items.push({label:`status: ${S.facetStatus}`,rm:()=>{S.facetStatus='';doSearch();}});
+  chips.innerHTML=items.map((item,i)=>`
+    <span class="filter-chip">
+      ${esc(item.label)}
+      <button class="chip-rm" data-chip="${i}">×</button>
+    </span>`).join('');
+  chips.querySelectorAll('.chip-rm').forEach(btn=>{
+    btn.addEventListener('click',()=>items[+btn.dataset.chip].rm());
+  });
+}
+
+function clearFilters(){
+  document.getElementById('qInput').value='';
+  document.getElementById('etypeFilter').value='';
+  document.getElementById('statusFilter').value='';
+  document.getElementById('rangeFilter').value='24h';
+  S.facetActor='';S.facetEtype='';S.facetStatus='';S.page=0;
+  doSearch();
+}
+
+// Facet group toggle
+document.querySelectorAll('.facet-hdr').forEach(hdr=>{
+  hdr.addEventListener('click',()=>{
+    hdr.closest('.facet-group').classList.toggle('open');
+  });
+});
+
+function load(){
+  S.theme=localStorage.getItem('ts_theme')||'dark';
+  S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';
+  if(window.innerWidth<768)S.navCollapsed=true;
+  TH.setAttribute('data-theme',S.theme);
+  applyNav();
+  S.jwt=localStorage.getItem('ts_jwt')||'';
+  S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
+  if(!S.jwt){window.location.href='/ui/login.html';return;}
+  const _p=parseJwt(S.jwt);
+  if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return;}
+
+  // Admin-only guard
+  const role=localStorage.getItem('ts_role')||_p.role||'';
+  if(role!=='admin'&&role!=='superadmin'){
+    document.getElementById('bodyArea').style.display='none';
+    document.querySelector('.top-area').style.display='none';
+    document.getElementById('blockedMsg').style.display='flex';
+    updateNavUser();
+    return;
+  }
+
+  updateNavUser();
+  doSearch();
+}
+
+window.addEventListener('DOMContentLoaded',load);
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
+from app.audit import store as audit
 from app.auth import AuthUser, require_admin, require_analyst
 from app.rules import engine as rule_engine
 
@@ -73,6 +74,11 @@ class RuleRequest(BaseModel):
     yaml_text: str
 
 
+class GenerateRuleRequest(BaseModel):
+    description: str
+    source: str
+
+
 @router.get("")
 def list_rules(_: AuthUser = Depends(require_analyst)):
     result = []
@@ -90,27 +96,47 @@ def list_rules(_: AuthUser = Depends(require_analyst)):
     return {"rules": result}
 
 
-class GenerateRuleRequest(BaseModel):
-    description: str
-    source: str
-
-
 @router.post("/generate")
-def generate_rule_endpoint(req: GenerateRuleRequest, _: AuthUser = Depends(require_admin)):
+def generate_rule_endpoint(req: GenerateRuleRequest, actor: AuthUser = Depends(require_admin)):
     from app.ai.claude import generate_rule
     try:
-        yaml_text = generate_rule(req.description, req.source)
+        yaml_text = generate_rule(req.description, req.source, actor=actor.username)
     except RuntimeError as exc:
+        audit.log_event(
+            "rule.generate", "generated", "error",
+            actor=actor.username, actor_role=actor.role,
+            resource_type="rule",
+            detail={"description_preview": req.description[:200], "source": req.source},
+            error_msg=str(exc),
+        )
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
+        audit.log_event(
+            "rule.generate", "generated", "error",
+            actor=actor.username, actor_role=actor.role,
+            resource_type="rule",
+            detail={"description_preview": req.description[:200], "source": req.source},
+            error_msg=str(exc),
+        )
         raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
     try:
-        _validate_rule_yaml(yaml_text)
+        data = _validate_rule_yaml(yaml_text)
     except HTTPException:
         raise HTTPException(
             status_code=422,
             detail=f"Generated YAML failed validation. Raw output:\n{yaml_text}",
         )
+    audit.log_event(
+        "rule.generate", "generated", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule", resource_id=data.get("name"),
+        detail={
+            "description_preview": req.description[:200],
+            "source": req.source,
+            "generated_name": data.get("name"),
+            "severity": data.get("severity"),
+        },
+    )
     return {"yaml_text": yaml_text, "preview": True}
 
 
@@ -124,34 +150,46 @@ def get_rule(name: str, _: AuthUser = Depends(require_analyst)):
 
 
 @router.post("", status_code=201)
-def create_rule(req: RuleRequest, _: AuthUser = Depends(require_admin)):
+def create_rule(req: RuleRequest, actor: AuthUser = Depends(require_admin)):
     _check_name(req.name)
-    _validate_rule_yaml(req.yaml_text)
+    data = _validate_rule_yaml(req.yaml_text)
     dest = _CUSTOM_DIR / f"{req.name}.yaml"
     if dest.exists():
         raise HTTPException(status_code=409, detail="Rule already exists")
     _CUSTOM_DIR.mkdir(exist_ok=True)
     dest.write_text(req.yaml_text)
     rule_engine.load_rules()
+    audit.log_event(
+        "rule.create", "created", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule", resource_id=req.name,
+        detail={"rule_name": req.name, "severity": data.get("severity"), "source": data.get("source")},
+    )
     return {"name": req.name, "status": "created"}
 
 
 @router.put("/{name}")
-def update_rule(name: str, req: RuleRequest, _: AuthUser = Depends(require_admin)):
+def update_rule(name: str, req: RuleRequest, actor: AuthUser = Depends(require_admin)):
     _check_name(name)
     path, is_custom = _get_rule_file(name)
     if not path:
         raise HTTPException(status_code=404, detail="Rule not found")
     if not is_custom:
         raise HTTPException(status_code=403, detail="Cannot modify built-in rules")
-    _validate_rule_yaml(req.yaml_text)
+    data = _validate_rule_yaml(req.yaml_text)
     path.write_text(req.yaml_text)
     rule_engine.load_rules()
+    audit.log_event(
+        "rule.update", "updated", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule", resource_id=name,
+        detail={"rule_name": name, "severity": data.get("severity")},
+    )
     return {"name": name, "status": "updated"}
 
 
 @router.delete("/{name}", status_code=204)
-def delete_rule(name: str, _: AuthUser = Depends(require_admin)):
+def delete_rule(name: str, actor: AuthUser = Depends(require_admin)):
     _check_name(name)
     path, is_custom = _get_rule_file(name)
     if not path:
@@ -160,4 +198,10 @@ def delete_rule(name: str, _: AuthUser = Depends(require_admin)):
         raise HTTPException(status_code=403, detail="Cannot delete built-in rules")
     path.unlink()
     rule_engine.load_rules()
+    audit.log_event(
+        "rule.delete", "deleted", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule", resource_id=name,
+        detail={"rule_name": name},
+    )
     return Response(status_code=204)

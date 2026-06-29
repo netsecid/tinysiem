@@ -1,4 +1,5 @@
 import logging
+import time
 
 from app.config import settings
 
@@ -64,26 +65,63 @@ def _get_client():
     return anthropic.Anthropic(api_key=settings.tinysiem_claude_api_key)
 
 
-def generate_parser(log_sample: str) -> str:
-    client = _get_client()
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2048,
-        system=_PARSER_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": f"Generate a decoder YAML for this log sample:\n\n{log_sample}"}],
+def _log_ai_call(action: str, actor: str, prompt: str, result: str, duration_ms: int, success: bool, error: str = None) -> None:
+    from app.audit import store as audit
+    audit.log_event(
+        "ai.call", action,
+        status="success" if success else "error",
+        actor=actor,
+        resource_type="ai",
+        detail={
+            "model": "claude-sonnet-4-6",
+            "prompt_length": len(prompt),
+            "prompt_preview": prompt[:500],
+            "response_length": len(result) if result else 0,
+            "response_preview": result[:1000] if result else None,
+            "duration_ms": duration_ms,
+        },
+        duration_ms=duration_ms,
+        error_msg=error,
     )
-    return response.content[0].text.strip()
 
 
-def generate_rule(description: str, source: str) -> str:
+def generate_parser(log_sample: str, actor: str = "system") -> str:
     client = _get_client()
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        system=_RULE_SYSTEM_PROMPT,
-        messages=[{
-            "role": "user",
-            "content": f"Source: {source}\n\nGenerate a detection rule for: {description}",
-        }],
-    )
-    return response.content[0].text.strip()
+    prompt = f"Generate a decoder YAML for this log sample:\n\n{log_sample}"
+    start = time.time()
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
+            system=_PARSER_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        result = response.content[0].text.strip()
+        duration_ms = int((time.time() - start) * 1000)
+        _log_ai_call("generate_parser", actor, prompt, result, duration_ms, success=True)
+        return result
+    except Exception as exc:
+        duration_ms = int((time.time() - start) * 1000)
+        _log_ai_call("generate_parser", actor, prompt, "", duration_ms, success=False, error=str(exc))
+        raise
+
+
+def generate_rule(description: str, source: str, actor: str = "system") -> str:
+    client = _get_client()
+    prompt = f"Source: {source}\n\nGenerate a detection rule for: {description}"
+    start = time.time()
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            system=_RULE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        result = response.content[0].text.strip()
+        duration_ms = int((time.time() - start) * 1000)
+        _log_ai_call("generate_rule", actor, prompt, result, duration_ms, success=True)
+        return result
+    except Exception as exc:
+        duration_ms = int((time.time() - start) * 1000)
+        _log_ai_call("generate_rule", actor, prompt, "", duration_ms, success=False, error=str(exc))
+        raise

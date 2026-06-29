@@ -486,3 +486,144 @@ def ensure_superadmin(password_hash: str) -> None:
     if count == 0:
         create_user("admin", password_hash, "superadmin")
         logger.info("Created initial superadmin user 'admin'")
+
+
+# ── Audit log ─────────────────────────────────────────────────────────────────
+
+def init_audit_table() -> None:
+    with _lock:
+        _conn.execute("""CREATE TABLE IF NOT EXISTS audit_log (
+            id            VARCHAR PRIMARY KEY,
+            ts            TIMESTAMP NOT NULL,
+            event_type    VARCHAR NOT NULL,
+            actor         VARCHAR NOT NULL DEFAULT 'system',
+            actor_role    VARCHAR,
+            resource_type VARCHAR,
+            resource_id   VARCHAR,
+            action        VARCHAR NOT NULL,
+            status        VARCHAR NOT NULL,
+            detail        JSON,
+            ip_address    VARCHAR,
+            duration_ms   INTEGER,
+            error_msg     VARCHAR
+        )""")
+        _conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts)")
+        _conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor)")
+        _conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_type ON audit_log(event_type)")
+
+
+def insert_audit_event(row: dict) -> None:
+    ts = row["ts"]
+    if hasattr(ts, "tzinfo") and ts.tzinfo:
+        ts = ts.replace(tzinfo=None)
+    with _lock:
+        _conn.execute(
+            "INSERT INTO audit_log (id,ts,event_type,actor,actor_role,resource_type,"
+            "resource_id,action,status,detail,ip_address,duration_ms,error_msg) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [row["id"], ts, row["event_type"], row["actor"],
+             row.get("actor_role"), row.get("resource_type"), row.get("resource_id"),
+             row["action"], row["status"], row.get("detail"),
+             row.get("ip_address"), row.get("duration_ms"), row.get("error_msg")],
+        )
+
+
+def query_audit(
+    event_type: Optional[str] = None,
+    actor: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    action: Optional[str] = None,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    conditions: list[str] = []
+    params: list = []
+    if event_type:
+        conditions.append("event_type = ?")
+        params.append(event_type)
+    if actor:
+        conditions.append("actor = ?")
+        params.append(actor)
+    if resource_type:
+        conditions.append("resource_type = ?")
+        params.append(resource_type)
+    if action:
+        conditions.append("action = ?")
+        params.append(action)
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+    if q:
+        like = f"%{q}%"
+        conditions.append(
+            "(actor ILIKE ? OR event_type ILIKE ? OR CAST(detail AS VARCHAR) ILIKE ?)"
+        )
+        params += [like, like, like]
+    if start:
+        s = start.replace(tzinfo=None) if start.tzinfo else start
+        conditions.append("ts >= ?")
+        params.append(s)
+    if end:
+        e = end.replace(tzinfo=None) if end.tzinfo else end
+        conditions.append("ts <= ?")
+        params.append(e)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    cols = ["id", "ts", "event_type", "actor", "actor_role", "resource_type",
+            "resource_id", "action", "status", "detail", "ip_address", "duration_ms", "error_msg"]
+    with _lock:
+        total = _conn.execute(
+            f"SELECT COUNT(*) FROM audit_log {where}", params
+        ).fetchone()[0]
+        rows = _conn.execute(
+            f"SELECT {','.join(cols)} FROM audit_log {where} "
+            "ORDER BY ts DESC LIMIT ? OFFSET ?",
+            params + [limit, offset],
+        ).fetchall()
+    items = []
+    for row in rows:
+        d = dict(zip(cols, row))
+        if d["ts"] and hasattr(d["ts"], "isoformat"):
+            d["ts"] = d["ts"].isoformat() + "Z"
+        if isinstance(d.get("detail"), str):
+            try:
+                d["detail"] = json.loads(d["detail"])
+            except Exception:
+                pass
+        items.append(d)
+    return {"total": total, "items": items}
+
+
+def get_audit_facets(
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+) -> dict:
+    conditions: list[str] = []
+    params: list = []
+    if start:
+        s = start.replace(tzinfo=None) if start.tzinfo else start
+        conditions.append("ts >= ?")
+        params.append(s)
+    if end:
+        e = end.replace(tzinfo=None) if end.tzinfo else end
+        conditions.append("ts <= ?")
+        params.append(e)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    def _counts(col: str) -> list[dict]:
+        rows = _conn.execute(
+            f"SELECT {col}, COUNT(*) FROM audit_log {where} "
+            f"GROUP BY {col} ORDER BY COUNT(*) DESC LIMIT 20",
+            params,
+        ).fetchall()
+        return [{"value": r[0], "count": r[1]} for r in rows if r[0] is not None]
+
+    with _lock:
+        return {
+            "event_type": _counts("event_type"),
+            "actor": _counts("actor"),
+            "status": _counts("status"),
+        }

@@ -6,6 +6,7 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
+from app.audit import store as audit
 from app.auth import AuthUser, require_admin, require_analyst
 from app.decoder import engine as decoder_engine
 
@@ -88,20 +89,26 @@ def list_parsers(_: AuthUser = Depends(require_analyst)):
 
 
 @router.post("", status_code=201)
-def create_parser(req: ParserRequest, _: AuthUser = Depends(require_admin)):
+def create_parser(req: ParserRequest, actor: AuthUser = Depends(require_admin)):
     _check_name(req.name)
-    _validate_parser_yaml(req.yaml_text)
+    data = _validate_parser_yaml(req.yaml_text)
     dest = _CUSTOM_DIR / f"{req.name}.yaml"
     if dest.exists():
         raise HTTPException(status_code=409, detail="Parser already exists")
     _CUSTOM_DIR.mkdir(exist_ok=True)
     dest.write_text(req.yaml_text)
     decoder_engine.load_decoders()
+    audit.log_event(
+        "parser.create", "created", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="parser", resource_id=req.name,
+        detail={"parser_name": req.name, "source": data.get("source"), "type": data.get("type")},
+    )
     return {"name": req.name, "status": "created"}
 
 
 @router.post("/{name}/test")
-def test_parser(name: str, req: TestRequest, _: AuthUser = Depends(require_analyst)):
+def test_parser(name: str, req: TestRequest, actor: AuthUser = Depends(require_analyst)):
     _check_name(name)
     path, _ = _get_parser_file(name)
     if not path:
@@ -111,7 +118,14 @@ def test_parser(name: str, req: TestRequest, _: AuthUser = Depends(require_analy
     except yaml.YAMLError as exc:
         raise HTTPException(status_code=422, detail=f"Parser YAML invalid: {exc}")
     event = decoder_engine.decode_with(decoder, req.log_line)
-    if event is None:
+    matched = event is not None
+    audit.log_event(
+        "parser.test", "tested", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="parser", resource_id=name,
+        detail={"parser_name": name, "matched": matched, "log_line_preview": req.log_line[:200]},
+    )
+    if not matched:
         return {"matched": False, "fields": {}}
     fields = {k: v for k, v in event.items() if k not in ("id", "ingested_at", "raw", "source")}
     return {"matched": True, "fields": fields}
@@ -122,21 +136,46 @@ class GenerateParserRequest(BaseModel):
 
 
 @router.post("/generate")
-def generate_parser_endpoint(req: GenerateParserRequest, _: AuthUser = Depends(require_admin)):
+def generate_parser_endpoint(req: GenerateParserRequest, actor: AuthUser = Depends(require_admin)):
     from app.ai.claude import generate_parser
     try:
-        yaml_text = generate_parser(req.log_sample)
+        yaml_text = generate_parser(req.log_sample, actor=actor.username)
     except RuntimeError as exc:
+        audit.log_event(
+            "parser.generate", "generated", "error",
+            actor=actor.username, actor_role=actor.role,
+            resource_type="parser",
+            detail={"log_sample_length": len(req.log_sample), "log_sample_preview": req.log_sample[:200]},
+            error_msg=str(exc),
+        )
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
+        audit.log_event(
+            "parser.generate", "generated", "error",
+            actor=actor.username, actor_role=actor.role,
+            resource_type="parser",
+            detail={"log_sample_length": len(req.log_sample), "log_sample_preview": req.log_sample[:200]},
+            error_msg=str(exc),
+        )
         raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
     try:
-        _validate_parser_yaml(yaml_text)
+        data = _validate_parser_yaml(yaml_text)
     except HTTPException:
         raise HTTPException(
             status_code=422,
             detail=f"Generated YAML failed validation. Raw output:\n{yaml_text}",
         )
+    audit.log_event(
+        "parser.generate", "generated", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="parser", resource_id=data.get("name"),
+        detail={
+            "log_sample_length": len(req.log_sample),
+            "log_sample_preview": req.log_sample[:200],
+            "generated_name": data.get("name"),
+            "generated_source": data.get("source"),
+        },
+    )
     return {"yaml_text": yaml_text, "preview": True}
 
 
@@ -150,21 +189,27 @@ def get_parser(name: str, _: AuthUser = Depends(require_analyst)):
 
 
 @router.put("/{name}")
-def update_parser(name: str, req: ParserRequest, _: AuthUser = Depends(require_admin)):
+def update_parser(name: str, req: ParserRequest, actor: AuthUser = Depends(require_admin)):
     _check_name(name)
     path, is_custom = _get_parser_file(name)
     if not path:
         raise HTTPException(status_code=404, detail="Parser not found")
     if not is_custom:
         raise HTTPException(status_code=403, detail="Cannot modify built-in parsers")
-    _validate_parser_yaml(req.yaml_text)
+    data = _validate_parser_yaml(req.yaml_text)
     path.write_text(req.yaml_text)
     decoder_engine.load_decoders()
+    audit.log_event(
+        "parser.update", "updated", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="parser", resource_id=name,
+        detail={"parser_name": name, "source": data.get("source")},
+    )
     return {"name": name, "status": "updated"}
 
 
 @router.delete("/{name}", status_code=204)
-def delete_parser(name: str, _: AuthUser = Depends(require_admin)):
+def delete_parser(name: str, actor: AuthUser = Depends(require_admin)):
     _check_name(name)
     path, is_custom = _get_parser_file(name)
     if not path:
@@ -173,4 +218,10 @@ def delete_parser(name: str, _: AuthUser = Depends(require_admin)):
         raise HTTPException(status_code=403, detail="Cannot delete built-in parsers")
     path.unlink()
     decoder_engine.load_decoders()
+    audit.log_event(
+        "parser.delete", "deleted", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="parser", resource_id=name,
+        detail={"parser_name": name},
+    )
     return Response(status_code=204)
