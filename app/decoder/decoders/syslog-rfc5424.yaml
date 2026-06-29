@@ -1,0 +1,11 @@
+name: syslog-rfc5424
+source: syslog_rfc5424
+type: regex
+pattern: '^<\d+>1 (?P<timestamp>\S+) (?P<hostname>\S+) (?P<appname>\S+) (?P<procid>\S+) \S+ \S+ (?P<message>.+)$'
+fields:
+  hostname: hostname
+  program: appname
+  pid: procid
+  message: message
+timestamp_field: timestamp
+timestamp_format: '%Y-%m-%dT%H:%M:%S.%f%z'

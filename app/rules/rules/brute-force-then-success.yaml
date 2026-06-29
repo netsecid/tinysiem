@@ -1,0 +1,18 @@
+name: brute-force-then-success
+severity: high
+source: "*"
+condition:
+  type: correlation
+  window_seconds: 300
+  capture_field: source_ip
+  steps:
+    - source: nginx
+      field: status_code
+      value: "401"
+      operator: eq
+    - source: nginx
+      field: status_code
+      value: "200"
+      operator: eq
+mitre_tactic: "Credential Access"
+mitre_technique: "T1110"

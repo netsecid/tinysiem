@@ -127,6 +127,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
           <div class="msg" id="retentionMsg"></div>
         </div>
 
+        <!-- Log Ingestion (admin+) -->
+        <div class="card" id="ingestCard" style="display:none">
+          <div class="section-label">Log Ingestion</div>
+          <div id="ingestContent" style="color:var(--text-muted);font-size:12px"><span class="spinner"></span>Loading…</div>
+        </div>
+
         <!-- Reports (analyst+) -->
         <div class="card">
           <div class="section-label">Reports</div>
@@ -178,6 +184,7 @@ async function loadConfig(){
   if(healthRes.ok){
     const h=await healthRes.json();
     document.getElementById('cfgVersion').textContent='v'+h.version;
+    if(h.listeners) renderIngestCard(h.listeners);
   }
   if(meRes){
     const me=await meRes.json();
@@ -188,6 +195,7 @@ async function loadConfig(){
     if(me.role==='admin'||me.role==='superadmin'){
       document.getElementById('notifCard').style.display='';
       document.getElementById('retentionCard').style.display='';
+      document.getElementById('ingestCard').style.display='';
       document.getElementById('sendReport').style.display='';
       loadNotifications();
       loadRetention();
@@ -286,6 +294,18 @@ async function sendReport(){
   if(!res) return;
   if(res.ok) showMsg('reportMsg','Report sent via email','ok');
   else showMsg('reportMsg','Send failed: HTTP '+res.status,'err');
+}
+
+function renderIngestCard(ls){
+  const udp=ls.syslog_udp||{};
+  const tcp=ls.syslog_tcp||{};
+  const beats=ls.beats_http||{};
+  document.getElementById('ingestContent').innerHTML=`<table class="kv-table">
+    <tr><td>REST API</td><td><span class="badge-ok">Enabled</span> &nbsp;<code style="color:var(--text-muted);font-size:11px">/ingest/raw</code></td></tr>
+    <tr><td>Beats HTTP</td><td>${beats.enabled?'<span class="badge-ok">Enabled</span>':'<span class="badge-off">Disabled</span>'}${beats.enabled?' &nbsp;<code style="color:var(--text-muted);font-size:11px">'+esc(beats.path)+'</code>':''}</td></tr>
+    <tr><td>Syslog UDP</td><td>${udp.enabled?'<span class="badge-ok">Enabled</span> &nbsp;port '+esc(String(udp.port)):'<span class="badge-off">Disabled</span>'}</td></tr>
+    <tr><td>Syslog TCP</td><td>${tcp.enabled?'<span class="badge-ok">Enabled</span> &nbsp;port '+esc(String(tcp.port)):'<span class="badge-off">Disabled</span>'}</td></tr>
+  </table>`;
 }
 
 function load(){

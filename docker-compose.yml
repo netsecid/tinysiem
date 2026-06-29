@@ -19,6 +19,8 @@ services:
       - tinysiem_data:/app/data
     ports:
       - "8000:8000"
+      - "5140:5140/udp"
+      - "5141:5141"
     depends_on:
       - nginx
 

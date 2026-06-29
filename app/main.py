@@ -39,8 +39,11 @@ async def lifespan(app: FastAPI):
     from app.reports.generator import start_report_scheduler
     start_retention_thread()
     start_report_scheduler()
+    from app.listeners.syslog import start_syslog_listeners, stop_syslog_listeners
+    _syslog_servers = await start_syslog_listeners()
     yield
     logger.info("TinySIEM shutting down")
+    stop_syslog_listeners(_syslog_servers)
     duckdb_store.close_db()
 
 
@@ -84,7 +87,24 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": settings.tinysiem_version}
+    return {
+        "status": "ok",
+        "version": settings.tinysiem_version,
+        "listeners": {
+            "syslog_udp": {
+                "enabled": settings.tinysiem_syslog_udp_port > 0,
+                "port": settings.tinysiem_syslog_udp_port,
+            },
+            "syslog_tcp": {
+                "enabled": settings.tinysiem_syslog_tcp_port > 0,
+                "port": settings.tinysiem_syslog_tcp_port,
+            },
+            "beats_http": {
+                "enabled": settings.tinysiem_beats_enabled,
+                "path": "/ingest/beats",
+            },
+        },
+    }
 
 
 if settings.tinysiem_mcp_enabled:

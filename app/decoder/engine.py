@@ -71,6 +71,17 @@ def decode(source: str, raw: str) -> Optional[dict]:
     return None
 
 
+def _get_nested(data: dict, key: str):
+    """Resolve dotted-path keys like 'winlog.event_id' into nested dicts."""
+    if "." not in key:
+        return data.get(key)
+    for part in key.split("."):
+        if not isinstance(data, dict):
+            return None
+        data = data.get(part)
+    return data
+
+
 def _base_event(source: str, raw: str) -> dict:
     return {
         "id": str(uuid.uuid4()),
@@ -83,7 +94,7 @@ def _base_event(source: str, raw: str) -> dict:
 def _apply_fields(event: dict, fields: dict, data: dict) -> dict:
     extra: dict = {}
     for normalized, src_key in fields.items():
-        value = data.get(src_key)
+        value = _get_nested(data, src_key)
         if normalized in _SCHEMA_FIELDS:
             event[normalized] = _coerce(normalized, value)
         else:
@@ -109,7 +120,7 @@ def _parse_timestamp(event: dict, decoder: dict, data: dict) -> None:
     fields = decoder.get("fields", {})
     if not (ts_field and ts_format and ts_field in fields):
         return
-    ts_str = data.get(fields[ts_field])
+    ts_str = _get_nested(data, fields[ts_field])
     if ts_str:
         try:
             event["event_time"] = datetime.strptime(ts_str, ts_format)

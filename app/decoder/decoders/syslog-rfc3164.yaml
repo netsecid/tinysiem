@@ -1,0 +1,9 @@
+name: syslog-rfc3164
+source: syslog_rfc3164
+type: regex
+pattern: '^<\d+>(?P<timestamp>\w{3} +\d{1,2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<program>[^\[: ]+)(?:\[(?P<pid>\d+)\])?: (?P<message>.+)$'
+fields:
+  hostname: hostname
+  program: program
+  pid: pid
+  message: message

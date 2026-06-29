@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     tinysiem_api_key: str
     tinysiem_debug: bool = False
-    tinysiem_version: str = "0.7.0"
+    tinysiem_version: str = "0.8.0"
     tinysiem_duckdb_path: str = "/app/data/tinysiem.duckdb"
     tinysiem_chroma_path: str = "/app/data/chroma_store"
     tinysiem_alerts_path: str = "/app/data/alerts/alerts.log"
@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     tinysiem_report_schedule: str = "disabled"
     tinysiem_report_email: str = ""
     tinysiem_report_hour: int = 8
+
+    # Listeners (v0.8)
+    tinysiem_syslog_udp_port: int = 5140   # 0 = disabled
+    tinysiem_syslog_tcp_port: int = 5141   # 0 = disabled
+    tinysiem_beats_enabled: bool = True
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

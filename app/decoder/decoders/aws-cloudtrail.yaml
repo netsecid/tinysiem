@@ -1,0 +1,11 @@
+name: aws-cloudtrail
+source: aws_cloudtrail
+type: json
+fields:
+  source_ip: sourceIPAddress
+  user_agent: userAgent
+  method: eventName
+  event_id: eventID
+  principal: userIdentity.type
+  region: awsRegion
+  response: responseElements

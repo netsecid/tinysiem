@@ -1,0 +1,11 @@
+name: windows-event
+source: windows_event
+type: json
+fields:
+  source_ip: source.ip
+  user_agent: user.name
+  method: event.action
+  uri: url.path
+  event_id: winlog.event_id
+  computer: winlog.computer_name
+  message: message

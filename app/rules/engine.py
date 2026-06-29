@@ -1,4 +1,6 @@
 import logging
+import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -10,6 +12,10 @@ from app.storage import duckdb_store
 logger = logging.getLogger(__name__)
 
 _rules: list[dict] = []
+
+# Correlation state: {rule_name: {capture_value: {step, triggered_at, first_event_id}}}
+_corr_state: dict[str, dict[str, dict]] = {}
+_corr_lock = threading.Lock()
 
 
 def load_rules(rules_dir: Optional[Path] = None) -> None:
@@ -39,13 +45,20 @@ def load_rules(rules_dir: Optional[Path] = None) -> None:
                 logger.warning(f"Failed to load custom rule {yaml_file}: {exc}")
 
 
+def reset_corr_state() -> None:
+    with _corr_lock:
+        _corr_state.clear()
+
+
 def evaluate(event: dict) -> None:
     source = event.get("source")
     for rule in _rules:
-        if rule.get("source") != source:
-            continue
+        ctype = rule.get("condition", {}).get("type")
         try:
-            _evaluate_rule(rule, event)
+            if ctype == "correlation":
+                _evaluate_correlation(rule, event)
+            elif rule.get("source") == source:
+                _evaluate_rule(rule, event)
         except Exception as exc:
             logger.warning(f"Rule '{rule.get('name')}' evaluation error: {exc}")
 
@@ -72,6 +85,62 @@ def _evaluate_rule(rule: dict, event: dict) -> None:
 
     if triggered:
         file_writer.write_alert(rule, event)
+
+
+def _check_step(event: dict, step_spec: dict) -> bool:
+    step_source = step_spec.get("source")
+    if step_source and step_source != "*" and event.get("source") != step_source:
+        return False
+    field = step_spec.get("field")
+    value = step_spec.get("value")
+    operator = step_spec.get("operator", "eq")
+    if field:
+        return _check_operator(event.get(field), operator, value)
+    return True
+
+
+def _cleanup_corr(rule_name: str, window: int) -> None:
+    now = datetime.now(timezone.utc)
+    if rule_name in _corr_state:
+        _corr_state[rule_name] = {
+            k: v for k, v in _corr_state[rule_name].items()
+            if (now - v["triggered_at"]).total_seconds() <= window
+        }
+
+
+def _evaluate_correlation(rule: dict, event: dict) -> None:
+    cond = rule.get("condition", {})
+    steps = cond.get("steps", [])
+    if len(steps) < 2:
+        return
+    capture_field = cond.get("capture_field")
+    window = cond.get("window_seconds", 300)
+    rule_name = rule.get("name")
+
+    capture_value = str(event.get(capture_field, "")) if capture_field else None
+    if not capture_value:
+        return
+
+    with _corr_lock:
+        _cleanup_corr(rule_name, window)
+        state = _corr_state.setdefault(rule_name, {})
+        entry = state.get(capture_value)
+
+        if entry is None:
+            if _check_step(event, steps[0]):
+                state[capture_value] = {
+                    "step": 0,
+                    "triggered_at": datetime.now(timezone.utc),
+                    "first_event_id": event.get("id"),
+                }
+        else:
+            next_step = entry["step"] + 1
+            if next_step < len(steps) and _check_step(event, steps[next_step]):
+                if next_step == len(steps) - 1:
+                    del state[capture_value]
+                    file_writer.write_alert(rule, event)
+                else:
+                    entry["step"] = next_step
 
 
 def _check_operator(event_value, operator: str, rule_value) -> bool:

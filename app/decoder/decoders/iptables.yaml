@@ -1,0 +1,10 @@
+name: iptables
+source: iptables
+type: regex
+pattern: '.*\bSRC=(?P<src_ip>\S+)\s+DST=(?P<dst_ip>\S+).*\bPROTO=(?P<proto>\S+)(?:.*\bSPT=(?P<sport>\d+))?(?:.*\bDPT=(?P<dport>\d+))?'
+fields:
+  source_ip: src_ip
+  uri: dst_ip
+  method: proto
+  src_port: sport
+  dst_port: dport

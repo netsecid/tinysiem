@@ -22,6 +22,9 @@ os.environ["TINYSIEM_ARCHIVE_PATH"] = _tmp + "/archive"
 os.environ["TINYSIEM_SMTP_HOST"] = ""
 os.environ["TINYSIEM_WEBHOOK_URL"] = ""
 os.environ["TINYSIEM_REPORT_SCHEDULE"] = "disabled"
+os.environ["TINYSIEM_SYSLOG_UDP_PORT"] = "0"
+os.environ["TINYSIEM_SYSLOG_TCP_PORT"] = "0"
+os.environ["TINYSIEM_BEATS_ENABLED"] = "true"
 
 # ── 2. Stub chromadb before any import resolves it ───────────────────────────
 _mock_collection = MagicMock()
