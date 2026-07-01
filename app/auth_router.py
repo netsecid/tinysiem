@@ -5,8 +5,12 @@ from pydantic import BaseModel
 from app.auth import AuthUser, create_token, require_analyst
 from app.audit import store as audit
 from app.config import settings
-from app.password import verify_password
+from app.password import hash_password, verify_password
 from app.storage import duckdb_store
+
+# Pre-computed dummy hash so bcrypt always runs regardless of whether username exists,
+# preventing timing-based username enumeration.
+_DUMMY_HASH = hash_password("tinysiem-dummy-no-match-placeholder")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -20,7 +24,9 @@ class LoginRequest(BaseModel):
 def login(req: LoginRequest, request: Request):
     ip = request.client.host if request.client else None
     user = duckdb_store.get_user_by_username(req.username)
-    if not user or not verify_password(req.password, user["password_hash"]):
+    password_hash = user["password_hash"] if user else _DUMMY_HASH
+    password_valid = verify_password(req.password, password_hash)
+    if not user or not password_valid:
         audit.log_event(
             "auth.login", "login", "failure",
             actor=req.username,

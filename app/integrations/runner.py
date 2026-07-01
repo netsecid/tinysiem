@@ -19,13 +19,12 @@ async def _ingest_events(events: list[dict], actor: str) -> int:
     """Insert pulled events via the same path as POST /ingest/raw."""
     from app.decoder import engine as decoder_engine
     from app.rules import engine as rule_engine
-    from app.alerts.file_writer import write_alert
 
     ingested = 0
     for ev in events:
         raw = ev.get("raw", "")
         source = ev.get("source", "unknown")
-        decoded = decoder_engine.decode(raw, source)
+        decoded = decoder_engine.decode(source, raw)
         if decoded is None:
             decoded = {
                 "id": __import__("uuid").uuid4().hex,
@@ -34,8 +33,7 @@ async def _ingest_events(events: list[dict], actor: str) -> int:
                 "raw": raw,
             }
         duckdb_store.insert_event(decoded)
-        for alert in rule_engine.evaluate(decoded):
-            write_alert(alert)
+        rule_engine.evaluate(decoded)
         ingested += 1
     return ingested
 

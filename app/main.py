@@ -100,6 +100,15 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+
 @app.exception_handler(HTTPException)
 async def audit_http_exception(request: Request, exc: HTTPException):
     """Log 4xx/5xx errors to audit log (except auth/health/ui noise)."""

@@ -8,12 +8,15 @@ from app.auth import decode_token
 logger = logging.getLogger(__name__)
 
 
+_MCP_ALLOWED_ROLES = {"analyst", "admin", "superadmin"}
+
+
 class _JWTMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             payload = decode_token(auth[7:])
-            if payload:
+            if payload and payload.get("role") in _MCP_ALLOWED_ROLES:
                 return await call_next(request)
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 

@@ -451,6 +451,10 @@ function applyNav(){
   updateNavUser();
   fetchFacets();
   fetchAlerts();
+  document.getElementById('activeFilters').addEventListener('click',e=>{
+    const btn=e.target.closest('.chip-rm[data-key]');
+    if(btn) clickFacet(btn.dataset.key,btn.dataset.val);
+  });
 })();
 
 // ── SEARCH ─────────────────────────────────────────────────────────────
@@ -592,7 +596,7 @@ function renderChips(){
   Object.entries(S.af).forEach(([k,v])=>{
     const chip=document.createElement('span');
     chip.className='filter-chip';
-    chip.innerHTML=`<b>${k}:</b>&nbsp;${esc(v)}<button class="chip-rm" onclick="clickFacet('${k}','${v.replace(/'/g,"\\'")}')">✕</button>`;
+    chip.innerHTML=`<b>${esc(k)}:</b>&nbsp;${esc(v)}<button class="chip-rm" data-key="${esc(k)}" data-val="${esc(v)}">✕</button>`;
     el.appendChild(chip);
   });
   if(S.q){
@@ -662,7 +666,7 @@ function toggleExpand(tr,al,i){
     <div class="exp-grid">${fieldRows}</div>
     <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
       <button class="ctrl-btn" onclick="openDetail(${i})">View Full Detail</button>
-      <button class="ctrl-btn" id="aiBtn_${i}" onclick="event.stopPropagation();explainAlert('${al.alert_id}',${i})">✦ Explain with AI</button>
+      <button class="ctrl-btn" id="aiBtn_${i}" onclick="event.stopPropagation();explainAlert('${esc(al.alert_id)}',${i})">✦ Explain with AI</button>
     </div>
     <div id="aiResult_${i}" style="display:none;margin-top:10px;padding:10px 14px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;font-size:12.5px;line-height:1.65;color:var(--text)"></div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
@@ -685,7 +689,7 @@ function toggleExpand(tr,al,i){
           <input id="trAssigned_${i}" type="text" class="ctrl-sel" style="width:100%;height:28px;padding:3px 7px" value="${esc(al.assigned_to||'')}" placeholder="username">
         </div>
       </div>
-      <button id="trSaveBtn_${i}" class="ctrl-btn" style="margin-top:8px" onclick="event.stopPropagation();saveTriage('${al.alert_id}',${i})">Save Triage</button>
+      <button id="trSaveBtn_${i}" class="ctrl-btn" style="margin-top:8px" onclick="event.stopPropagation();saveTriage('${esc(al.alert_id)}',${i})">Save Triage</button>
     </div>
   </div></td>`;
   tr.parentNode.insertBefore(exp,tr.nextSibling);

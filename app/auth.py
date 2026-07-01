@@ -1,5 +1,6 @@
 import app.password  # noqa: F401 — ensures bcrypt monkey-patch is applied before passlib/jwt
 
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -62,13 +63,13 @@ def require_auth(min_role: str = "analyst"):
             if not _role_ok(role, min_role):
                 raise HTTPException(status_code=403, detail="Insufficient permissions")
             return AuthUser(
-                user_id=payload["sub"],
+                user_id=payload.get("sub", ""),
                 username=payload.get("username", ""),
                 role=role,
             )
 
         # 2. Backward compat: global API key → admin
-        if token == settings.tinysiem_api_key:
+        if secrets.compare_digest(token, settings.tinysiem_api_key):
             if not _role_ok("admin", min_role):
                 raise HTTPException(status_code=403, detail="Insufficient permissions")
             return AuthUser(user_id="system", username="system", role="admin")

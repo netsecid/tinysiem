@@ -660,7 +660,7 @@ function buildSidebar(facets){
         const color=g.colorFn(it.value);
         const pct=Math.max(4,Math.round(it.count/max*100));
         const dotCls=g.dot||`dot-${it.value}`;
-        html+=`<div class="fv${active?' active':''}" onclick="clickFacet('${esc(g.key)}','${esc(it.value)}')">
+        html+=`<div class="fv${active?' active':''}" data-fkey="${esc(g.key)}" data-fval="${esc(it.value)}">
           <span class="fv-dot ${dotCls}" style="${g.dot?'':'background:'+color}"></span>
           <div class="fv-inner">
             <div style="display:flex;align-items:center;gap:4px">
@@ -843,12 +843,16 @@ function toggleRow(row,encoded){
     <div class="exp-fields">${fields.map(([k,v])=>`
       <div class="ef">
         <span class="ef-k">${esc(String(k))}</span>
-        <span class="ef-v" onclick="quickFilter('${esc(k)}','${esc(String(v))}')" title="Click to filter">${esc(String(v))}</span>
+        <span class="ef-v ef-filter" data-fk="${esc(String(k))}" data-fv="${esc(String(v))}" title="Click to filter">${esc(String(v))}</span>
       </div>`).join('')}
     </div>
     <div class="exp-raw-lbl">Raw</div>
     <div class="exp-raw" onclick="openRaw(event,'${enc(e)}')">${esc(e.raw||'')}</div>
   </div></td>`;
+  tr.addEventListener('click',e=>{
+    const span=e.target.closest('.ef-filter');
+    if(span) quickFilter(span.dataset.fk,span.dataset.fv);
+  });
   row.after(tr);
 }
 function quickFilter(k,v){
@@ -1009,6 +1013,10 @@ function copyT(s){navigator.clipboard.writeText(s).catch(()=>{})}
   if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
   updateNavUser();
   boot();
+  document.getElementById('sidebarContent').addEventListener('click',e=>{
+    const fv=e.target.closest('[data-fkey]');
+    if(fv) clickFacet(fv.dataset.fkey,fv.dataset.fval);
+  });
 })();
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeRaw();closeTime();closeAiModal()}

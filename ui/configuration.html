@@ -233,7 +233,7 @@ function updateNavUser(){const el=document.getElementById('navUser');const name=
 function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
 function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}
 function toggleTheme(){S.theme=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',S.theme);localStorage.setItem('ts_theme',S.theme)}
-function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
 async function api(path,opts={}){
   const res=await fetch(S.ep+path,{...opts,headers:{...opts.headers,'Authorization':'Bearer '+S.jwt,'Content-Type':'application/json'}});

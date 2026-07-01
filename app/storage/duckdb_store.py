@@ -68,6 +68,11 @@ def _get_conn() -> duckdb.DuckDBPyConnection:
     return _conn
 
 
+def _escape_like(val: str) -> str:
+    """Escape SQL LIKE/ILIKE metacharacters so user input is treated literally."""
+    return val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _build_where(
     source: Optional[str] = None,
     source_ip: Optional[str] = None,
@@ -87,8 +92,8 @@ def _build_where(
         conditions.append("source = ?")
         params.append(source)
     if source_ip:
-        conditions.append("source_ip LIKE ?")
-        params.append(f"%{source_ip}%")
+        conditions.append("source_ip LIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(source_ip)}%")
     if status_code is not None:
         conditions.append("status_code = ?")
         params.append(status_code)
@@ -102,11 +107,11 @@ def _build_where(
         conditions.append("UPPER(method) = UPPER(?)")
         params.append(method)
     if uri:
-        conditions.append("uri ILIKE ?")
-        params.append(f"%{uri}%")
+        conditions.append("uri ILIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(uri)}%")
     if q:
-        conditions.append("raw ILIKE ?")
-        params.append(f"%{q}%")
+        conditions.append("raw ILIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(q)}%")
     if start:
         s = start.replace(tzinfo=None) if start.tzinfo else start
         conditions.append("ingested_at >= ?")
@@ -558,9 +563,9 @@ def query_audit(
         conditions.append("status = ?")
         params.append(status)
     if q:
-        like = f"%{q}%"
+        like = f"%{_escape_like(q)}%"
         conditions.append(
-            "(actor ILIKE ? OR event_type ILIKE ? OR CAST(detail AS VARCHAR) ILIKE ?)"
+            "(actor ILIKE ? ESCAPE '\\' OR event_type ILIKE ? ESCAPE '\\' OR CAST(detail AS VARCHAR) ILIKE ? ESCAPE '\\')"
         )
         params += [like, like, like]
     if start:
