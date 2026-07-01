@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     tinysiem_baseline_z_threshold: float = 3.0
     tinysiem_baseline_min_samples: int = 4
 
+    # API Integrations (v1.2)
+    tinysiem_master_key: str = ""  # Fernet key; required when integrations are configured
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

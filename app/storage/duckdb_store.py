@@ -760,6 +760,49 @@ def init_baselines_tables() -> None:
         )""")
 
 
+def init_integrations_tables() -> None:
+    with _lock:
+        # No CREATE INDEX — DuckDB 1.1.x UPDATE fails with PRIMARY KEY + secondary ART index.
+        _conn.execute("""CREATE TABLE IF NOT EXISTS integrations (
+            integration_id   VARCHAR PRIMARY KEY,
+            name             VARCHAR NOT NULL,
+            integration_type VARCHAR NOT NULL,
+            enabled          BOOLEAN NOT NULL DEFAULT TRUE,
+            config           JSON NOT NULL,
+            credentials      JSON NOT NULL,
+            schedule_minutes INTEGER NOT NULL DEFAULT 15,
+            created_by       VARCHAR NOT NULL,
+            created_at       TIMESTAMP NOT NULL,
+            updated_at       TIMESTAMP NOT NULL,
+            last_run_at      TIMESTAMP,
+            last_run_status  VARCHAR
+        )""")
+        _conn.execute("""CREATE TABLE IF NOT EXISTS integration_runs (
+            run_id           VARCHAR PRIMARY KEY,
+            integration_id   VARCHAR NOT NULL,
+            started_at       TIMESTAMP NOT NULL,
+            finished_at      TIMESTAMP,
+            status           VARCHAR NOT NULL,
+            events_pulled    INTEGER NOT NULL DEFAULT 0,
+            events_ingested  INTEGER NOT NULL DEFAULT 0,
+            error_message    VARCHAR,
+            next_cursor      VARCHAR
+        )""")
+
+
+def init_dashboard_tables() -> None:
+    with _lock:
+        # No UNIQUE on owner — avoids DuckDB 1.1.x UPDATE bug; upsert uses DELETE+INSERT.
+        _conn.execute("""CREATE TABLE IF NOT EXISTS dashboards (
+            dashboard_id VARCHAR PRIMARY KEY,
+            owner        VARCHAR NOT NULL,
+            title        VARCHAR NOT NULL DEFAULT 'My Dashboard',
+            widgets      JSON NOT NULL,
+            created_at   TIMESTAMP NOT NULL,
+            updated_at   TIMESTAMP NOT NULL
+        )""")
+
+
 def get_audit_facets(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,

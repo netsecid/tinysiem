@@ -2,36 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current State: v1.1
+## Current State: v1.2
 
-All v1.1 features shipped and tested (188 tests passing):
-- All v1.0 features +
-- **Smart Baselines** (`app/baselines/`): 2 new DuckDB tables (`baselines`, `baseline_violations`), background asyncio job runs every 5 min, Welford's online z-score algorithm, severity mapping (z≥3→low … z≥7→critical), violations written to alerts JSONL
-- **AI Context Enrichment** (`app/ai/`): `build_generation_context()` injects active sources + parser/rule inventory into parser and rule generation; `POST /ai/explain-alert`, `POST /ai/analyze-events` endpoints; "Explain with AI" in alerts UI; multi-select + "Analyze with AI" in events UI
-- XSS fix in `ui/cases.html`: inline `onclick` with string-interpolated data replaced with `data-*` event delegation
+All v1.2 features shipped and tested (216 tests passing):
+- All v1.1 features +
+- **API Integrations** (`app/integrations/`): Fernet-encrypted credential storage (`TINYSIEM_MASTER_KEY` env var), pull-based pollers for AWS CloudTrail and Google Workspace, background asyncio scheduler checks every 60s, 2 new DuckDB tables (`integrations`, `integration_runs`), full CRUD API + manual trigger, Integrations section in Configuration UI (admin+)
+- **Custom Dashboard** (`ui/dashboard.html`): 7 configurable widget types (event_volume, top_sources, top_ips, alert_severity, recent_alerts, case_status, baseline_health), per-user layout saved to DuckDB, edit mode with add/remove/edit settings, auto-refresh every 60s per widget, HTML export via `POST /dashboard/export/html`
 
-**Known DuckDB constraint:** DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, and the cases tables.
+**Known DuckDB constraint:** DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, cases tables, `integrations`, and `integration_runs`. Dashboard uses DELETE+INSERT pattern (no UNIQUE on `owner`) to avoid this.
 
-**Next version: v1.2** — see `docs/specs/roadmap.md` for the full roadmap and `docs/specs/` for individual specs.
+**Environment variables added in v1.2:**
+- `TINYSIEM_MASTER_KEY` — Fernet key for credential encryption. Optional (503 if integrations are used without it). Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
 
-### What to build next (v1.2)
+**Next version: v1.3** — see `docs/specs/roadmap.md` for the full roadmap.
 
-Two independent features:
+### What to build next (v1.3)
 
-1. **API Integrations** (`app/integrations/`) — spec: `docs/specs/v1.2-integrations.md`
-   - Pull-based pollers for SaaS log sources (AWS CloudTrail, Google Workspace, etc.)
-   - Fernet-encrypted credential storage (`TINYSIEM_MASTER_KEY` env var required)
-   - One Python file + one YAML config per integration type; drop-in extensible
-   - New DuckDB tables: `integrations`, `integration_runs`
-   - API: CRUD for integrations, poll status/health; UI: Configuration page section
+TBD — see `docs/specs/roadmap.md`.
 
-2. **Custom Dashboard** (`ui/dashboard.html`) — spec: `docs/specs/v1.2-dashboard.md`
-   - Configurable widget grid (6 widget types) with per-user layout saved in DuckDB
-   - Widgets: event volume chart, top IPs, alert severity breakdown, rule fired counts, baseline violations, case summary
-   - No drag-and-drop in v1.2 — grid position set via widget settings
-   - Replaces static `dashboard.html` with operator-composable SOC overview
-
-**After v1.2 ships:** update this section to "Current State: v1.2" and set next to v1.3.
+**After v1.3 ships:** update this section to "Current State: v1.3" and set next to v1.4.
 
 ---
 

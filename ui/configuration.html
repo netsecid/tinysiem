@@ -152,6 +152,47 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
           <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Configured via TINYSIEM_BASELINE_Z_THRESHOLD and TINYSIEM_BASELINE_MIN_SAMPLES environment variables.</div>
         </div>
 
+        <!-- API Integrations (admin+) -->
+        <div class="card" id="integrationsCard" style="display:none">
+          <div class="section-label" style="display:flex;align-items:center;justify-content:space-between">
+            <span>API Integrations</span>
+            <button class="btn-sec" id="newIntegBtn" onclick="openNewIntegModal()" style="font-size:11px;padding:3px 10px">+ New Integration</button>
+          </div>
+          <div id="integrationsSummary" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"><span class="spinner"></span>Loading…</div>
+          <table class="arch-table" id="integrationsTable" style="display:none">
+            <thead><tr><th>Name</th><th>Type</th><th>Schedule</th><th>Last Run</th><th>Status</th><th></th></tr></thead>
+            <tbody id="integrationsBody"></tbody>
+          </table>
+          <div class="msg" id="integrationsMsg"></div>
+          <div style="margin-top:8px"><button class="btn-sec" onclick="loadIntegrations()">↻ Refresh</button></div>
+        </div>
+
+        <!-- New Integration Modal -->
+        <div id="integModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:center;justify-content:center">
+          <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:24px;width:480px;max-height:80vh;overflow-y:auto">
+            <div style="font-size:13px;font-weight:600;margin-bottom:16px">New Integration</div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Type</label>
+              <select id="integTypeSelect" onchange="onIntegTypeChange()" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px"><option value="">Select type…</option></select>
+            </div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Name</label>
+              <input id="integName" type="text" placeholder="e.g. prod-cloudtrail" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+            </div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Poll interval (minutes)</label>
+              <input id="integSchedule" type="number" value="15" min="1" max="1440" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+            </div>
+            <div id="integConfigFields"></div>
+            <div id="integCredFields"></div>
+            <div class="msg" id="integModalMsg" style="margin-bottom:8px"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn-sec" onclick="closeIntegModal()">Cancel</button>
+              <button class="btn-prim" onclick="submitNewInteg()">Create</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Log Sources (analyst+) -->
         <div class="card">
           <div class="section-label">Log Sources</div>
@@ -227,9 +268,11 @@ async function loadConfig(){
       document.getElementById('notifCard').style.display='';
       document.getElementById('retentionCard').style.display='';
       document.getElementById('ingestCard').style.display='';
+      document.getElementById('integrationsCard').style.display='';
       document.getElementById('sendReport').style.display='';
       loadNotifications();
       loadRetention();
+      loadIntegrations();
     }
   }
 }
@@ -364,6 +407,82 @@ async function loadBaselines(){
     document.getElementById('baselinesMsg').className='msg err';
     document.getElementById('baselinesMsg').textContent='Error: '+e.message;
   }
+}
+
+// ── Integrations ──────────────────────────────────────────────────────────────
+let _integTypes=[];
+async function loadIntegrations(){
+  const sumEl=document.getElementById('integrationsSummary');
+  const tbl=document.getElementById('integrationsTable');
+  sumEl.innerHTML='<span class="spinner"></span>Loading…';
+  tbl.style.display='none';
+  const [listRes,typesRes]=await Promise.all([api('/integrations'),api('/integrations/types')]);
+  if(!listRes){sumEl.textContent='Failed to load';return}
+  const d=await listRes.json();
+  if(typesRes){const t=await typesRes.json();_integTypes=t.types||[];}
+  const integrations=d.integrations||[];
+  sumEl.innerHTML=`<span style="color:var(--text)">${integrations.length} integration${integrations.length!==1?'s':''} configured</span>`;
+  const tbody=document.getElementById('integrationsBody');
+  const statusColor={ok:'var(--green)',error:'var(--red)'};
+  tbody.innerHTML=integrations.map(it=>`
+    <tr>
+      <td style="font-family:var(--mono)">${esc(it.name)}</td>
+      <td>${esc((_integTypes.find(t=>t.integration_type===it.integration_type)||{}).display_name||it.integration_type)}</td>
+      <td>${esc(String(it.schedule_minutes))} min</td>
+      <td>${it.last_run_at?relTime(it.last_run_at):'Never'}</td>
+      <td style="color:${statusColor[it.last_run_status]||'var(--text-muted)'}">
+        ${it.last_run_status==='ok'?'✓ OK ('+it.events_pulled_last_run+' events)':it.last_run_status==='error'?'✗ Error':'—'}
+      </td>
+      <td>
+        <button class="btn-sec" style="font-size:11px;padding:2px 7px" onclick="toggleInteg('${esc(it.integration_id)}','${it.enabled}')">${it.enabled?'Disable':'Enable'}</button>
+        <button class="btn-sec" style="font-size:11px;padding:2px 7px;color:var(--red)" onclick="deleteInteg('${esc(it.integration_id)}','${esc(it.name)}')">Delete</button>
+      </td>
+    </tr>`).join('');
+  tbl.style.display=integrations.length?'':'none';
+}
+
+function openNewIntegModal(){
+  const sel=document.getElementById('integTypeSelect');
+  sel.innerHTML='<option value="">Select type…</option>'+_integTypes.map(t=>`<option value="${esc(t.integration_type)}">${esc(t.display_name)}</option>`).join('');
+  document.getElementById('integName').value='';
+  document.getElementById('integSchedule').value='15';
+  document.getElementById('integConfigFields').innerHTML='';
+  document.getElementById('integCredFields').innerHTML='';
+  document.getElementById('integModal').style.display='flex';
+}
+function closeIntegModal(){document.getElementById('integModal').style.display='none';}
+function onIntegTypeChange(){
+  const type=document.getElementById('integTypeSelect').value;
+  const info=_integTypes.find(t=>t.integration_type===type)||{};
+  const mkField=(id,lbl,isPassword=false)=>`<div style="margin-bottom:10px"><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">${esc(lbl)}</label><input id="${id}" type="${isPassword?'password':'text'}" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px"></div>`;
+  document.getElementById('integConfigFields').innerHTML=(info.config_fields||[]).map((f,i)=>mkField('icfg_'+i,f)).join('');
+  document.getElementById('integCredFields').innerHTML='<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin:8px 0 6px">Credentials</div>'+(info.credential_fields||[]).map((f,i)=>mkField('icrd_'+i,f,true)).join('');
+}
+async function submitNewInteg(){
+  const type=document.getElementById('integTypeSelect').value;
+  const name=document.getElementById('integName').value.trim();
+  const schedule=parseInt(document.getElementById('integSchedule').value)||15;
+  if(!type||!name){showMsg('integModalMsg','Type and name required','err');return}
+  const info=_integTypes.find(t=>t.integration_type===type)||{};
+  const config={};
+  (info.config_fields||[]).forEach((f,i)=>{config[f]=document.getElementById('icfg_'+i)?.value||'';});
+  const credentials={};
+  (info.credential_fields||[]).forEach((f,i)=>{credentials[f]=document.getElementById('icrd_'+i)?.value||'';});
+  const res=await api('/integrations',{method:'POST',body:JSON.stringify({name,integration_type:type,schedule_minutes:schedule,config,credentials})});
+  if(!res){return}
+  if(res.ok){closeIntegModal();loadIntegrations();}
+  else{const e=await res.json();showMsg('integModalMsg','Error: '+(e.detail||res.status),'err');}
+}
+async function toggleInteg(id,enabled){
+  const res=await api('/integrations/'+id,{method:'PATCH',body:JSON.stringify({enabled:enabled==='true'?false:true})});
+  if(res&&res.ok) loadIntegrations();
+  else showMsg('integrationsMsg','Failed to update','err');
+}
+async function deleteInteg(id,name){
+  if(!confirm('Delete integration "'+name+'"? All run history will be removed.')) return;
+  const res=await api('/integrations/'+id,{method:'DELETE'});
+  if(res&&(res.ok||res.status===204)) loadIntegrations();
+  else showMsg('integrationsMsg','Delete failed','err');
 }
 
 async function loadSources(){

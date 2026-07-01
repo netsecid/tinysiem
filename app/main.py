@@ -12,6 +12,8 @@ from app.config import settings
 from app.decoder import engine as decoder_engine
 from app.ai.router import router as ai_router
 from app.alerts.router import router as alerts_router
+from app.dashboard.router import router as dashboard_router
+from app.integrations.router import router as integrations_router
 from app.audit.router import router as audit_router
 from app.auth_router import router as auth_router
 from app.baselines.router import router as baselines_router
@@ -41,6 +43,8 @@ async def lifespan(app: FastAPI):
     duckdb_store.init_audit_table()
     duckdb_store.init_cases_tables()
     duckdb_store.init_baselines_tables()
+    duckdb_store.init_integrations_tables()
+    duckdb_store.init_dashboard_tables()
     chroma_store.init_chroma()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
@@ -62,6 +66,18 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(settings.tinysiem_baseline_interval_minutes * 60)
 
     asyncio.create_task(_baseline_loop())
+
+    from app.integrations import runner as integration_runner
+
+    async def _integration_loop():
+        while True:
+            try:
+                await integration_runner.run_due()
+            except Exception as exc:
+                logger.error(f"Integration scheduler error: {exc}")
+            await asyncio.sleep(60)
+
+    asyncio.create_task(_integration_loop())
     yield
     logger.info("TinySIEM shutting down")
     stop_syslog_listeners(_syslog_servers)
@@ -125,6 +141,8 @@ app.include_router(notifications_router)
 app.include_router(retention_router)
 app.include_router(reports_router)
 app.include_router(audit_router)
+app.include_router(integrations_router)
+app.include_router(dashboard_router)
 
 app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 

@@ -25,6 +25,8 @@ os.environ["TINYSIEM_REPORT_SCHEDULE"] = "disabled"
 os.environ["TINYSIEM_SYSLOG_UDP_PORT"] = "0"
 os.environ["TINYSIEM_SYSLOG_TCP_PORT"] = "0"
 os.environ["TINYSIEM_BEATS_ENABLED"] = "true"
+import base64
+os.environ["TINYSIEM_MASTER_KEY"] = base64.urlsafe_b64encode(b"tinysiem-test-master-key-paddin!").decode()
 
 # ── 2. Stub chromadb before any import resolves it ───────────────────────────
 _mock_collection = MagicMock()
@@ -57,6 +59,8 @@ def _init_db():
     duckdb_store.init_audit_table()
     duckdb_store.init_cases_tables()
     duckdb_store.init_baselines_tables()
+    duckdb_store.init_integrations_tables()
+    duckdb_store.init_dashboard_tables()
     duckdb_store.ensure_superadmin(hash_password(os.environ["TINYSIEM_SUPERADMIN_PASSWORD"]))
 
 
