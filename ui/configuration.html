@@ -135,6 +135,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
           <div id="ingestContent" style="color:var(--text-muted);font-size:12px"><span class="spinner"></span>Loading…</div>
         </div>
 
+        <!-- Smart Baselines (analyst+) -->
+        <div class="card">
+          <div class="section-label">Smart Baselines</div>
+          <div style="color:var(--text-dim);font-size:12px;margin-bottom:10px">Statistical anomaly detection using Welford z-score per source × hour × day-of-week. Violations appear in alerts with <code style="font-family:var(--mono);font-size:11px">rule_name: smart_baseline</code>.</div>
+          <div id="baselineSummary" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"><span class="spinner"></span>Loading…</div>
+          <table class="arch-table" id="baselinesTable" style="display:none">
+            <thead><tr><th>Source</th><th>Buckets Learned</th><th>Avg Samples</th><th>Recent Violations</th></tr></thead>
+            <tbody id="baselinesBody"></tbody>
+          </table>
+          <div class="msg" id="baselinesMsg"></div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-sec" onclick="loadBaselines()">↻ Refresh</button>
+            <a class="btn-sec" href="/ui/alerts.html?rule_name=smart_baseline" style="text-decoration:none">View Violations →</a>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Configured via TINYSIEM_BASELINE_Z_THRESHOLD and TINYSIEM_BASELINE_MIN_SAMPLES environment variables.</div>
+        </div>
+
         <!-- Log Sources (analyst+) -->
         <div class="card">
           <div class="section-label">Log Sources</div>
@@ -310,6 +327,45 @@ async function sendReport(){
   else showMsg('reportMsg','Send failed: HTTP '+res.status,'err');
 }
 
+async function loadBaselines(){
+  const sumEl=document.getElementById('baselineSummary');
+  const tbl=document.getElementById('baselinesTable');
+  sumEl.innerHTML='<span class="spinner"></span>Loading…';
+  tbl.style.display='none';
+  try{
+    const [bRes,vRes]=await Promise.all([api('/baselines'),api('/baselines/violations?limit=500')]);
+    if(!bRes||!vRes){sumEl.textContent='Failed to load';return}
+    const bData=await bRes.json();
+    const vData=await vRes.json();
+    const buckets=bData.baselines||[];
+    const violations=vData.violations||[];
+    const sourceMap={};
+    for(const b of buckets){
+      if(!sourceMap[b.source])sourceMap[b.source]={buckets:0,totalSamples:0,violations:0};
+      sourceMap[b.source].buckets++;
+      sourceMap[b.source].totalSamples+=b.sample_count||0;
+    }
+    for(const v of violations){
+      if(!sourceMap[v.source])sourceMap[v.source]={buckets:0,totalSamples:0,violations:0};
+      sourceMap[v.source].violations++;
+    }
+    const sources=Object.entries(sourceMap);
+    sumEl.innerHTML=`<span style="color:var(--text)">${buckets.length} buckets learned</span> across <b>${sources.length}</b> sources · <span style="color:var(--yellow)">${violations.filter(v=>!v.acknowledged).length} unacknowledged violations</span>`;
+    const tbody=document.getElementById('baselinesBody');
+    tbody.innerHTML=sources.map(([src,d])=>`
+      <tr>
+        <td style="font-family:var(--mono)">${esc(src)}</td>
+        <td>${d.buckets} / 168</td>
+        <td>${d.buckets>0?(d.totalSamples/d.buckets).toFixed(1):'—'}</td>
+        <td style="color:${d.violations>0?'var(--yellow)':'var(--text-muted)'}">${d.violations>0?'⚠ '+d.violations:'—'}</td>
+      </tr>`).join('');
+    tbl.style.display=sources.length?'':'none';
+  }catch(e){
+    document.getElementById('baselinesMsg').className='msg err';
+    document.getElementById('baselinesMsg').textContent='Error: '+e.message;
+  }
+}
+
 async function loadSources(){
   const sumEl=document.getElementById('sourceSummary');
   const tbl=document.getElementById('sourcesTable');
@@ -368,6 +424,7 @@ function load(){
   if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
   updateNavUser();
   loadConfig();
+  loadBaselines();
   loadSources();
 }
 window.addEventListener('DOMContentLoaded',load);

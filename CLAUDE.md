@@ -2,34 +2,36 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current State: v1.0
+## Current State: v1.1
 
-All v1.0 features shipped and tested (164 tests passing):
-- All v0.9 features +
-- **Cases & Workflow**: `app/cases/` module, `ui/cases.html`, 3 new DuckDB tables (cases, case_comments, case_alerts), full CRUD API, sliding detail panel with comment thread
-- **Log Sources**: `app/sources/` module, `GET /sources` API, Log Sources section in Configuration UI
-- Cases nav link added to all pages
+All v1.1 features shipped and tested (188 tests passing):
+- All v1.0 features +
+- **Smart Baselines** (`app/baselines/`): 2 new DuckDB tables (`baselines`, `baseline_violations`), background asyncio job runs every 5 min, Welford's online z-score algorithm, severity mapping (z≥3→low … z≥7→critical), violations written to alerts JSONL
+- **AI Context Enrichment** (`app/ai/`): `build_generation_context()` injects active sources + parser/rule inventory into parser and rule generation; `POST /ai/explain-alert`, `POST /ai/analyze-events` endpoints; "Explain with AI" in alerts UI; multi-select + "Analyze with AI" in events UI
+- XSS fix in `ui/cases.html`: inline `onclick` with string-interpolated data replaced with `data-*` event delegation
 
-**Known DuckDB constraint:** DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. See `app/storage/duckdb_store.py` comment in `init_cases_tables()`.
+**Known DuckDB constraint:** DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, and the cases tables.
 
-**Next version: v1.1** — see `docs/specs/roadmap.md` for the full roadmap and `docs/specs/` for individual specs.
+**Next version: v1.2** — see `docs/specs/roadmap.md` for the full roadmap and `docs/specs/` for individual specs.
 
-### What to build next (v1.1)
+### What to build next (v1.2)
 
 Two independent features:
 
-1. **Smart Baselines** (`app/baselines/`) — spec: `docs/specs/v1.1-smart-baselines.md`
-   - 2 new DuckDB tables: `baselines`, `baseline_violations` (no secondary indexes per DuckDB constraint above)
-   - Background `asyncio` job runs every 5 min, computes z-scores with Welford's online algorithm
-   - New dependency: `numpy` (add to `requirements.txt` + Dockerfile)
-   - API: `GET /baselines`, `GET /baselines/violations`, `PATCH /baselines/violations/{id}`, `DELETE /baselines/{source}`
+1. **API Integrations** (`app/integrations/`) — spec: `docs/specs/v1.2-integrations.md`
+   - Pull-based pollers for SaaS log sources (AWS CloudTrail, Google Workspace, etc.)
+   - Fernet-encrypted credential storage (`TINYSIEM_MASTER_KEY` env var required)
+   - One Python file + one YAML config per integration type; drop-in extensible
+   - New DuckDB tables: `integrations`, `integration_runs`
+   - API: CRUD for integrations, poll status/health; UI: Configuration page section
 
-2. **AI Context Enrichment** (`app/ai/enrichment.py`) — spec: `docs/specs/v1.1-ai-enrichment.md`
-   - Inject active sources + existing parsers/rules context into existing `/parsers/generate` and `/rules/generate` endpoints (no schema change)
-   - Two new endpoints: `POST /ai/explain-alert`, `POST /ai/analyze-events`
-   - UI: "Explain with AI" button in alerts expanded row; multi-select + "Analyze with AI" in events
+2. **Custom Dashboard** (`ui/dashboard.html`) — spec: `docs/specs/v1.2-dashboard.md`
+   - Configurable widget grid (6 widget types) with per-user layout saved in DuckDB
+   - Widgets: event volume chart, top IPs, alert severity breakdown, rule fired counts, baseline violations, case summary
+   - No drag-and-drop in v1.2 — grid position set via widget settings
+   - Replaces static `dashboard.html` with operator-composable SOC overview
 
-**After v1.1 ships:** update this section to "Current State: v1.1" and set next to v1.2 (Integrations + Dashboard).
+**After v1.2 ships:** update this section to "Current State: v1.2" and set next to v1.3.
 
 ---
 

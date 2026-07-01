@@ -685,6 +685,81 @@ def query_source_activity() -> list[dict]:
     return result
 
 
+def get_event_sources() -> list[str]:
+    with _lock:
+        rows = _get_conn().execute(
+            "SELECT DISTINCT source FROM events WHERE source IS NOT NULL ORDER BY source"
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def get_event_by_id(event_id: str) -> Optional[dict]:
+    with _lock:
+        row = _get_conn().execute(
+            "SELECT id, source, ingested_at, source_ip, method, uri, status_code, raw, extra "
+            "FROM events WHERE id = ?",
+            [event_id],
+        ).fetchone()
+    if not row:
+        return None
+    cols = ["id", "source", "ingested_at", "source_ip", "method", "uri", "status_code", "raw", "extra"]
+    d = dict(zip(cols, row))
+    if d.get("ingested_at") and hasattr(d["ingested_at"], "isoformat"):
+        d["ingested_at"] = d["ingested_at"].isoformat()
+    return d
+
+
+def get_events_by_ids(event_ids: list[str]) -> list[dict]:
+    if not event_ids:
+        return []
+    placeholders = ",".join("?" * len(event_ids))
+    with _lock:
+        rows = _get_conn().execute(
+            f"SELECT id, source, ingested_at, source_ip, method, uri, status_code, raw, extra "
+            f"FROM events WHERE id IN ({placeholders})",
+            event_ids,
+        ).fetchall()
+    cols = ["id", "source", "ingested_at", "source_ip", "method", "uri", "status_code", "raw", "extra"]
+    result = []
+    for row in rows:
+        d = dict(zip(cols, row))
+        if d.get("ingested_at") and hasattr(d["ingested_at"], "isoformat"):
+            d["ingested_at"] = d["ingested_at"].isoformat()
+        result.append(d)
+    return result
+
+
+# ── Baselines ─────────────────────────────────────────────────────────────────
+
+def init_baselines_tables() -> None:
+    with _lock:
+        # No secondary indexes — see CLAUDE.md re DuckDB 1.1.x UPDATE + ART index bug.
+        _conn.execute("""CREATE TABLE IF NOT EXISTS baselines (
+            source          VARCHAR NOT NULL,
+            hour_of_day     INTEGER NOT NULL,
+            day_of_week     INTEGER NOT NULL,
+            mean            DOUBLE NOT NULL DEFAULT 0.0,
+            std_dev         DOUBLE NOT NULL DEFAULT 0.0,
+            m2              DOUBLE NOT NULL DEFAULT 0.0,
+            sample_count    INTEGER NOT NULL DEFAULT 0,
+            last_updated    TIMESTAMP NOT NULL,
+            PRIMARY KEY (source, hour_of_day, day_of_week)
+        )""")
+        _conn.execute("""CREATE TABLE IF NOT EXISTS baseline_violations (
+            violation_id    VARCHAR PRIMARY KEY,
+            source          VARCHAR NOT NULL,
+            detected_at     TIMESTAMP NOT NULL,
+            hour_of_day     INTEGER NOT NULL,
+            day_of_week     INTEGER NOT NULL,
+            observed_count  DOUBLE NOT NULL,
+            expected_mean   DOUBLE NOT NULL,
+            expected_std    DOUBLE NOT NULL,
+            z_score         DOUBLE NOT NULL,
+            severity        VARCHAR NOT NULL,
+            acknowledged    BOOLEAN NOT NULL DEFAULT FALSE
+        )""")
+
+
 def get_audit_facets(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,

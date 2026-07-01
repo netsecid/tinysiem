@@ -138,8 +138,10 @@ class GenerateParserRequest(BaseModel):
 @router.post("/generate")
 def generate_parser_endpoint(req: GenerateParserRequest, actor: AuthUser = Depends(require_admin)):
     from app.ai.claude import generate_parser
+    from app.ai.enrichment import build_generation_context
+    ctx = build_generation_context()
     try:
-        yaml_text = generate_parser(req.log_sample, actor=actor.username)
+        yaml_text = generate_parser(ctx + req.log_sample, actor=actor.username)
     except RuntimeError as exc:
         audit.log_event(
             "parser.generate", "generated", "error",

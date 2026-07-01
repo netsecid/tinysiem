@@ -407,6 +407,9 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
         <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M5.5 7.5L2.5 4.5H4.5V1h2v3.5h2L5.5 7.5zM1 9.5v1h9v-1H1z"/></svg>
         Export CSV
       </button>
+      <button class="ctrl-btn" id="aiAnalyzeBtn" style="display:none;color:var(--accent);border-color:var(--accent)" onclick="openAiModal()">
+        ✦ Analyze with AI (<span id="aiSelCount">0</span>)
+      </button>
       <div class="ctrl-space"></div>
       <span class="result-info" id="resultInfo">—</span>
       <div class="pager">
@@ -420,16 +423,17 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
     <div class="table-scroll">
       <table>
         <colgroup>
-          <col class="col-exp"><col class="col-time"><col class="col-src">
+          <col style="width:28px"><col class="col-exp"><col class="col-time"><col class="col-src">
           <col class="col-ip"><col class="col-mth"><col class="col-uri">
           <col class="col-st"><col class="col-sz"><col class="col-raw">
         </colgroup>
         <thead><tr>
+          <th style="padding:0 4px;text-align:center"><input type="checkbox" id="selectAll" title="Select all" onchange="toggleSelectAll(this.checked)"></th>
           <th></th><th>Time</th><th>Source</th><th>IP</th>
           <th>Method</th><th>URI</th><th>Status</th><th>Size</th><th>Raw Log</th>
         </tr></thead>
         <tbody id="tbody">
-          <tr class="empty-row"><td colspan="9"><span class="spinner"></span>Loading…</td></tr>
+          <tr class="empty-row"><td colspan="10"><span class="spinner"></span>Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -488,6 +492,7 @@ const S={
   events:[], hc:null, rawEv:null,
   histOpen:true,
   navCollapsed: false,
+  selectedIds: new Set(),              // AI multi-select
 };
 
 // ── THEME ─────────────────────────────────────────────────────────────
@@ -721,7 +726,7 @@ async function boot(){
 }
 async function fetchEvents(){
   const tb=document.getElementById('tbody');
-  tb.innerHTML=`<tr class="empty-row"><td colspan="9"><span class="spinner"></span>Loading…</td></tr>`;
+  tb.innerHTML=`<tr class="empty-row"><td colspan="10"><span class="spinner"></span>Loading…</td></tr>`;
   try{
     const qs=buildQS({limit:S.limit,offset:S.offset});
     const d=await get('/events',qs);
@@ -730,7 +735,7 @@ async function fetchEvents(){
     renderTable(d.events,false);
     updatePager();
   }catch(e){
-    tb.innerHTML=`<tr class="empty-row"><td colspan="9" style="color:var(--red)">⚠ ${esc(e.message)} — check settings</td></tr>`;
+    tb.innerHTML=`<tr class="empty-row"><td colspan="10" style="color:var(--red)">⚠ ${esc(e.message)} — check settings</td></tr>`;
   }
 }
 async function fetchFacets(){
@@ -774,7 +779,7 @@ async function fetchLive(){
 // ── TABLE ─────────────────────────────────────────────────────────────
 function renderTable(evs,animate){
   const tb=document.getElementById('tbody');
-  if(!evs.length){tb.innerHTML=`<tr class="empty-row"><td colspan="9">No events match this query</td></tr>`;return}
+  if(!evs.length){tb.innerHTML=`<tr class="empty-row"><td colspan="10">No events match this query</td></tr>`;return}
   tb.innerHTML=evs.map((e,i)=>rowH(e,animate&&i<6)).join('');
 }
 function prependRows(evs){
@@ -797,7 +802,11 @@ function enc(e){return encodeURIComponent(JSON.stringify(e))}
 function rowH(e,anim){
   const cls=anim?'dr rn':'dr';
   const raw=(e.raw||'').slice(0,100)+(e.raw?.length>100?'…':'');
+  const checked=S.selectedIds&&S.selectedIds.has(e.id)?'checked':'';
   return `<tr class="${cls}" onclick="toggleRow(this,'${enc(e)}')">
+    <td onclick="event.stopPropagation()" style="padding:0 4px;text-align:center">
+      <input type="checkbox" class="ev-cb" data-eid="${esc(e.id)}" ${checked} onchange="toggleSelect('${esc(e.id)}',this.checked)">
+    </td>
     <td style="color:var(--text-muted);font-size:10px;text-align:center">›</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">${fmtT(e.ingested_at)}</td>
     <td>${e.source?`<span class="badge bsrc">${esc(e.source)}</span>`:'—'}</td>
@@ -825,7 +834,7 @@ function toggleRow(row,encoded){
     ...Object.entries(xtra(e.extra)),
   ].filter(([,v])=>v!=null&&v!=='');
   const tr=document.createElement('tr');tr.className='expand-row';
-  tr.innerHTML=`<td colspan="9"><div class="exp-body">
+  tr.innerHTML=`<td colspan="10"><div class="exp-body">
     <div class="exp-row1">
       <span class="exp-eid">${esc(e.id)}</span>
       <button class="cbtn" onclick="copyT('${esc(e.id)}')">Copy ID</button>
@@ -1002,8 +1011,101 @@ function copyT(s){navigator.clipboard.writeText(s).catch(()=>{})}
   boot();
 })();
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeRaw();closeTime()}
+  if(e.key==='Escape'){closeRaw();closeTime();closeAiModal()}
 });
+
+// ── AI MULTI-SELECT ────────────────────────────────────────────────────
+function toggleSelect(id, checked){
+  if(checked) S.selectedIds.add(id);
+  else S.selectedIds.delete(id);
+  const btn=document.getElementById('aiAnalyzeBtn');
+  const cnt=document.getElementById('aiSelCount');
+  if(btn){btn.style.display=S.selectedIds.size>0?'':'none'}
+  if(cnt){cnt.textContent=S.selectedIds.size}
+  const cnt2=document.getElementById('aiSelCount2');
+  if(cnt2){cnt2.textContent=S.selectedIds.size}
+  const saEl=document.getElementById('selectAll');
+  if(saEl){saEl.checked=false} // indeterminate state — just uncheck header
+}
+function toggleSelectAll(checked){
+  S.selectedIds.clear();
+  if(checked){
+    document.querySelectorAll('.ev-cb').forEach(cb=>{
+      cb.checked=true;
+      S.selectedIds.add(cb.dataset.eid);
+    });
+  } else {
+    document.querySelectorAll('.ev-cb').forEach(cb=>{cb.checked=false});
+  }
+  const btn=document.getElementById('aiAnalyzeBtn');
+  const cnt=document.getElementById('aiSelCount');
+  if(btn){btn.style.display=S.selectedIds.size>0?'':'none'}
+  if(cnt){cnt.textContent=S.selectedIds.size}
+  const cnt2b=document.getElementById('aiSelCount2');
+  if(cnt2b){cnt2b.textContent=S.selectedIds.size}
+}
+
+function openAiModal(){
+  document.getElementById('aiModal').classList.add('show');
+  document.getElementById('aiQuestion').value='What do these events have in common?';
+  document.getElementById('aiModalResult').style.display='none';
+  document.getElementById('aiModalResult').textContent='';
+}
+function closeAiModal(){
+  const m=document.getElementById('aiModal');
+  if(m) m.classList.remove('show');
+}
+async function runAiAnalysis(){
+  const q=document.getElementById('aiQuestion').value.trim();
+  if(!q||S.selectedIds.size===0) return;
+  const btn=document.getElementById('aiRunBtn');
+  const res=document.getElementById('aiModalResult');
+  btn.textContent='✦ Analyzing…'; btn.disabled=true;
+  res.style.display='none';
+  try{
+    const r=await fetch(`${S.ep}/ai/analyze-events`,{
+      method:'POST',
+      headers:{Authorization:`Bearer ${S.jwt}`,'Content-Type':'application/json'},
+      body:JSON.stringify({event_ids:[...S.selectedIds],question:q}),
+    });
+    const d=await r.json();
+    if(!r.ok){
+      res.innerHTML=`<span style="color:var(--red)">Error: ${esc(d.detail||'Unknown error')}</span>`;
+    } else {
+      res.innerHTML=
+        '<div style="font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">✦ AI Analysis</div>'+
+        esc(d.analysis).replace(/\n\n/g,'</p><p style="margin-top:8px">').replace(/\n/g,'<br>');
+    }
+    res.style.display='block';
+  }catch(e){
+    res.innerHTML=`<span style="color:var(--red)">Error: ${esc(e.message)}</span>`;
+    res.style.display='block';
+  }finally{
+    btn.textContent='✦ Analyze'; btn.disabled=false;
+  }
+}
 </script>
+
+<!-- AI ANALYSIS MODAL -->
+<div class="modal-bg" id="aiModal" onclick="if(event.target===this)closeAiModal()" style="z-index:300">
+  <div class="raw-modal" style="max-width:600px">
+    <div class="rm-head">
+      <div class="rm-title">✦ AI Event Analysis (<span id="aiSelCount2"></span> events)</div>
+      <button class="rm-close" onclick="closeAiModal()">✕</button>
+    </div>
+    <div class="rm-body">
+      <div>
+        <div class="rm-label">Question</div>
+        <textarea id="aiQuestion" style="width:100%;min-height:70px;padding:8px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--sans);font-size:13px;resize:vertical;outline:none" placeholder="What do these events have in common?"></textarea>
+      </div>
+      <div id="aiModalResult" style="display:none;padding:12px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;font-size:12.5px;line-height:1.65"></div>
+    </div>
+    <div class="rm-foot">
+      <button class="rm-btn" id="aiRunBtn" onclick="runAiAnalysis()" style="color:var(--accent);border-color:var(--accent)">✦ Analyze</button>
+      <button class="rm-btn" onclick="closeAiModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

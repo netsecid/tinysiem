@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     tinysiem_syslog_tcp_port: int = 5141   # 0 = disabled
     tinysiem_beats_enabled: bool = True
 
+    # Smart Baselines (v1.1)
+    tinysiem_baseline_interval_minutes: int = 5
+    tinysiem_baseline_z_threshold: float = 3.0
+    tinysiem_baseline_min_samples: int = 4
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

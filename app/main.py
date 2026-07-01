@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -9,9 +10,11 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.decoder import engine as decoder_engine
+from app.ai.router import router as ai_router
 from app.alerts.router import router as alerts_router
 from app.audit.router import router as audit_router
 from app.auth_router import router as auth_router
+from app.baselines.router import router as baselines_router
 from app.cases.router import router as cases_router
 from app.events.router import router as events_router
 from app.ingest.router import router as ingest_router
@@ -37,6 +40,7 @@ async def lifespan(app: FastAPI):
     duckdb_store.init_alert_triage_table()
     duckdb_store.init_audit_table()
     duckdb_store.init_cases_tables()
+    duckdb_store.init_baselines_tables()
     chroma_store.init_chroma()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
@@ -47,6 +51,17 @@ async def lifespan(app: FastAPI):
     start_report_scheduler()
     from app.listeners.syslog import start_syslog_listeners, stop_syslog_listeners
     _syslog_servers = await start_syslog_listeners()
+    from app.baselines import engine as baseline_engine
+
+    async def _baseline_loop():
+        while True:
+            try:
+                await baseline_engine.run_once()
+            except Exception as exc:
+                logger.error(f"Baseline job error: {exc}")
+            await asyncio.sleep(settings.tinysiem_baseline_interval_minutes * 60)
+
+    asyncio.create_task(_baseline_loop())
     yield
     logger.info("TinySIEM shutting down")
     stop_syslog_listeners(_syslog_servers)
@@ -100,6 +115,8 @@ app.include_router(events_router)
 app.include_router(alerts_router)
 app.include_router(cases_router)
 app.include_router(sources_router)
+app.include_router(baselines_router)
+app.include_router(ai_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(parsers_router)

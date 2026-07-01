@@ -99,8 +99,10 @@ def list_rules(_: AuthUser = Depends(require_analyst)):
 @router.post("/generate")
 def generate_rule_endpoint(req: GenerateRuleRequest, actor: AuthUser = Depends(require_admin)):
     from app.ai.claude import generate_rule
+    from app.ai.enrichment import build_generation_context
+    ctx = build_generation_context()
     try:
-        yaml_text = generate_rule(req.description, req.source, actor=actor.username)
+        yaml_text = generate_rule(ctx + req.description, req.source, actor=actor.username)
     except RuntimeError as exc:
         audit.log_event(
             "rule.generate", "generated", "error",

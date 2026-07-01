@@ -660,9 +660,11 @@ function toggleExpand(tr,al,i){
   const optRes=curStatus==='resolved'?'selected':'';
   exp.innerHTML=`<td colspan="9"><div class="exp-body">
     <div class="exp-grid">${fieldRows}</div>
-    <div style="display:flex;gap:7px;margin-top:8px">
+    <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
       <button class="ctrl-btn" onclick="openDetail(${i})">View Full Detail</button>
+      <button class="ctrl-btn" id="aiBtn_${i}" onclick="event.stopPropagation();explainAlert('${al.alert_id}',${i})">✦ Explain with AI</button>
     </div>
+    <div id="aiResult_${i}" style="display:none;margin-top:10px;padding:10px 14px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;font-size:12.5px;line-height:1.65;color:var(--text)"></div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Triage</div>
       <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
@@ -807,6 +809,36 @@ function fmtTime(ts){
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} `+
            `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   }catch{return ts}
+}
+
+// ── AI EXPLAIN ─────────────────────────────────────────────────────────
+async function explainAlert(alertId, i){
+  const btn=document.getElementById('aiBtn_'+i);
+  const result=document.getElementById('aiResult_'+i);
+  if(!btn||!result) return;
+  btn.textContent='✦ Thinking…'; btn.disabled=true;
+  result.style.display='none';
+  try{
+    const r=await fetch(`${S.ep}/ai/explain-alert`,{
+      method:'POST',
+      headers:{Authorization:`Bearer ${S.jwt}`,'Content-Type':'application/json'},
+      body:JSON.stringify({alert_id:alertId}),
+    });
+    const d=await r.json();
+    if(!r.ok){
+      result.innerHTML=`<span style="color:var(--red)">Error: ${esc(d.detail||'Unknown error')}</span>`;
+    } else {
+      result.innerHTML=
+        '<div style="font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">✦ AI Analysis</div>'+
+        esc(d.explanation).replace(/\n\n/g,'</p><p style="margin-top:8px">').replace(/\n/g,'<br>');
+    }
+    result.style.display='block';
+  }catch(e){
+    result.innerHTML=`<span style="color:var(--red)">Error: ${esc(e.message)}</span>`;
+    result.style.display='block';
+  }finally{
+    btn.textContent='✦ Explain with AI'; btn.disabled=false;
+  }
 }
 
 // keyboard shortcuts

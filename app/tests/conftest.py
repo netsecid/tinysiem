@@ -56,6 +56,7 @@ def _init_db():
     duckdb_store.init_alert_triage_table()
     duckdb_store.init_audit_table()
     duckdb_store.init_cases_tables()
+    duckdb_store.init_baselines_tables()
     duckdb_store.ensure_superadmin(hash_password(os.environ["TINYSIEM_SUPERADMIN_PASSWORD"]))
 
 

@@ -439,7 +439,7 @@ function renderPanel(c){
         <span class="badge sev-${detail.severity||'low'}">${(detail.severity||'').toUpperCase()||'?'}</span>
         <span class="ac-name">${esc(detail.rule_name||la.alert_id)}</span>
         <span style="color:var(--text-muted);font-size:11px">${esc(detail.source_ip||'')}</span>
-        <button class="ac-unlink" onclick="unlinkAlert('${la.alert_id}')" title="Unlink">✕</button>
+        <button class="ac-unlink" data-alert-id="${esc(la.alert_id)}" title="Unlink">✕</button>
       </div>`;
     }).join('');
   }
@@ -458,7 +458,7 @@ function renderPanel(c){
       </div>
       <div class="comment-body">${esc(cm.body)}</div>
       ${!cm.is_system?`<div class="comment-actions">
-        ${cm.author===S.username||['admin','superadmin'].includes(S.role)?`<button onclick="editComment('${cm.comment_id}','${esc(cm.body).replace(/'/g,'&#39;')}')">Edit</button><button onclick="deleteComment('${cm.comment_id}')">Delete</button>`:''}
+        ${cm.author===S.username||['admin','superadmin'].includes(S.role)?`<button class="comment-edit" data-comment-id="${esc(cm.comment_id)}">Edit</button><button class="comment-del" data-comment-id="${esc(cm.comment_id)}">Delete</button>`:''}
       </div>`:''}
     </div>`).join('');
 
@@ -518,8 +518,9 @@ async function submitComment(){
     await openCase(S.currentCaseId);
   }catch(e){console.error(e)}
 }
-async function editComment(id,oldBody){
-  const newBody=prompt('Edit comment:',oldBody);
+async function editComment(id){
+  const cm=(S.currentCase?.comments||[]).find(c=>c.comment_id===id);
+  const newBody=prompt('Edit comment:',cm?.body||'');
   if(!newBody||newBody===oldBody)return;
   try{
     const r=await fetch(`${S.ep}/cases/${S.currentCaseId}/comments/${id}`,{
@@ -631,6 +632,16 @@ function relTime(iso){
   return d.toLocaleDateString();
 }
 
+document.getElementById('commentsThread').addEventListener('click',e=>{
+  const eb=e.target.closest('.comment-edit');
+  const db=e.target.closest('.comment-del');
+  if(eb)editComment(eb.dataset.commentId);
+  if(db)deleteComment(db.dataset.commentId);
+});
+document.getElementById('linkedAlerts').addEventListener('click',e=>{
+  const ub=e.target.closest('.ac-unlink');
+  if(ub)unlinkAlert(ub.dataset.alertId);
+});
 init();
 </script>
 </body>
