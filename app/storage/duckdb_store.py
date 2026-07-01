@@ -275,10 +275,10 @@ def get_event_facets(
 
 def get_event_histogram(start: datetime, end: datetime, buckets: int = 60) -> list:
     conn = _get_conn()
-    duration = max(1, (end - start).total_seconds())
-    bucket_size = max(1, int(duration / buckets))
     start_n = start.replace(tzinfo=None) if start.tzinfo else start
     end_n   = end.replace(tzinfo=None)   if end.tzinfo   else end
+    duration = max(1, (end_n - start_n).total_seconds())
+    bucket_size = max(1, int(duration / buckets))
 
     with _lock:
         rows = conn.execute(

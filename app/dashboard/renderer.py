@@ -78,11 +78,24 @@ def build_html_export(owner: str) -> str:
         "exportedAt": ts,
     })
 
+    import html as _html
+    # Make inline <script> data safe: escape </script> injection and HTML special chars
+    safe_data_json = (
+        data_json
+        .replace("&", r"&")
+        .replace("<", r"<")
+        .replace(">", r">")
+    )
+    widget_blocks = "".join(
+        f'<div class="widget"><h3>{_html.escape(w.get("title","Widget"))}</h3>'
+        f'<pre>{_html.escape(json.dumps(widget_data.get(w["widget_id"],{}), indent=2, default=str))}</pre></div>'
+        for w in dash.get("widgets", [])
+    )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>TinySIEM Dashboard — {ts}</title>
+<title>TinySIEM Dashboard — {_html.escape(ts)}</title>
 <style>
 body{{font-family:sans-serif;margin:24px;background:#0d0e17;color:#cdd0eb}}
 h1{{font-size:18px;margin-bottom:8px}}
@@ -94,14 +107,11 @@ pre{{font-size:11px;color:#cdd0eb;white-space:pre-wrap;word-break:break-all}}
 </style>
 </head>
 <body>
-<h1>{dash.get('title','Dashboard')}</h1>
-<div class="ts">Exported {ts}</div>
+<h1>{_html.escape(dash.get('title','Dashboard'))}</h1>
+<div class="ts">Exported {_html.escape(ts)}</div>
 <div class="grid">
-{"".join(
-    f'<div class="widget"><h3>{w.get("title","Widget")}</h3><pre>{json.dumps(widget_data.get(w["widget_id"],{}), indent=2, default=str)}</pre></div>'
-    for w in dash.get("widgets", [])
-)}
+{widget_blocks}
 </div>
-<script>window.__DASHBOARD_DATA__={data_json};</script>
+<script>window.__DASHBOARD_DATA__={safe_data_json};</script>
 </body>
 </html>"""

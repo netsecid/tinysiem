@@ -434,8 +434,8 @@ async function loadIntegrations(){
         ${it.last_run_status==='ok'?'✓ OK ('+it.events_pulled_last_run+' events)':it.last_run_status==='error'?'✗ Error':'—'}
       </td>
       <td>
-        <button class="btn-sec" style="font-size:11px;padding:2px 7px" onclick="toggleInteg('${esc(it.integration_id)}','${it.enabled}')">${it.enabled?'Disable':'Enable'}</button>
-        <button class="btn-sec" style="font-size:11px;padding:2px 7px;color:var(--red)" onclick="deleteInteg('${esc(it.integration_id)}','${esc(it.name)}')">Delete</button>
+        <button class="integ-toggle btn-sec" data-integ-id="${esc(it.integration_id)}" data-enabled="${it.enabled?'true':'false'}" style="font-size:11px;padding:2px 7px">${it.enabled?'Disable':'Enable'}</button>
+        <button class="integ-del btn-sec" data-integ-id="${esc(it.integration_id)}" data-name="${esc(it.name)}" style="font-size:11px;padding:2px 7px;color:var(--red)">Delete</button>
       </td>
     </tr>`).join('');
   tbl.style.display=integrations.length?'':'none';
@@ -474,7 +474,7 @@ async function submitNewInteg(){
   else{const e=await res.json();showMsg('integModalMsg','Error: '+(e.detail||res.status),'err');}
 }
 async function toggleInteg(id,enabled){
-  const res=await api('/integrations/'+id,{method:'PATCH',body:JSON.stringify({enabled:enabled==='true'?false:true})});
+  const res=await api('/integrations/'+id,{method:'PATCH',body:JSON.stringify({enabled:!enabled})});
   if(res&&res.ok) loadIntegrations();
   else showMsg('integrationsMsg','Failed to update','err');
 }
@@ -484,6 +484,12 @@ async function deleteInteg(id,name){
   if(res&&(res.ok||res.status===204)) loadIntegrations();
   else showMsg('integrationsMsg','Delete failed','err');
 }
+document.getElementById('integrationsBody').addEventListener('click',e=>{
+  const tb=e.target.closest('.integ-toggle');
+  const db=e.target.closest('.integ-del');
+  if(tb)toggleInteg(tb.dataset.integId,tb.dataset.enabled==='true');
+  if(db)deleteInteg(db.dataset.integId,db.dataset.name);
+});
 
 async function loadSources(){
   const sumEl=document.getElementById('sourceSummary');

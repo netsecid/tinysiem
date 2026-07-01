@@ -210,8 +210,10 @@ async function renderWidget(w){
       const r=await api('/events/histogram?buckets='+b+(startTime?'&start='+encodeURIComponent(startTime):'&start='+encodeURIComponent(timeRangeToStart('24h'))));
       if(!r){el.innerHTML='<div class="empty-state">Error</div>';return}
       const d=await r.json();
-      const labels=(d.buckets||[]).map(b=>new Date(b.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
-      const data=(d.buckets||[]).map(b=>b.count);
+      // API returns [{ts: ms_epoch, count}] directly
+      const buckets=Array.isArray(d)?d:(d.buckets||[]);
+      const labels=buckets.map(bk=>new Date(bk.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+      const data=buckets.map(bk=>bk.count);
       el.innerHTML='<canvas id="ch_'+w.widget_id+'" style="width:100%;height:120px"></canvas>';
       if(S.charts[w.widget_id])S.charts[w.widget_id].destroy();
       S.charts[w.widget_id]=new Chart(document.getElementById('ch_'+w.widget_id),{
