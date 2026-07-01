@@ -29,6 +29,12 @@ openssl rand -hex 32   # use for API_KEY
 openssl rand -hex 32   # use for JWT_SECRET
 ```
 
+If you plan to use **API Integrations** (AWS CloudTrail, Google Workspace), also generate a Fernet key:
+```bash
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Add output to .env as: TINYSIEM_MASTER_KEY=<key>
+```
+
 ---
 
 ## 2. Start the Stack
@@ -51,7 +57,7 @@ Default credentials:
 - **Username:** `admin`
 - **Password:** value of `TINYSIEM_SUPERADMIN_PASSWORD` (default: `admin`)
 
-Change the password immediately after first login via **Configuration → Users**.
+**Change the password immediately** after first login via **Configuration → Users**.
 
 ---
 
@@ -67,7 +73,7 @@ docker-compose exec tinysiem python scripts/ingest_test_logs.py 500
 python scripts/ingest_test_logs.py 500
 ```
 
-After seeding, open the Events or Dashboard page — you should see data immediately.
+After seeding, open the Events or Dashboard page — you should see data immediately. The baseline learner will begin building hour-of-day models after data accumulates across a few buckets.
 
 ---
 

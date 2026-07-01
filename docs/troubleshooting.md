@@ -446,6 +446,121 @@ Use specific filters (`source_ip`, `status_code`, `start`/`end`) instead of `q` 
 
 ---
 
+## API Integrations
+
+### `503 Service Unavailable` on integration endpoints
+
+```json
+{ "detail": "TINYSIEM_MASTER_KEY not set — integrations require credential encryption" }
+```
+
+**Fix:** Generate a Fernet key and add it to `.env`:
+```bash
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+```dotenv
+TINYSIEM_MASTER_KEY=<output from above>
+```
+
+Then recreate the container (must use `up -d`, not `restart`, to pick up new env vars):
+```bash
+docker-compose up -d
+```
+
+---
+
+### Integration created but never pulling events
+
+**Cause options:**
+1. Integration is disabled — check the Enabled toggle in the UI or `GET /integrations/{id}`
+2. AWS credentials don't have permission to read the CloudTrail S3 bucket
+3. Google Workspace service account isn't configured as a domain-wide delegation authority
+4. The background scheduler hasn't run yet — it polls every 60 s
+
+**Debug:**
+```bash
+# Check recent run history
+curl -s "http://localhost:8000/integrations/<id>/runs" \
+  -H "Authorization: Bearer <jwt>" | python3 -m json.tool
+```
+
+Look at `status` and `error_message` on the most recent run. Common errors:
+- `NoCredentialsError` — AWS credentials invalid or missing
+- `AccessDenied` — bucket or CloudTrail read permission missing
+- `ServiceAccountError` — Google service account JSON is malformed or lacks domain delegation
+
+**Manually trigger to test immediately:**
+```bash
+curl -s -X POST "http://localhost:8000/integrations/<id>/trigger" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+---
+
+### Integration events appear but alerts don't fire
+
+**Cause:** Events are ingested correctly but the rule engine evaluates them using the integration's source name (e.g. `aws_cloudtrail`). If no rule targets that source, no alerts are fired.
+
+**Fix:** Create a rule with `source: aws_cloudtrail` (or whatever source the integration uses). Check the Sources page to confirm what source name is being set.
+
+---
+
+## Custom Dashboard
+
+### Widget shows "No data"
+
+**Cause options:**
+1. The time range for the widget covers a period with no events
+2. The selected source filter doesn't match any data
+3. Widget config has an invalid value (e.g. `buckets: 0`)
+
+**Fix:** Open the widget's settings (pencil icon in edit mode) and verify the config. For `event_volume`, try increasing the `hours` value. Check the Events page with the same filters to confirm data exists.
+
+---
+
+### Dashboard layout not saving
+
+**Cause:** `PUT /dashboard` requires a JWT (not just the API key) since the layout is per-user.
+
+**Fix:** Ensure you're logged in via the login page, not using a raw API key. Check browser console for 401 errors.
+
+---
+
+### HTML export is empty or malformed
+
+**Cause:** The dashboard has no widgets, or a widget's data fetch failed.
+
+**Fix:** Add at least one widget and verify it shows data before exporting. Check the container logs for export errors:
+```bash
+docker-compose logs tinysiem | grep "export"
+```
+
+---
+
+## Smart Baselines
+
+### No baselines being learned
+
+**Cause:** The baseline learner runs as a background asyncio task. It needs events to have been ingested for at least one hour bucket before it can build a baseline.
+
+**How learning works:** After events accumulate, the learner calculates mean and standard deviation per `(source, hour_of_day, day_of_week)` bucket. With fewer than ~5 samples, the bucket exists but the stddev is unreliable.
+
+**Fix:** Ingest data over several days and let the scheduler run. Alternatively, seed test data:
+```bash
+python scripts/ingest_test_logs.py 2000
+```
+
+---
+
+### Baseline violations not being acknowledged
+
+**Cause:** The `PATCH /baselines/violations/{id}` endpoint updates the `acknowledged` field in DuckDB. Due to a known DuckDB 1.1.x constraint (UPDATE fails on tables with a PRIMARY KEY + secondary index), the baselines tables use a pattern that avoids secondary indexes. If you added a `CREATE INDEX` to the `baseline_violations` table manually, UPDATE will silently fail.
+
+**Fix:** Do not add secondary indexes to the baselines, cases, integrations, or integration_runs tables. See the DuckDB constraint note in [Development](development.md).
+
+---
+
 ## Still Stuck?
 
 1. Check structured container logs: `docker-compose logs --tail=200 tinysiem`
