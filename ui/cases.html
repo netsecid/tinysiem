@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TinySIEM — Cases</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0e17;--surface:#12131f;--surface2:#191a2d;--surface3:#1f2138;--surface4:#252845;
+  --border:#252840;--border2:#323560;--text:#cdd0eb;--text-dim:#7b7fa8;
+  --text-muted:#454870;--accent:#4d9fff;--accent-dim:#0d2a50;
+  --green:#3ddc84;--green-dim:#0a2e1c;--red:#e85555;--red-dim:#320c0c;
+  --yellow:#f5c842;--yellow-dim:#322800;--orange:#f5a442;--orange-dim:#321800;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+[data-theme="light"]{
+  --bg:#f0f2f8;--surface:#ffffff;--surface2:#f5f7fc;--surface3:#eaecf5;--surface4:#e0e3f0;
+  --border:#dde0f0;--border2:#c0c6e0;--text:#1a1c2e;--text-dim:#4a4f6a;
+  --text-muted:#9096b8;--accent:#2979ff;--accent-dim:#e3ecff;
+  --green:#1a8a4a;--green-dim:#eaf7ef;--red:#c0392b;--red-dim:#fde8e6;
+  --yellow:#c47800;--yellow-dim:#fff4d6;--orange:#c46000;--orange-dim:#fff0e0;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
+.nav-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
+.nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
+/* ── Page layout ── */
+.page-body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.filter-bar{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex-shrink:0}
+.filter-bar input,.filter-bar select{height:28px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;outline:none}
+.filter-bar input:focus,.filter-bar select:focus{border-color:var(--accent)}
+.filter-bar input{width:220px}
+.filter-bar select{min-width:100px}
+.btn-prim{padding:5px 13px;background:var(--accent);border:none;border-radius:5px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .12s;white-space:nowrap}
+.btn-prim:hover{opacity:.85}
+.btn-sec{padding:5px 13px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);font-size:12px;cursor:pointer;transition:all .12s;white-space:nowrap}
+.btn-sec:hover{color:var(--text);border-color:var(--accent)}
+.btn-danger{padding:5px 13px;background:var(--red-dim);border:1px solid var(--red);border-radius:5px;color:var(--red);font-size:12px;cursor:pointer;transition:opacity .12s}
+.btn-danger:hover{opacity:.8}
+.filter-bar .ml{margin-left:auto}
+/* ── Table ── */
+.table-wrap{flex:1;overflow-y:auto}
+.cases-table{width:100%;border-collapse:collapse}
+.cases-table th{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:7px 12px;border-bottom:1px solid var(--border);text-align:left;position:sticky;top:0;background:var(--surface);z-index:1}
+.cases-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.cases-table tbody tr{cursor:pointer;transition:background .1s}
+.cases-table tbody tr:hover{background:var(--surface2)}
+.cases-table tbody tr.active-row{background:var(--accent-dim)}
+.col-sev{width:80px}
+.col-status{width:110px}
+.col-assignee{width:110px}
+.col-counts{width:60px;text-align:center}
+.col-updated{width:90px;color:var(--text-muted);font-size:12px}
+.badge{display:inline-flex;align-items:center;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;border:1px solid}
+.sev-critical{background:var(--red-dim);color:var(--red);border-color:var(--red)}
+.sev-high{background:var(--orange-dim);color:var(--orange);border-color:var(--orange)}
+.sev-medium{background:var(--yellow-dim);color:var(--yellow);border-color:var(--yellow)}
+.sev-low{background:var(--green-dim);color:var(--green);border-color:var(--green)}
+.status-open{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
+.status-investigating{background:var(--yellow-dim);color:var(--yellow);border-color:var(--yellow)}
+.status-resolved{background:var(--surface3);color:var(--text-muted);border-color:var(--border2)}
+.count-chip{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text-muted);font-family:var(--mono)}
+.empty-state{padding:60px 20px;text-align:center;color:var(--text-muted)}
+.empty-state svg{margin-bottom:12px;opacity:.3}
+.pagination{padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);flex-shrink:0}
+.pagination button{padding:2px 9px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-size:11px;cursor:pointer}
+.pagination button:hover{border-color:var(--accent);color:var(--text)}
+.pagination button:disabled{opacity:.4;cursor:default}
+/* ── Side panel ── */
+.panel-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none}
+.panel-overlay.open{display:block}
+.side-panel{position:fixed;top:0;right:0;width:700px;max-width:100vw;height:100vh;background:var(--surface);border-left:1px solid var(--border2);z-index:101;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .2s ease}
+.side-panel.open{transform:translateX(0)}
+.panel-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px;flex-shrink:0}
+.panel-header .ph-title{flex:1;font-size:15px;font-weight:600;line-height:1.3;word-break:break-word}
+.panel-header .ph-meta{font-size:11.5px;color:var(--text-muted);margin-top:3px}
+.panel-close{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:4px;flex-shrink:0}
+.panel-close:hover{color:var(--text);background:var(--surface3)}
+.panel-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:16px}
+.panel-body::-webkit-scrollbar{width:5px}
+.panel-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.panel-section{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.panel-section-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:8px}
+.detail-grid{display:grid;grid-template-columns:120px 1fr;gap:5px 12px;font-size:12.5px}
+.detail-grid .dk{color:var(--text-muted)}
+.detail-grid .dv{color:var(--text)}
+.alert-chip{display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--surface3);border:1px solid var(--border);border-radius:4px;font-size:12px;margin-bottom:4px}
+.alert-chip .ac-name{flex:1;color:var(--text)}
+.alert-chip .ac-unlink{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;padding:1px 5px;border-radius:3px}
+.alert-chip .ac-unlink:hover{color:var(--red)}
+/* ── Comments ── */
+.comment{padding:8px 0;border-bottom:1px solid var(--border)}
+.comment:last-child{border-bottom:none}
+.comment.system{opacity:.6}
+.comment-header{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11.5px;color:var(--text-muted)}
+.comment-author{font-weight:600;color:var(--text-dim)}
+.comment-body{font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.comment-actions{display:flex;gap:6px;margin-top:4px}
+.comment-actions button{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;padding:1px 4px;border-radius:3px}
+.comment-actions button:hover{color:var(--accent)}
+.comment-input-area{margin-top:8px}
+.comment-input-area textarea{width:100%;min-height:70px;padding:8px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:13px;font-family:var(--sans);resize:vertical;outline:none}
+.comment-input-area textarea:focus{border-color:var(--accent)}
+.comment-add-row{display:flex;justify-content:flex-end;margin-top:6px}
+/* ── Panel footer ── */
+.panel-footer{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;align-items:center}
+.close-case-wrap{position:relative}
+.resolution-dropdown{position:absolute;bottom:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:8px;display:none;width:220px;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.resolution-dropdown.open{display:block}
+.resolution-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-radius:4px;font-size:12.5px}
+.resolution-opt:hover{background:var(--surface3)}
+.resolution-opt input{accent-color:var(--accent)}
+.resolution-confirm{width:100%;margin-top:8px;padding:5px;background:var(--red);border:none;border-radius:4px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;opacity:.5}
+.resolution-confirm.ready{opacity:1}
+/* ── New Case modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:20px;width:480px;max-width:96vw;max-height:90vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:16px}
+.form-row{margin-bottom:12px}
+.form-row label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px}
+.form-row input,.form-row select,.form-row textarea{width:100%;padding:6px 9px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:13px;outline:none;font-family:var(--sans)}
+.form-row input:focus,.form-row select:focus,.form-row textarea:focus{border-color:var(--accent)}
+.form-row textarea{min-height:70px;resize:vertical}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidenav" id="sidenav">
+    <div class="sidenav-header">
+      <a href="/ui/dashboard.html" class="sidenav-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span class="sidenav-logo-text">TinySIEM</span>
+      </a>
+      <button class="sidenav-collapse-btn" onclick="toggleNav()" title="Toggle sidebar">
+        <svg id="collapseIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+    <ul class="sidenav-items">
+      <li><a href="/ui/dashboard.html" class="nav-link" title="Home"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span class="nav-link-label">Home</span></a></li>
+      <li><a href="/ui/events.html" class="nav-link" title="Events"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span class="nav-link-label">Events</span></a></li>
+      <li><a href="/ui/alerts.html" class="nav-link" title="Alerts"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="nav-link-label">Alerts</span></a></li>
+      <li><a href="/ui/cases.html" class="nav-link active" title="Cases"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span class="nav-link-label">Cases</span></a></li>
+      <li><a href="/ui/rules.html" class="nav-link" title="Rules"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span class="nav-link-label">Rules</span></a></li>
+      <li><a href="/ui/parsers.html" class="nav-link" title="Parsers"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span class="nav-link-label">Parsers</span></a></li>
+      <li><a href="/ui/audit.html" class="nav-link" title="Audit Log"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg><span class="nav-link-label">Audit Log</span></a></li>
+      <li><a href="/ui/configuration.html" class="nav-link" title="Configuration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg><span class="nav-link-label">Configuration</span></a></li>
+    </ul>
+    <div class="sidenav-footer">
+      <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">◑</button>
+      <span class="sidenav-user" id="navUser"></span>
+      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">⏏</button>
+    </div>
+  </nav>
+  <div class="main-wrap">
+    <div class="topbar">
+      <span class="topbar-title">Cases</span>
+    </div>
+    <div class="page-body">
+      <!-- filter bar -->
+      <div class="filter-bar">
+        <input type="text" id="fSearch" placeholder="Search title, description…" onkeydown="if(event.key==='Enter')doSearch()">
+        <select id="fStatus" onchange="doSearch()">
+          <option value="">All Status</option>
+          <option value="open">Open</option>
+          <option value="investigating">Investigating</option>
+          <option value="resolved">Resolved</option>
+        </select>
+        <select id="fSev" onchange="doSearch()">
+          <option value="">All Severity</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <button class="btn-sec" onclick="clearFilters()">Clear</button>
+        <button class="btn-prim" onclick="doSearch()">Search</button>
+        <button class="btn-prim ml" onclick="openNewCase()">+ New Case</button>
+      </div>
+      <!-- table -->
+      <div class="table-wrap">
+        <table class="cases-table">
+          <thead>
+            <tr>
+              <th class="col-sev">Severity</th>
+              <th>Title</th>
+              <th class="col-status">Status</th>
+              <th class="col-assignee">Assignee</th>
+              <th class="col-counts" title="Linked alerts">⚡</th>
+              <th class="col-counts" title="Comments">💬</th>
+              <th class="col-updated">Updated</th>
+            </tr>
+          </thead>
+          <tbody id="casesBody"></tbody>
+        </table>
+        <div class="empty-state" id="emptyState" style="display:none">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          <div style="margin-top:8px;font-size:13px">No cases found</div>
+          <div style="font-size:12px;margin-top:4px">Try clearing your filters or create the first case.</div>
+        </div>
+      </div>
+      <!-- pagination -->
+      <div class="pagination">
+        <button id="prevBtn" onclick="prevPage()" disabled>← Prev</button>
+        <span id="pageInfo">—</span>
+        <button id="nextBtn" onclick="nextPage()" disabled>Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Side Panel -->
+<div class="panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
+<div class="side-panel" id="sidePanel">
+  <div class="panel-header">
+    <div style="flex:1">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span class="badge" id="phSev">—</span>
+        <span class="badge" id="phStatus">—</span>
+      </div>
+      <div class="ph-title" id="phTitle">—</div>
+      <div class="ph-meta" id="phMeta">—</div>
+    </div>
+    <button class="panel-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="panel-body">
+    <!-- Description / Details -->
+    <div class="panel-section" id="phDetailsSection">
+      <div class="panel-section-label">Details</div>
+      <div class="detail-grid" id="phGrid"></div>
+      <div id="phDesc" style="margin-top:10px;font-size:13px;line-height:1.5;color:var(--text-dim)"></div>
+    </div>
+    <!-- Linked Alerts -->
+    <div class="panel-section">
+      <div class="panel-section-label" id="alertsSectionLabel">Linked Alerts (0)</div>
+      <div id="linkedAlerts"></div>
+      <button class="btn-sec" style="margin-top:8px;font-size:12px" onclick="openLinkAlert()">+ Link Alert ID</button>
+    </div>
+    <!-- Comments -->
+    <div class="panel-section">
+      <div class="panel-section-label" id="commentsSectionLabel">Comments &amp; Timeline</div>
+      <div id="commentsThread"></div>
+      <div class="comment-input-area">
+        <textarea id="commentText" placeholder="Add a comment…"></textarea>
+        <div class="comment-add-row">
+          <button class="btn-prim" onclick="submitComment()">Add Comment</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="panel-footer">
+    <button class="btn-sec" onclick="openEditCase()">Edit</button>
+    <div style="flex:1"></div>
+    <div class="close-case-wrap" id="closeCaseWrap">
+      <div class="resolution-dropdown" id="resDrop">
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;font-weight:600">Select resolution:</div>
+        <label class="resolution-opt"><input type="radio" name="resolution" value="true_positive"> True Positive</label>
+        <label class="resolution-opt"><input type="radio" name="resolution" value="false_positive"> False Positive</label>
+        <label class="resolution-opt"><input type="radio" name="resolution" value="benign"> Benign</label>
+        <label class="resolution-opt"><input type="radio" name="resolution" value="undetermined"> Undetermined</label>
+        <button class="resolution-confirm" id="resConfirm" onclick="confirmClose()" disabled>Confirm Close</button>
+      </div>
+      <button class="btn-danger" id="closeCaseBtn" onclick="toggleResDropdown()">Close Case</button>
+    </div>
+  </div>
+</div>
+
+<!-- New / Edit Case Modal -->
+<div class="modal-overlay" id="caseModal">
+  <div class="modal">
+    <h3 id="modalTitle">New Case</h3>
+    <div class="form-row"><label>Title *</label><input type="text" id="mTitle" maxlength="300"></div>
+    <div class="form-row"><label>Description</label><textarea id="mDesc" maxlength="5000"></textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-row"><label>Severity</label>
+        <select id="mSev"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select>
+      </div>
+      <div class="form-row"><label>Assignee</label><input type="text" id="mAssignee" placeholder="username"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-row"><label>MITRE Tactic</label><input type="text" id="mTactic" placeholder="e.g. Discovery"></div>
+      <div class="form-row"><label>MITRE Technique</label><input type="text" id="mTech" placeholder="e.g. T1595"></div>
+    </div>
+    <div class="form-row"><label>Tags (comma-separated)</label><input type="text" id="mTags" placeholder="brute-force, ssh"></div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeModal()">Cancel</button>
+      <button class="btn-prim" id="modalSave" onclick="saveCase()">Create Case</button>
+    </div>
+  </div>
+</div>
+
+<!-- Link Alert Modal -->
+<div class="modal-overlay" id="linkAlertModal">
+  <div class="modal" style="width:360px">
+    <h3>Link Alert</h3>
+    <div class="form-row"><label>Alert ID</label><input type="text" id="linkAlertId" placeholder="alert_id UUID"></div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeLinkModal()">Cancel</button>
+      <button class="btn-prim" onclick="doLinkAlert()">Link</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TH=document.documentElement;
+const S={
+  navCollapsed:false,theme:'dark',jwt:'',ep:'',role:'',username:'',
+  page:0,limit:25,total:0,
+  currentCaseId:null,currentCase:null,
+  editMode:false,  // false=create, true=edit
+};
+
+function parseJwt(t){try{const b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b))}catch{return null}}
+function clearAuth(){['ts_jwt','ts_username','ts_role','ts_key'].forEach(k=>localStorage.removeItem(k))}
+function logout(){clearAuth();location.href='/ui/login.html'}
+function apiHeaders(){return{'Content-Type':'application/json','Authorization':'Bearer '+(S.jwt||localStorage.getItem('ts_key')||'')}}
+
+function init(){
+  S.theme=localStorage.getItem('ts_theme')||'dark';
+  TH.setAttribute('data-theme',S.theme);
+  S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
+  S.jwt=localStorage.getItem('ts_jwt')||'';
+  S.role=localStorage.getItem('ts_role')||'';
+  S.username=localStorage.getItem('ts_username')||'';
+  if(!S.jwt&&!localStorage.getItem('ts_key')){location.href='/ui/login.html';return}
+  const p=parseJwt(S.jwt);
+  if(p){S.role=p.role||S.role;S.username=p.username||S.username}
+  document.getElementById('navUser').textContent=S.username||'';
+  const nc=localStorage.getItem('ts_nav_collapsed');
+  if(nc==='true'){S.navCollapsed=true;document.getElementById('sidenav').classList.add('collapsed');document.getElementById('collapseIcon').style.transform='rotate(180deg)'}
+  doSearch();
+}
+
+function toggleTheme(){S.theme=S.theme==='dark'?'light':'dark';TH.setAttribute('data-theme',S.theme);localStorage.setItem('ts_theme',S.theme)}
+function toggleNav(){S.navCollapsed=!S.navCollapsed;document.getElementById('sidenav').classList.toggle('collapsed',S.navCollapsed);document.getElementById('collapseIcon').style.transform=S.navCollapsed?'rotate(180deg)':'';localStorage.setItem('ts_nav_collapsed',S.navCollapsed)}
+
+function clearFilters(){document.getElementById('fSearch').value='';document.getElementById('fStatus').value='';document.getElementById('fSev').value='';S.page=0;doSearch()}
+
+async function doSearch(){
+  S.page=S.page||0;
+  const params=new URLSearchParams();
+  const q=document.getElementById('fSearch').value.trim();
+  const status=document.getElementById('fStatus').value;
+  const sev=document.getElementById('fSev').value;
+  if(q)params.set('q',q);
+  if(status)params.set('status',status);
+  if(sev)params.set('severity',sev);
+  params.set('limit',S.limit);
+  params.set('offset',S.page*S.limit);
+  try{
+    const r=await fetch(`${S.ep}/cases?${params}`,{headers:apiHeaders()});
+    if(r.status===401){logout();return}
+    const d=await r.json();
+    S.total=d.total||0;
+    renderTable(d.cases||[]);
+    renderPagination();
+  }catch(e){console.error(e)}
+}
+
+function renderTable(cases){
+  const tbody=document.getElementById('casesBody');
+  const empty=document.getElementById('emptyState');
+  if(!cases.length){tbody.innerHTML='';empty.style.display='block';return}
+  empty.style.display='none';
+  tbody.innerHTML=cases.map(c=>`
+    <tr data-id="${c.case_id}" onclick="openCase('${c.case_id}')" class="${S.currentCaseId===c.case_id?'active-row':''}">
+      <td><span class="badge sev-${c.severity||'medium'}">${(c.severity||'medium').toUpperCase()}</span></td>
+      <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.title)}">${esc(c.title)}</td>
+      <td><span class="badge status-${c.status||'open'}">${fmtStatus(c.status||'open')}</span></td>
+      <td style="color:var(--text-dim)">${esc(c.assignee||'—')}</td>
+      <td class="col-counts"><span class="count-chip">⚡ ${c.alert_count||0}</span></td>
+      <td class="col-counts"><span class="count-chip">💬 ${c.comment_count||0}</span></td>
+      <td class="col-updated" title="${c.updated_at||''}">${relTime(c.updated_at)}</td>
+    </tr>`).join('');
+}
+
+function renderPagination(){
+  const total=S.total,page=S.page,limit=S.limit;
+  const totalPages=Math.ceil(total/limit)||1;
+  document.getElementById('pageInfo').textContent=`Page ${page+1} of ${totalPages} (${total} cases)`;
+  document.getElementById('prevBtn').disabled=page===0;
+  document.getElementById('nextBtn').disabled=(page+1)*limit>=total;
+}
+function prevPage(){if(S.page>0){S.page--;doSearch()}}
+function nextPage(){if((S.page+1)*S.limit<S.total){S.page++;doSearch()}}
+
+async function openCase(id){
+  S.currentCaseId=id;
+  // highlight row
+  document.querySelectorAll('.cases-table tbody tr').forEach(r=>r.classList.toggle('active-row',r.dataset.id===id));
+  try{
+    const r=await fetch(`${S.ep}/cases/${id}`,{headers:apiHeaders()});
+    if(!r.ok)return;
+    S.currentCase=await r.json();
+    renderPanel(S.currentCase);
+    document.getElementById('panelOverlay').classList.add('open');
+    document.getElementById('sidePanel').classList.add('open');
+  }catch(e){console.error(e)}
+}
+
+function renderPanel(c){
+  document.getElementById('phTitle').textContent=c.title;
+  document.getElementById('phMeta').textContent=`Created by ${c.created_by||'?'} · ${relTime(c.created_at)}`;
+  const sevEl=document.getElementById('phSev');
+  sevEl.textContent=(c.severity||'medium').toUpperCase();
+  sevEl.className=`badge sev-${c.severity||'medium'}`;
+  const stEl=document.getElementById('phStatus');
+  stEl.textContent=fmtStatus(c.status||'open');
+  stEl.className=`badge status-${c.status||'open'}`;
+
+  // details grid
+  const grid=document.getElementById('phGrid');
+  const rows=[
+    ['Severity',`<span class="badge sev-${c.severity}">${(c.severity||'').toUpperCase()}</span>`],
+    ['Assignee',esc(c.assignee||'Unassigned')],
+    ['MITRE',c.mitre_technique?`${esc(c.mitre_tactic||'')} / ${esc(c.mitre_technique)}`:'—'],
+    ['Tags',c.tags&&c.tags.length?c.tags.map(t=>`<span style="background:var(--surface4);padding:1px 6px;border-radius:10px;font-size:11px">${esc(t)}</span>`).join(' '):'—'],
+    ['Resolution',c.resolution?esc(c.resolution.replace(/_/g,' ')):'—'],
+    ['Created',c.created_at?new Date(c.created_at).toLocaleString():'—'],
+  ];
+  grid.innerHTML=rows.map(([k,v])=>`<div class="dk">${k}</div><div class="dv">${v}</div>`).join('');
+  document.getElementById('phDesc').textContent=c.description||'';
+
+  // linked alerts
+  const alertsEl=document.getElementById('linkedAlerts');
+  const linkedIds=c.linked_alert_ids||[];
+  const alertDetails=c.alerts||[];
+  document.getElementById('alertsSectionLabel').textContent=`Linked Alerts (${linkedIds.length})`;
+  if(!linkedIds.length){alertsEl.innerHTML='<div style="color:var(--text-muted);font-size:12px">No linked alerts.</div>';} else {
+    alertsEl.innerHTML=linkedIds.map(la=>{
+      const detail=alertDetails.find(a=>a.alert_id===la.alert_id)||{};
+      return `<div class="alert-chip">
+        <span class="badge sev-${detail.severity||'low'}">${(detail.severity||'').toUpperCase()||'?'}</span>
+        <span class="ac-name">${esc(detail.rule_name||la.alert_id)}</span>
+        <span style="color:var(--text-muted);font-size:11px">${esc(detail.source_ip||'')}</span>
+        <button class="ac-unlink" onclick="unlinkAlert('${la.alert_id}')" title="Unlink">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  // comments
+  const comments=c.comments||[];
+  document.getElementById('commentsSectionLabel').textContent=`Comments & Timeline (${comments.filter(c=>!c.is_system).length})`;
+  document.getElementById('commentsThread').innerHTML=comments.map(cm=>`
+    <div class="comment${cm.is_system?' system':''}">
+      <div class="comment-header">
+        ${cm.is_system?'⚙ ':''}
+        <span class="comment-author">${esc(cm.author)}</span>
+        <span>·</span>
+        <span>${relTime(cm.created_at)}</span>
+        ${cm.edited_at?'<span>· edited</span>':''}
+      </div>
+      <div class="comment-body">${esc(cm.body)}</div>
+      ${!cm.is_system?`<div class="comment-actions">
+        ${cm.author===S.username||['admin','superadmin'].includes(S.role)?`<button onclick="editComment('${cm.comment_id}','${esc(cm.body).replace(/'/g,'&#39;')}')">Edit</button><button onclick="deleteComment('${cm.comment_id}')">Delete</button>`:''}
+      </div>`:''}
+    </div>`).join('');
+
+  // show/hide close button
+  document.getElementById('closeCaseWrap').style.display=c.status==='resolved'?'none':'flex';
+  // reset resolution dropdown
+  document.getElementById('resDrop').classList.remove('open');
+  document.querySelectorAll('input[name="resolution"]').forEach(r=>r.checked=false);
+  document.getElementById('resConfirm').disabled=true;
+  document.getElementById('resConfirm').classList.remove('ready');
+  document.getElementById('commentText').value='';
+}
+
+function closePanel(){
+  document.getElementById('panelOverlay').classList.remove('open');
+  document.getElementById('sidePanel').classList.remove('open');
+  S.currentCaseId=null;
+  document.querySelectorAll('.cases-table tbody tr').forEach(r=>r.classList.remove('active-row'));
+}
+
+// ── Resolution / close ──
+function toggleResDropdown(){
+  document.getElementById('resDrop').classList.toggle('open');
+}
+document.querySelectorAll('input[name="resolution"]').forEach(r=>{
+  r.addEventListener('change',()=>{
+    document.getElementById('resConfirm').disabled=false;
+    document.getElementById('resConfirm').classList.add('ready');
+  });
+});
+async function confirmClose(){
+  const res=document.querySelector('input[name="resolution"]:checked')?.value;
+  if(!res)return;
+  try{
+    const r=await fetch(`${S.ep}/cases/${S.currentCaseId}`,{
+      method:'PATCH',
+      headers:apiHeaders(),
+      body:JSON.stringify({status:'resolved',resolution:res}),
+    });
+    if(!r.ok){alert((await r.json()).detail||'Error');return}
+    document.getElementById('resDrop').classList.remove('open');
+    await openCase(S.currentCaseId);
+    doSearch();
+  }catch(e){console.error(e)}
+}
+
+// ── Comments ──
+async function submitComment(){
+  const body=document.getElementById('commentText').value.trim();
+  if(!body||!S.currentCaseId)return;
+  try{
+    const r=await fetch(`${S.ep}/cases/${S.currentCaseId}/comments`,{
+      method:'POST',headers:apiHeaders(),body:JSON.stringify({body}),
+    });
+    if(!r.ok){alert((await r.json()).detail||'Error');return}
+    document.getElementById('commentText').value='';
+    await openCase(S.currentCaseId);
+  }catch(e){console.error(e)}
+}
+async function editComment(id,oldBody){
+  const newBody=prompt('Edit comment:',oldBody);
+  if(!newBody||newBody===oldBody)return;
+  try{
+    const r=await fetch(`${S.ep}/cases/${S.currentCaseId}/comments/${id}`,{
+      method:'PUT',headers:apiHeaders(),body:JSON.stringify({body:newBody}),
+    });
+    if(!r.ok){alert((await r.json()).detail||'Error');return}
+    await openCase(S.currentCaseId);
+  }catch(e){console.error(e)}
+}
+async function deleteComment(id){
+  if(!confirm('Delete this comment?'))return;
+  try{
+    await fetch(`${S.ep}/cases/${S.currentCaseId}/comments/${id}`,{method:'DELETE',headers:apiHeaders()});
+    await openCase(S.currentCaseId);
+  }catch(e){console.error(e)}
+}
+
+// ── Link alert ──
+function openLinkAlert(){document.getElementById('linkAlertModal').classList.add('open');document.getElementById('linkAlertId').value=''}
+function closeLinkModal(){document.getElementById('linkAlertModal').classList.remove('open')}
+async function doLinkAlert(){
+  const aid=document.getElementById('linkAlertId').value.trim();
+  if(!aid)return;
+  try{
+    const r=await fetch(`${S.ep}/cases/${S.currentCaseId}/alerts`,{
+      method:'POST',headers:apiHeaders(),body:JSON.stringify({alert_ids:[aid]}),
+    });
+    if(!r.ok){alert((await r.json()).detail||'Error');return}
+    closeLinkModal();
+    await openCase(S.currentCaseId);
+  }catch(e){console.error(e)}
+}
+async function unlinkAlert(aid){
+  if(!confirm(`Unlink alert ${aid}?`))return;
+  try{
+    await fetch(`${S.ep}/cases/${S.currentCaseId}/alerts/${aid}`,{method:'DELETE',headers:apiHeaders()});
+    await openCase(S.currentCaseId);
+  }catch(e){console.error(e)}
+}
+
+// ── New / Edit Case Modal ──
+function openNewCase(){
+  S.editMode=false;
+  document.getElementById('modalTitle').textContent='New Case';
+  document.getElementById('modalSave').textContent='Create Case';
+  document.getElementById('mTitle').value='';
+  document.getElementById('mDesc').value='';
+  document.getElementById('mSev').value='medium';
+  document.getElementById('mAssignee').value='';
+  document.getElementById('mTactic').value='';
+  document.getElementById('mTech').value='';
+  document.getElementById('mTags').value='';
+  document.getElementById('caseModal').classList.add('open');
+}
+function openEditCase(){
+  if(!S.currentCase)return;
+  S.editMode=true;
+  const c=S.currentCase;
+  document.getElementById('modalTitle').textContent='Edit Case';
+  document.getElementById('modalSave').textContent='Save Changes';
+  document.getElementById('mTitle').value=c.title||'';
+  document.getElementById('mDesc').value=c.description||'';
+  document.getElementById('mSev').value=c.severity||'medium';
+  document.getElementById('mAssignee').value=c.assignee||'';
+  document.getElementById('mTactic').value=c.mitre_tactic||'';
+  document.getElementById('mTech').value=c.mitre_technique||'';
+  document.getElementById('mTags').value=(c.tags||[]).join(', ');
+  document.getElementById('caseModal').classList.add('open');
+}
+function closeModal(){document.getElementById('caseModal').classList.remove('open')}
+async function saveCase(){
+  const title=document.getElementById('mTitle').value.trim();
+  if(!title){alert('Title is required');return}
+  const payload={
+    title,
+    description:document.getElementById('mDesc').value.trim()||null,
+    severity:document.getElementById('mSev').value,
+    assignee:document.getElementById('mAssignee').value.trim()||null,
+    mitre_tactic:document.getElementById('mTactic').value.trim()||null,
+    mitre_technique:document.getElementById('mTech').value.trim()||null,
+    tags:document.getElementById('mTags').value.split(',').map(t=>t.trim()).filter(Boolean),
+  };
+  try{
+    let r;
+    if(S.editMode){
+      r=await fetch(`${S.ep}/cases/${S.currentCaseId}`,{method:'PATCH',headers:apiHeaders(),body:JSON.stringify(payload)});
+    } else {
+      r=await fetch(`${S.ep}/cases`,{method:'POST',headers:apiHeaders(),body:JSON.stringify(payload)});
+    }
+    if(!r.ok){alert((await r.json()).detail||'Error');return}
+    const saved=await r.json();
+    closeModal();
+    doSearch();
+    if(S.editMode){await openCase(S.currentCaseId)}
+    else{await openCase(saved.case_id)}
+  }catch(e){console.error(e)}
+}
+
+// ── Helpers ──
+function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function fmtStatus(s){return({open:'Open',investigating:'Investigating',resolved:'Resolved'})[s]||s}
+function relTime(iso){
+  if(!iso)return '—';
+  const d=new Date(iso),now=Date.now(),diff=(now-d)/1000;
+  if(diff<60)return 'just now';
+  if(diff<3600)return Math.floor(diff/60)+'m ago';
+  if(diff<86400)return Math.floor(diff/3600)+'h ago';
+  if(diff<2592000)return Math.floor(diff/86400)+'d ago';
+  return d.toLocaleDateString();
+}
+
+init();
+</script>
+</body>
+</html>

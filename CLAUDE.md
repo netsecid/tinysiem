@@ -2,9 +2,34 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current State: v0.3
+## Current State: v1.0
 
-Backend is fully implemented. Events UI (v0.2) and Alerts UI (v0.3) are both working in Docker. The stack has been tested end-to-end with ingested nginx logs.
+All v1.0 features shipped and tested (164 tests passing):
+- All v0.9 features +
+- **Cases & Workflow**: `app/cases/` module, `ui/cases.html`, 3 new DuckDB tables (cases, case_comments, case_alerts), full CRUD API, sliding detail panel with comment thread
+- **Log Sources**: `app/sources/` module, `GET /sources` API, Log Sources section in Configuration UI
+- Cases nav link added to all pages
+
+**Known DuckDB constraint:** DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. See `app/storage/duckdb_store.py` comment in `init_cases_tables()`.
+
+**Next version: v1.1** — see `docs/specs/roadmap.md` for the full roadmap and `docs/specs/` for individual specs.
+
+### What to build next (v1.1)
+
+Two independent features:
+
+1. **Smart Baselines** (`app/baselines/`) — spec: `docs/specs/v1.1-smart-baselines.md`
+   - 2 new DuckDB tables: `baselines`, `baseline_violations` (no secondary indexes per DuckDB constraint above)
+   - Background `asyncio` job runs every 5 min, computes z-scores with Welford's online algorithm
+   - New dependency: `numpy` (add to `requirements.txt` + Dockerfile)
+   - API: `GET /baselines`, `GET /baselines/violations`, `PATCH /baselines/violations/{id}`, `DELETE /baselines/{source}`
+
+2. **AI Context Enrichment** (`app/ai/enrichment.py`) — spec: `docs/specs/v1.1-ai-enrichment.md`
+   - Inject active sources + existing parsers/rules context into existing `/parsers/generate` and `/rules/generate` endpoints (no schema change)
+   - Two new endpoints: `POST /ai/explain-alert`, `POST /ai/analyze-events`
+   - UI: "Explain with AI" button in alerts expanded row; multi-select + "Analyze with AI" in events
+
+**After v1.1 ships:** update this section to "Current State: v1.1" and set next to v1.2 (Integrations + Dashboard).
 
 ---
 
@@ -220,25 +245,15 @@ TINYSIEM_SUPERADMIN_PASSWORD  # initial superadmin password (only used when user
 
 ---
 
-## What to Build Next (v0.4)
-
-1. **Dashboard page** (`ui/dashboard.html`) — event volume chart (24h sparkline reusing `/events/histogram`), top source IPs and top rules fired (reusing `/events/facets`), alert severity breakdown (reusing `/alerts/facets`), total events + total alerts counters; no new backend endpoints needed
-2. **Wire dashboard in nav** — add `href="/ui/dashboard.html"` to the Dashboard nav item in both `events.html` and `alerts.html`
-3. **`test_events.py`** — tests for `query_events`, `get_event_facets`, `get_event_histogram` in `duckdb_store.py`
-
-### Known polish items
-- `scripts/ingest_test_logs.py` hardcodes the API key; could read it from `.env` dynamically
-- The events table expand-row stopPropagation between expand toggle and raw modal could be tightened
-
----
-
 ## Do NOT Add (out of scope for this project)
 
-- Real-time SSE log tailing (polling is fine)
-- Slack/webhook alert destinations
-- Multi-user auth or sessions
-- AI triage (ChromaDB plumbing exists but no Claude API calls yet)
-- Log retention/purge
+- Real-time SSE / WebSocket log tailing (polling is fine)
+- Slack/PagerDuty alert destinations
+- Multi-tenant / org isolation
+- SBOM UI (a static `/sbom` endpoint is acceptable)
 - Rate limiting
 - Sigma rule format
 - React/Vue/any build-step frontend framework
+- ML models (sklearn, ARIMA, Isolation Forest) — z-score only for baselines
+- Case SLA timers or automated escalation
+- OAuth flow for integrations (service account/API key only)

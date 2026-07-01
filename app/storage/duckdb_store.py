@@ -597,6 +597,94 @@ def query_audit(
     return {"total": total, "items": items}
 
 
+# ── Cases ─────────────────────────────────────────────────────────────────────
+
+def init_cases_tables() -> None:
+    with _lock:
+        _conn.execute("""CREATE TABLE IF NOT EXISTS cases (
+            case_id         VARCHAR PRIMARY KEY,
+            title           VARCHAR NOT NULL,
+            description     VARCHAR,
+            severity        VARCHAR NOT NULL DEFAULT 'medium',
+            status          VARCHAR NOT NULL DEFAULT 'open',
+            resolution      VARCHAR,
+            assignee        VARCHAR,
+            created_by      VARCHAR NOT NULL,
+            created_at      TIMESTAMP NOT NULL,
+            updated_at      TIMESTAMP NOT NULL,
+            closed_at       TIMESTAMP,
+            mitre_tactic    VARCHAR,
+            mitre_technique VARCHAR,
+            tags            JSON
+        )""")
+        # Note: no secondary indexes on cases — DuckDB 1.1.x UPDATE fails when a table
+        # has a PRIMARY KEY + any secondary ART index (known bug). Filter queries use
+        # table scans which are fast enough at this scale.
+        _conn.execute("""CREATE TABLE IF NOT EXISTS case_alerts (
+            case_id     VARCHAR NOT NULL,
+            alert_id    VARCHAR NOT NULL,
+            linked_at   TIMESTAMP NOT NULL,
+            linked_by   VARCHAR NOT NULL,
+            PRIMARY KEY (case_id, alert_id)
+        )""")
+        _conn.execute("""CREATE TABLE IF NOT EXISTS case_comments (
+            comment_id  VARCHAR PRIMARY KEY,
+            case_id     VARCHAR NOT NULL,
+            author      VARCHAR NOT NULL,
+            body        VARCHAR NOT NULL,
+            created_at  TIMESTAMP NOT NULL,
+            edited_at   TIMESTAMP,
+            is_system   BOOLEAN NOT NULL DEFAULT FALSE
+        )""")
+        _conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_case ON case_comments(case_id)")
+
+
+# ── Log Sources ────────────────────────────────────────────────────────────────
+
+_ACTIVE_MINUTES = 30
+_STALE_HOURS = 24
+
+
+def query_source_activity() -> list[dict]:
+    with _lock:
+        rows = _conn.execute("""
+            SELECT
+                source,
+                COUNT(*) AS total,
+                MAX(ingested_at) AS last_seen,
+                MIN(ingested_at) AS first_seen,
+                COUNT(*) FILTER (WHERE ingested_at > (CURRENT_TIMESTAMP - INTERVAL '24 hours')) AS cnt_24h,
+                COUNT(*) FILTER (WHERE ingested_at > (CURRENT_TIMESTAMP - INTERVAL '1 hour'))  AS cnt_1h
+            FROM events
+            GROUP BY source
+            ORDER BY last_seen DESC
+        """).fetchall()
+    now = datetime.utcnow()
+    result = []
+    for row in rows:
+        source, total, last_seen, first_seen, cnt_24h, cnt_1h = row
+        if last_seen:
+            delta = (now - last_seen).total_seconds()
+            if delta < _ACTIVE_MINUTES * 60:
+                status = "active"
+            elif delta < _STALE_HOURS * 3600:
+                status = "stale"
+            else:
+                status = "silent"
+        else:
+            status = "silent"
+        result.append({
+            "source": source,
+            "status": status,
+            "last_seen": last_seen.isoformat() + "Z" if last_seen else None,
+            "first_seen": first_seen.isoformat() + "Z" if first_seen else None,
+            "event_count_total": total,
+            "event_count_24h": cnt_24h or 0,
+            "event_count_1h": cnt_1h or 0,
+        })
+    return result
+
+
 def get_audit_facets(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,

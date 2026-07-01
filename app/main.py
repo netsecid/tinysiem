@@ -12,10 +12,12 @@ from app.decoder import engine as decoder_engine
 from app.alerts.router import router as alerts_router
 from app.audit.router import router as audit_router
 from app.auth_router import router as auth_router
+from app.cases.router import router as cases_router
 from app.events.router import router as events_router
 from app.ingest.router import router as ingest_router
 from app.parsers.router import router as parsers_router
 from app.rules.router import router as rules_crud_router
+from app.sources.router import router as sources_router
 from app.users.router import router as users_router
 from app.password import hash_password
 from app.rules import engine as rule_engine
@@ -34,6 +36,7 @@ async def lifespan(app: FastAPI):
     duckdb_store.init_db()
     duckdb_store.init_alert_triage_table()
     duckdb_store.init_audit_table()
+    duckdb_store.init_cases_tables()
     chroma_store.init_chroma()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
@@ -95,6 +98,8 @@ from app.reports.router import router as reports_router
 app.include_router(ingest_router)
 app.include_router(events_router)
 app.include_router(alerts_router)
+app.include_router(cases_router)
+app.include_router(sources_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(parsers_router)
