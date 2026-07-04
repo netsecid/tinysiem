@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from app.auth import AuthUser, require_analyst
 from app.config import settings
+from app.cases import store as case_store
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -148,6 +149,12 @@ def get_alert(alert_id: str, _: AuthUser = Depends(require_analyst)):
         if a.get("alert_id") == alert_id:
             return a
     raise HTTPException(status_code=404, detail="Alert not found")
+
+
+@router.get("/{alert_id}/cases")
+def get_alert_cases(alert_id: str, _: AuthUser = Depends(require_analyst)):
+    cases = case_store.get_cases_for_alert(alert_id)
+    return {"cases": cases}
 
 
 @router.patch("/{alert_id}")

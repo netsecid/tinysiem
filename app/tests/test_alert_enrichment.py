@@ -37,3 +37,43 @@ async def test_get_event_by_id_not_found(client, auth_headers):
 async def test_get_event_by_id_requires_auth(client):
     resp = await client.get(f"/events/{uuid.uuid4()}")
     assert resp.status_code == 401
+
+
+async def test_get_alert_cases_unlinked(client, analyst_headers):
+    """Alert not in any case returns empty list."""
+    resp = await client.get("/alerts/nonexistent-alert-id/cases", headers=analyst_headers)
+    assert resp.status_code == 200
+    assert resp.json() == {"cases": []}
+
+
+async def test_get_alert_cases_linked(client, analyst_headers, auth_headers):
+    """Alert linked to a case returns that case."""
+    import json
+    from pathlib import Path
+    from app.alerts.file_writer import write_alert
+    from app.config import settings
+
+    rule = {"name": "test-link-rule", "severity": "medium"}
+    event = {"id": str(uuid.uuid4()), "source_ip": "3.3.3.3"}
+    write_alert(rule, event)
+
+    path = Path(settings.tinysiem_alerts_path)
+    alerts = [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
+    alert_id = [a for a in alerts if a.get("rule_name") == "test-link-rule"][-1]["alert_id"]
+
+    cr = await client.post("/cases", json={"title": "Link Test Case"}, headers=analyst_headers)
+    case_id = cr.json()["case_id"]
+    await client.post(f"/cases/{case_id}/alerts", json={"alert_ids": [alert_id]}, headers=analyst_headers)
+
+    resp = await client.get(f"/alerts/{alert_id}/cases", headers=analyst_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["cases"]) == 1
+    assert data["cases"][0]["case_id"] == case_id
+    assert data["cases"][0]["title"] == "Link Test Case"
+    assert "linked_at" in data["cases"][0]
+
+
+async def test_get_alert_cases_requires_auth(client):
+    resp = await client.get("/alerts/some-alert-id/cases")
+    assert resp.status_code == 401
