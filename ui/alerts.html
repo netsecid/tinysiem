@@ -979,7 +979,7 @@ async function loadLogsTab(){
     const windowSec=cond.window_seconds||60;
     const firedAt=alert.triggered_at?new Date(alert.triggered_at):new Date();
     const startTs=new Date(firedAt.getTime()-windowSec*1000).toISOString();
-    const endTs=firedAt.toISOString();
+    const endTs=new Date(firedAt.getTime()+windowSec*1000).toISOString();
     const params=new URLSearchParams();
     if(alert.source_ip) params.set('source_ip',alert.source_ip);
     params.set('start',startTs);
@@ -992,15 +992,15 @@ async function loadLogsTab(){
     const eventsUrl='/ui/events.html?'+params.toString();
     let summary='';
     if(condType==='threshold'){
-      summary='Condition: '+esc(condField)+' '+esc(cond.operator||'eq')+' '+esc(condValue)+' · '+(cond.threshold_count||'?')+'+ hits in '+windowSec+'s · source: '+esc(alert.source||rule?.source||'?');
+      summary='Condition: '+esc(condField)+' '+esc(cond.operator||'eq')+' '+esc(condValue)+' · '+esc(String(cond.threshold_count||'?'))+'+ hits in '+esc(String(windowSec))+'s · source: '+esc(alert.source||rule?.source||'?');
     } else {
-      summary='Multi-step correlation over '+windowSec+'s';
+      summary='Multi-step correlation over '+esc(String(windowSec))+'s';
     }
     el.innerHTML=
       '<div style="background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:.75rem;margin-bottom:.75rem;font-size:.83rem">'+
         '<div style="color:var(--text-muted);margin-bottom:.25rem">This rule fired on a window of events, not a single log.</div>'+
         '<div>'+summary+'</div>'+
-        '<div style="margin-top:.25rem;color:var(--text-muted)">Time window: '+esc(new Date(firedAt.getTime()-windowSec*1000).toLocaleString())+' → '+esc(firedAt.toLocaleString())+'</div>'+
+        '<div style="margin-top:.25rem;color:var(--text-muted)">Time window: '+esc(new Date(firedAt.getTime()-windowSec*1000).toLocaleString())+' → '+esc(new Date(firedAt.getTime()+windowSec*1000).toLocaleString())+'</div>'+
         (alert.source_ip?'<div style="color:var(--text-muted)">Source IP: '+esc(alert.source_ip)+'</div>':'')+
       '</div>'+
       '<a href="'+esc(eventsUrl)+'" class="rm-btn" style="display:inline-block;text-decoration:none">View triggering logs →</a>';
@@ -1032,10 +1032,10 @@ async function loadRuleTab(){
   if(cond.type==='field_match'){
     condSummary='Fires when <code>'+esc(cond.field)+'</code> '+esc(cond.operator)+' <code>'+esc(String(cond.value))+'</code> on source <code>'+esc(rule.source)+'</code>';
   } else if(cond.type==='threshold'){
-    condSummary='Fires when <code>'+esc(cond.field)+'</code> '+esc(cond.operator)+' <code>'+esc(String(cond.value))+'</code> appears '+(cond.threshold_count||'?')+'+ times in '+(cond.window_seconds||'?')+'s from the same source IP';
+    condSummary='Fires when <code>'+esc(cond.field)+'</code> '+esc(cond.operator)+' <code>'+esc(String(cond.value))+'</code> appears '+esc(String(cond.threshold_count||'?'))+'+ times in '+esc(String(cond.window_seconds||'?'))+'s from the same source IP';
   } else if(cond.type==='correlation'){
     const stepDescs=(cond.steps||[]).map(s=>esc(s.field)+' '+esc(s.operator)+' '+esc(String(s.value))).join(' → ');
-    condSummary='Fires on a multi-step sequence: '+stepDescs+' within '+(cond.window_seconds||'?')+'s';
+    condSummary='Fires on a multi-step sequence: '+stepDescs+' within '+esc(String(cond.window_seconds||'?'))+'s';
   }
   const mitreChips=[rule.mitre_tactic,rule.mitre_technique].filter(Boolean)
     .map(v=>'<span style="display:inline-block;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;padding:.15rem .4rem;font-size:.73rem;margin-right:.25rem;color:var(--purple)">'+esc(v)+'</span>').join('');
@@ -1060,8 +1060,10 @@ async function loadAlertCaseLinkage(alertId){
       } else {
         el.innerHTML='<span style="font-size:.82rem;color:var(--text-dim)">In '+data.cases.length+' cases</span>';
       }
-      document.getElementById('btnNewCase').textContent='New Case';
+      document.getElementById('btnNewCase').style.display='none';
       document.getElementById('btnAddToCase').textContent='Add to another case';
+    } else {
+      document.getElementById('btnNewCase').style.display='';
     }
   }catch(e){/* silently fail — escalation still available */}
 }
