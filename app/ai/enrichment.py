@@ -186,6 +186,9 @@ def generate_playbook(rule: dict, actor: str) -> dict:
     from app.ai.claude import _get_client, _log_ai_call
     from app.storage import duckdb_store
 
+    # Eagerly check for API key so callers get 503 before any DB work
+    client = _get_client()
+
     sources = duckdb_store.get_event_sources()
     rule_name = rule.get("name", "")
     history = _get_rule_resolution_stats(rule_name)
@@ -224,7 +227,6 @@ def generate_playbook(rule: dict, actor: str) -> dict:
         "Return ONLY the JSON object — no markdown, no explanation."
     )
 
-    client = _get_client()
     start = time.time()
     try:
         response = client.messages.create(
