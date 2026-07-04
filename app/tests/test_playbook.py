@@ -300,3 +300,32 @@ async def test_complete_and_uncheck_step_via_api(client, analyst_headers):
     pb_resp2 = await client.get(f"/cases/{case_id}/playbook", headers=analyst_headers)
     step2 = pb_resp2.json()["playbooks"][0]["steps"][0]
     assert step2["completed"] is False
+
+
+async def test_generate_playbook_no_claude_key(client, admin_headers):
+    """Returns 503 when TINYSIEM_CLAUDE_API_KEY is empty."""
+    # conftest sets TINYSIEM_CLAUDE_API_KEY="" so no real call is made
+    resp = await client.post("/rules/nginx-http-404-spike/playbook/generate", headers=admin_headers)
+    assert resp.status_code == 503
+
+
+async def test_refine_playbook_no_claude_key(client, analyst_headers):
+    """Returns 503 when TINYSIEM_CLAUDE_API_KEY is empty."""
+    cr = await client.post("/cases", json={"title": "Refine Test"}, headers=analyst_headers)
+    case_id = cr.json()["case_id"]
+    resp = await client.post(
+        f"/cases/{case_id}/playbook/refine",
+        json={"alert_id": "00000000-0000-0000-0000-000000000000"},
+        headers=analyst_headers,
+    )
+    assert resp.status_code == 503
+
+
+async def test_generate_playbook_rule_not_found(client, admin_headers):
+    resp = await client.post("/rules/nonexistent-rule-xyz/playbook/generate", headers=admin_headers)
+    assert resp.status_code == 404
+
+
+async def test_generate_playbook_requires_admin(client, analyst_headers):
+    resp = await client.post("/rules/nginx-http-404-spike/playbook/generate", headers=analyst_headers)
+    assert resp.status_code == 403

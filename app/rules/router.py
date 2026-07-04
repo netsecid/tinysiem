@@ -162,6 +162,30 @@ def generate_rule_endpoint(req: GenerateRuleRequest, actor: AuthUser = Depends(r
     return {"yaml_text": yaml_text, "preview": True}
 
 
+@router.post("/{name}/playbook/generate")
+def generate_playbook_endpoint(name: str, actor: AuthUser = Depends(require_admin)):
+    rule_path, _ = _get_rule_file(name)
+    if not rule_path:
+        raise HTTPException(404, f"Rule '{name}' not found")
+    try:
+        rule = yaml.safe_load(rule_path.read_text())
+    except Exception as exc:
+        raise HTTPException(422, f"Could not parse rule YAML: {exc}")
+    from app.ai.enrichment import generate_playbook
+    try:
+        result = generate_playbook(rule, actor.username)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
+    audit.log_event(
+        "rule.playbook.generate", "generated", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule", resource_id=name,
+    )
+    return result
+
+
 @router.get("/{name}")
 def get_rule(name: str, _: AuthUser = Depends(require_analyst)):
     _check_name(name)

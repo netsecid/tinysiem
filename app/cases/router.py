@@ -109,6 +109,10 @@ class StepComplete(BaseModel):
     note: Optional[str] = Field(None, max_length=2000)
 
 
+class PlaybookRefineRequest(BaseModel):
+    alert_id: str
+
+
 @router.get("/facets")
 def case_facets(_: AuthUser = Depends(require_analyst)):
     return case_store.get_case_facets()
@@ -369,3 +373,23 @@ def uncomplete_playbook_step(
     removed = case_store.uncomplete_step(case_id, rule_name, step_id)
     if not removed:
         raise HTTPException(404, "Step completion not found")
+
+
+@router.post("/{case_id}/playbook/refine")
+def refine_case_playbook(
+    case_id: str,
+    body: PlaybookRefineRequest,
+    current_user: AuthUser = Depends(require_analyst),
+):
+    if not case_store.get_case(case_id):
+        raise HTTPException(404, "Case not found")
+    from app.ai.enrichment import refine_playbook
+    try:
+        result = refine_playbook(case_id, body.alert_id, current_user.username)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc))
+    except Exception as exc:
+        raise HTTPException(502, f"Claude API error: {exc}")
+    return result
