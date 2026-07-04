@@ -37,6 +37,9 @@ def write_alert(rule: dict, event: dict) -> None:
             f"Rule '{rule.get('name')}' triggered on event {event.get('id')}"
         ),
     }
+    # Snapshot playbook if the rule has one — preserves guidance at alert-fire time
+    if rule.get("playbook"):
+        alert["playbook"] = rule["playbook"]
 
     path = _alerts_path()
 

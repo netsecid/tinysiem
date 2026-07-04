@@ -66,7 +66,27 @@ def _validate_rule_yaml(yaml_text: str) -> dict:
             status_code=422,
             detail=f"severity must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
         )
+    if data.get("playbook"):
+        _validate_playbook(data["playbook"])
     return data
+
+
+def _validate_playbook(playbook: dict) -> None:
+    """Raises HTTPException 422 if playbook steps are malformed."""
+    steps = playbook.get("steps", [])
+    if not isinstance(steps, list):
+        raise HTTPException(status_code=422, detail="playbook.steps must be a list")
+    seen_ids: set[str] = set()
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict):
+            raise HTTPException(status_code=422, detail=f"playbook step {i} must be a mapping")
+        if not step.get("id"):
+            raise HTTPException(status_code=422, detail=f"playbook step {i} missing required field: id")
+        if not step.get("name"):
+            raise HTTPException(status_code=422, detail=f"playbook step {i} missing required field: name")
+        if step["id"] in seen_ids:
+            raise HTTPException(status_code=422, detail=f"duplicate playbook step id: {step['id']!r}")
+        seen_ids.add(step["id"])
 
 
 class RuleRequest(BaseModel):
