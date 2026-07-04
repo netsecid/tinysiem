@@ -320,9 +320,9 @@ async function generatePlaybook(){
     const pb=data.playbook||{};
     const yamlLines=['playbook:','  summary: '+JSON.stringify(pb.summary||''),'  steps:'];
     for(const step of(pb.steps||[])){
-      yamlLines.push('    - id: '+step.id);
+      yamlLines.push('    - id: '+JSON.stringify(step.id));
       yamlLines.push('      name: '+JSON.stringify(step.name||''));
-      if(step.action)yamlLines.push('      action: '+step.action);
+      if(step.action)yamlLines.push('      action: '+JSON.stringify(step.action));
       if(step.auto!==undefined)yamlLines.push('      auto: '+step.auto);
       if(step.notes)yamlLines.push('      notes: '+JSON.stringify(step.notes));
     }

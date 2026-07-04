@@ -750,15 +750,22 @@ async function togglePlaybookStep(checkbox){
 }
 
 async function refinePlaybook(caseId,ruleName){
-  const alertId=S.currentCaseAlerts?.find(a=>a.rule_name===ruleName)?.alert_id;
-  if(!alertId){
-    alert('No linked alert found for this rule');
-    return;
-  }
   const resultEl=document.getElementById(`refineResult-${ruleName}`);
   resultEl.textContent='Refining…';
   resultEl.style.display='block';
   try{
+    // Find the most recent alert for this rule via the alerts API (avoids stale in-memory state)
+    const alertsResp=await apiFetch(`/alerts?rule_name=${encodeURIComponent(ruleName)}&limit=1`);
+    if(!alertsResp||!alertsResp.ok){
+      resultEl.textContent='Could not look up alerts for this rule.';
+      return;
+    }
+    const alertsData=await alertsResp.json();
+    const alertId=alertsData.alerts?.[0]?.alert_id;
+    if(!alertId){
+      resultEl.textContent='No alerts found for this rule.';
+      return;
+    }
     const resp=await apiFetch(`/cases/${caseId}/playbook/refine`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},

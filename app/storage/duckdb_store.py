@@ -839,7 +839,7 @@ def get_event_full(event_id: str) -> Optional[dict]:
     d = dict(zip(cols, row))
     for f in ("ingested_at", "event_time"):
         if d.get(f) and hasattr(d[f], "isoformat"):
-            d[f] = d[f].isoformat()
+            d[f] = d[f].isoformat() + "Z"
     return d
 
 

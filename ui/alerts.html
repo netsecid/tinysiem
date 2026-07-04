@@ -1014,8 +1014,30 @@ async function fetchRule(ruleName){
     const resp=await apiFetch('/rules/'+encodeURIComponent(ruleName));
     if(!resp||!resp.ok) return null;
     const data=await resp.json();
-    _ruleCache[ruleName]=data;
-    return data;
+    // Parse yaml_text into a structured object for callers that need condition/source/mitre fields
+    const yaml=data.yaml_text||'';
+    const rule={name:data.name,yaml_text:yaml};
+    const condMatch=yaml.match(/^condition:\s*\n((?:[ \t]+.+\n?)*)/m);
+    if(condMatch){
+      const condBlock=condMatch[1];
+      rule.condition={
+        type:(condBlock.match(/type:\s*(\S+)/)||[])[1]||'field_match',
+        field:(condBlock.match(/field:\s*(\S+)/)||[])[1],
+        value:(condBlock.match(/value:\s*(.+)/)||[])[1]?.trim(),
+        operator:(condBlock.match(/operator:\s*(\S+)/)||[])[1],
+        threshold_count:parseInt((condBlock.match(/threshold_count:\s*(\d+)/)||[])[1])||null,
+        window_seconds:parseInt((condBlock.match(/window_seconds:\s*(\d+)/)||[])[1])||null,
+        steps:null,
+      };
+    }
+    rule.source=(yaml.match(/^source:\s*(\S+)/m)||[])[1];
+    rule.mitre_tactic=(yaml.match(/^mitre_tactic:\s*["']?([^"'\n]+)["']?/m)||[])[1]?.trim();
+    rule.mitre_technique=(yaml.match(/^mitre_technique:\s*["']?([^"'\n]+)["']?/m)||[])[1]?.trim();
+    if(rule.condition&&yaml.includes('type: correlation')){
+      rule.condition.type='correlation';
+    }
+    _ruleCache[ruleName]=rule;
+    return rule;
   }catch{return null}
 }
 
@@ -1089,13 +1111,17 @@ async function createCaseFromAlert(){
     });
     if(!cr||!cr.ok){showToast('Failed to create case','error');return}
     const newCase=await cr.json();
-    await apiFetch('/cases/'+newCase.case_id+'/alerts',{
+    const linkResp=await apiFetch('/cases/'+newCase.case_id+'/alerts',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({alert_ids:[_modalAlert.alert_id]}),
     });
     document.getElementById('newCaseForm').style.display='none';
-    showToast('Case created — <a href="/ui/cases.html?case_id='+esc(newCase.case_id)+'" style="color:var(--accent)">View Case</a>');
+    if(!linkResp||!linkResp.ok){
+      showToast('Case created but alert could not be linked — open the case to link manually.');
+    } else {
+      showToast('Case created — <a href="/ui/cases.html?case_id='+esc(newCase.case_id)+'" style="color:var(--accent)">View Case</a>');
+    }
     loadAlertCaseLinkage(_modalAlert.alert_id);
   }catch(e){
     showToast('Error: '+esc(e.message),'error');
