@@ -202,7 +202,10 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
 .df-k{font-size:9.5px;color:var(--text-muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:2px}
 .df-v{font-family:var(--mono);font-size:11.5px;color:var(--text);word-break:break-all}
 .dm-summary{padding:10px 12px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;font-family:var(--mono);font-size:12px;color:var(--text-dim);line-height:1.6}
-.dm-foot{display:flex;gap:7px;padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0}
+.dm-foot{display:flex;gap:7px;padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;position:relative;align-items:center}
+.modal-tab-btn{padding:6px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-dim);font-size:12.5px;font-family:var(--sans);cursor:pointer;transition:all .12s;margin-bottom:-1px}
+.modal-tab-btn:hover{color:var(--text)}
+.modal-tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 .rm-btn{padding:5px 14px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);font-size:12px;cursor:pointer;transition:all .12s}
 .rm-btn:hover{color:var(--text);border-color:var(--accent)}
 .rm-btn.ok{color:var(--green);border-color:var(--green)}
@@ -372,18 +375,61 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
       <div id="dmSevBadge"></div>
       <button class="dm-close" onclick="closeDetail()">✕</button>
     </div>
+    <!-- Tab navigation -->
+    <div class="modal-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 1rem;flex-shrink:0">
+      <button class="modal-tab-btn active" data-tab="alert" onclick="switchAlertTab('alert',this)">Alert</button>
+      <button class="modal-tab-btn" data-tab="logs" onclick="switchAlertTab('logs',this)">Logs</button>
+      <button class="modal-tab-btn" data-tab="rule" onclick="switchAlertTab('rule',this)">Rule</button>
+    </div>
     <div class="dm-body">
-      <div>
-        <div class="dm-label">Summary</div>
-        <div class="dm-summary" id="dmSummary"></div>
+      <!-- Alert tab panel (existing content) -->
+      <div id="alertTabAlert">
+        <div>
+          <div class="dm-label">Summary</div>
+          <div class="dm-summary" id="dmSummary"></div>
+        </div>
+        <div>
+          <div class="dm-label">Alert Fields</div>
+          <div class="dm-grid" id="dmGrid"></div>
+        </div>
       </div>
-      <div>
-        <div class="dm-label">Alert Fields</div>
-        <div class="dm-grid" id="dmGrid"></div>
+      <!-- Logs tab panel -->
+      <div id="alertTabLogs" style="display:none">
+        <div id="logsTabContent"><div style="color:var(--text-muted);font-size:12.5px">Click Logs tab to load…</div></div>
+      </div>
+      <!-- Rule tab panel -->
+      <div id="alertTabRule" style="display:none">
+        <div id="ruleTabContent"><div style="color:var(--text-muted);font-size:12.5px">Click Rule tab to load…</div></div>
       </div>
     </div>
     <div class="dm-foot">
       <button class="rm-btn" id="dmCopyJSON" onclick="copyDetailJSON()">Copy as JSON</button>
+      <div id="alertCaseLinkage" style="font-size:.82rem;display:flex;align-items:center;margin-left:.25rem;margin-right:auto"></div>
+      <div id="alertEscalateButtons" style="display:flex;gap:.5rem;align-items:center">
+        <button id="btnNewCase" class="rm-btn" onclick="showNewCaseForm()">New Case</button>
+        <button id="btnAddToCase" class="rm-btn" onclick="toggleAddToCaseDropdown()">Add to Case</button>
+      </div>
+      <!-- Inline new case form (hidden by default) -->
+      <div id="newCaseForm" style="display:none;width:100%;padding:.75rem;border-top:1px solid var(--border);margin-top:.25rem">
+        <div style="display:flex;flex-direction:column;gap:.5rem">
+          <input id="newCaseTitle" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12.5px;padding:5px 8px;outline:none" placeholder="Case title">
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <select id="newCaseSeverity" style="background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:3px 7px;height:26px;cursor:pointer;outline:none">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+            <button class="rm-btn" onclick="createCaseFromAlert()" style="color:var(--green);border-color:var(--green)">Create</button>
+            <button class="rm-btn" onclick="document.getElementById('newCaseForm').style.display='none'">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <!-- Add to existing case dropdown -->
+      <div id="addToCaseDropdown" style="display:none;position:absolute;bottom:3.5rem;right:1rem;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.5rem;width:280px;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,.4)">
+        <input id="caseSearchInput" oninput="filterCaseDropdown()" style="width:100%;margin-bottom:.5rem;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12px;padding:5px 8px;outline:none" placeholder="Search open cases…">
+        <div id="caseDropdownList" style="max-height:200px;overflow-y:auto"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -700,6 +746,10 @@ function openDetail(i){
   const al=S.alerts[i];
   if(!al) return;
   S.detailAl=al;
+  _modalAlert=al;
+  _logsLoaded=false;
+  _ruleLoaded=false;
+  _ruleCache={};
   document.getElementById('dmRule').textContent=al.rule_name||'Unknown Rule';
   document.getElementById('dmTime').textContent=fmtTime(al.triggered_at);
   document.getElementById('dmSevBadge').innerHTML=sevBadge(al.severity);
@@ -712,9 +762,17 @@ function openDetail(i){
       <span class="df-k">${esc(k)}</span>
       <span class="df-v">${esc(v!=null?String(v):'—')}</span>
     </div>`).join('');
+  document.getElementById('addToCaseDropdown').style.display='none';
+  document.getElementById('newCaseForm').style.display='none';
+  switchAlertTab('alert',document.querySelector('.modal-tab-btn[data-tab="alert"]'));
+  loadAlertCaseLinkage(al.alert_id);
   document.getElementById('detailModal').classList.add('show');
 }
-function closeDetail(){document.getElementById('detailModal').classList.remove('show')}
+function closeDetail(){
+  document.getElementById('detailModal').classList.remove('show');
+  document.getElementById('addToCaseDropdown').style.display='none';
+  document.getElementById('newCaseForm').style.display='none';
+}
 function onDetailBg(e){if(e.target.id==='detailModal') closeDetail()}
 function copyDetailJSON(){
   navigator.clipboard.writeText(JSON.stringify(S.detailAl,null,2));
@@ -844,6 +902,264 @@ async function explainAlert(alertId, i){
     btn.textContent='✦ Explain with AI'; btn.disabled=false;
   }
 }
+
+// ── MODAL API HELPER (returns Response, not parsed JSON) ──────────────────────
+async function apiFetch(path, opts={}) {
+  const headers={Authorization:`Bearer ${S.jwt}`,...(opts.headers||{})};
+  const res=await fetch(S.ep+path,{...opts,headers});
+  if(res.status===401){clearAuth();window.location.href='/ui/login.html';return null}
+  return res;
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+function showToast(msg,type){
+  let t=document.getElementById('_toast');
+  if(!t){
+    t=document.createElement('div');
+    t.id='_toast';
+    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:8px 18px;border-radius:6px;font-size:13px;z-index:9999;transition:opacity .4s;white-space:nowrap';
+    document.body.appendChild(t);
+  }
+  t.innerHTML=msg;
+  t.style.background=type==='error'?'var(--red-dim)':'var(--surface4)';
+  t.style.color=type==='error'?'var(--red)':'var(--green)';
+  t.style.border=type==='error'?'1px solid var(--red)':'1px solid var(--green)';
+  t.style.opacity='1';
+  clearTimeout(t._to);
+  t._to=setTimeout(()=>{t.style.opacity='0'},3500);
+}
+
+// ── ALERT MODAL STATE ─────────────────────────────────────────────────────────
+let _modalAlert=null;
+let _ruleCache={};
+let _logsLoaded=false;
+let _ruleLoaded=false;
+
+function switchAlertTab(tab,btn){
+  ['alert','logs','rule'].forEach(t=>{
+    document.getElementById('alertTab'+t.charAt(0).toUpperCase()+t.slice(1)).style.display=t===tab?'':'none';
+  });
+  document.querySelectorAll('.modal-tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(tab==='logs'&&!_logsLoaded){_logsLoaded=true;loadLogsTab();}
+  if(tab==='rule'&&!_ruleLoaded){_ruleLoaded=true;loadRuleTab();}
+}
+
+async function loadLogsTab(){
+  const el=document.getElementById('logsTabContent');
+  el.innerHTML='<div style="color:var(--text-muted);font-size:12.5px">Loading…</div>';
+  const alert=_modalAlert;
+  if(!alert) return;
+  const rule=await fetchRule(alert.rule_name);
+  const condType=rule?.condition?.type||'field_match';
+
+  if(condType==='field_match'&&alert.event_id){
+    try{
+      const resp=await apiFetch('/events/'+encodeURIComponent(alert.event_id));
+      if(!resp) return;
+      if(resp.status===404){
+        el.innerHTML='<div style="color:var(--text-muted);font-size:12.5px">Event '+esc(alert.event_id)+' is no longer in the database (may have been archived).</div>';
+        return;
+      }
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
+      const ev=await resp.json();
+      let html='<pre style="white-space:pre-wrap;word-break:break-all;font-size:.78rem;background:var(--surface3);border:1px solid var(--border);padding:.75rem;border-radius:4px;margin-bottom:.75rem">'+esc(ev.raw||'')+'</pre>';
+      html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem">';
+      for(const [k,v] of Object.entries(ev)){
+        if(k==='raw'||v===null||v===undefined) continue;
+        html+='<div style="background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:.5rem"><div style="font-size:.65rem;font-weight:600;letter-spacing:.06em;color:var(--text-muted);text-transform:uppercase">'+esc(k)+'</div><div style="font-family:var(--mono);font-size:.82rem;word-break:break-all">'+esc(String(v))+'</div></div>';
+      }
+      html+='</div>';
+      el.innerHTML=html;
+    }catch(e){
+      el.innerHTML='<div style="color:var(--red);font-size:12.5px">Failed to load event: '+esc(String(e))+'</div>';
+    }
+  } else {
+    const cond=rule?.condition||{};
+    const windowSec=cond.window_seconds||60;
+    const firedAt=alert.triggered_at?new Date(alert.triggered_at):new Date();
+    const startTs=new Date(firedAt.getTime()-windowSec*1000).toISOString();
+    const endTs=firedAt.toISOString();
+    const params=new URLSearchParams();
+    if(alert.source_ip) params.set('source_ip',alert.source_ip);
+    params.set('start',startTs);
+    params.set('end',endTs);
+    const fieldMap={status_code:'status_code',source_ip:'source_ip',uri:'uri',method:'method'};
+    const condField=cond.field||'';
+    const condValue=String(cond.value||'');
+    if(fieldMap[condField]) params.set(fieldMap[condField],condValue);
+    else if(condValue) params.set('q',condValue);
+    const eventsUrl='/ui/events.html?'+params.toString();
+    let summary='';
+    if(condType==='threshold'){
+      summary='Condition: '+esc(condField)+' '+esc(cond.operator||'eq')+' '+esc(condValue)+' · '+(cond.threshold_count||'?')+'+ hits in '+windowSec+'s · source: '+esc(alert.source||rule?.source||'?');
+    } else {
+      summary='Multi-step correlation over '+windowSec+'s';
+    }
+    el.innerHTML=
+      '<div style="background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:.75rem;margin-bottom:.75rem;font-size:.83rem">'+
+        '<div style="color:var(--text-muted);margin-bottom:.25rem">This rule fired on a window of events, not a single log.</div>'+
+        '<div>'+summary+'</div>'+
+        '<div style="margin-top:.25rem;color:var(--text-muted)">Time window: '+esc(new Date(firedAt.getTime()-windowSec*1000).toLocaleString())+' → '+esc(firedAt.toLocaleString())+'</div>'+
+        (alert.source_ip?'<div style="color:var(--text-muted)">Source IP: '+esc(alert.source_ip)+'</div>':'')+
+      '</div>'+
+      '<a href="'+esc(eventsUrl)+'" class="rm-btn" style="display:inline-block;text-decoration:none">View triggering logs →</a>';
+  }
+}
+
+async function fetchRule(ruleName){
+  if(!ruleName) return null;
+  if(_ruleCache[ruleName]) return _ruleCache[ruleName];
+  try{
+    const resp=await apiFetch('/rules/'+encodeURIComponent(ruleName));
+    if(!resp||!resp.ok) return null;
+    const data=await resp.json();
+    _ruleCache[ruleName]=data;
+    return data;
+  }catch{return null}
+}
+
+async function loadRuleTab(){
+  const el=document.getElementById('ruleTabContent');
+  el.innerHTML='<div style="color:var(--text-muted);font-size:12.5px">Loading…</div>';
+  const rule=await fetchRule(_modalAlert?.rule_name);
+  if(!rule){
+    el.innerHTML='<div style="color:var(--text-muted);font-size:12.5px">Rule definition not available — rule may have been deleted after this alert fired.</div>';
+    return;
+  }
+  const cond=rule.condition||{};
+  let condSummary='';
+  if(cond.type==='field_match'){
+    condSummary='Fires when <code>'+esc(cond.field)+'</code> '+esc(cond.operator)+' <code>'+esc(String(cond.value))+'</code> on source <code>'+esc(rule.source)+'</code>';
+  } else if(cond.type==='threshold'){
+    condSummary='Fires when <code>'+esc(cond.field)+'</code> '+esc(cond.operator)+' <code>'+esc(String(cond.value))+'</code> appears '+(cond.threshold_count||'?')+'+ times in '+(cond.window_seconds||'?')+'s from the same source IP';
+  } else if(cond.type==='correlation'){
+    const stepDescs=(cond.steps||[]).map(s=>esc(s.field)+' '+esc(s.operator)+' '+esc(String(s.value))).join(' → ');
+    condSummary='Fires on a multi-step sequence: '+stepDescs+' within '+(cond.window_seconds||'?')+'s';
+  }
+  const mitreChips=[rule.mitre_tactic,rule.mitre_technique].filter(Boolean)
+    .map(v=>'<span style="display:inline-block;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;padding:.15rem .4rem;font-size:.73rem;margin-right:.25rem;color:var(--purple)">'+esc(v)+'</span>').join('');
+  let html='<div style="margin-bottom:.75rem;font-size:.88rem;line-height:1.6">'+condSummary+'</div>';
+  if(mitreChips) html+='<div style="margin-bottom:.75rem">'+mitreChips+'</div>';
+  html+='<details style="margin-top:.75rem"><summary style="cursor:pointer;font-size:.78rem;color:var(--text-muted)">Raw YAML / JSON</summary><pre style="font-size:.75rem;background:var(--surface3);border:1px solid var(--border);padding:.75rem;border-radius:4px;margin-top:.5rem;white-space:pre-wrap;word-break:break-all">'+esc(rule.yaml_text||JSON.stringify(rule,null,2))+'</pre></details>';
+  el.innerHTML=html;
+}
+
+// ── CASE ESCALATION ───────────────────────────────────────────────────────────
+async function loadAlertCaseLinkage(alertId){
+  const el=document.getElementById('alertCaseLinkage');
+  el.innerHTML='';
+  try{
+    const resp=await apiFetch('/alerts/'+encodeURIComponent(alertId)+'/cases');
+    if(!resp||!resp.ok) return;
+    const data=await resp.json();
+    if(data.cases&&data.cases.length>0){
+      if(data.cases.length===1){
+        const c=data.cases[0];
+        el.innerHTML='<a href="/ui/cases.html?case_id='+esc(c.case_id)+'" style="font-size:.82rem;color:var(--accent)">In case: '+esc(c.title)+' →</a>';
+      } else {
+        el.innerHTML='<span style="font-size:.82rem;color:var(--text-dim)">In '+data.cases.length+' cases</span>';
+      }
+      document.getElementById('btnNewCase').textContent='New Case';
+      document.getElementById('btnAddToCase').textContent='Add to another case';
+    }
+  }catch(e){/* silently fail — escalation still available */}
+}
+
+function showNewCaseForm(){
+  const form=document.getElementById('newCaseForm');
+  form.style.display=form.style.display==='none'?'':'none';
+  if(_modalAlert&&form.style.display!=='none'){
+    document.getElementById('newCaseTitle').value='Alert: '+(_modalAlert.rule_name||'')+' from '+(_modalAlert.source_ip||'unknown');
+    document.getElementById('newCaseSeverity').value=_modalAlert.severity||'medium';
+  }
+}
+
+async function createCaseFromAlert(){
+  const title=document.getElementById('newCaseTitle').value.trim();
+  const severity=document.getElementById('newCaseSeverity').value;
+  if(!title){showToast('Title is required','error');return}
+  try{
+    const cr=await apiFetch('/cases',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title,severity}),
+    });
+    if(!cr||!cr.ok){showToast('Failed to create case','error');return}
+    const newCase=await cr.json();
+    await apiFetch('/cases/'+newCase.case_id+'/alerts',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({alert_ids:[_modalAlert.alert_id]}),
+    });
+    document.getElementById('newCaseForm').style.display='none';
+    showToast('Case created — <a href="/ui/cases.html?case_id='+esc(newCase.case_id)+'" style="color:var(--accent)">View Case</a>');
+    loadAlertCaseLinkage(_modalAlert.alert_id);
+  }catch(e){
+    showToast('Error: '+esc(e.message),'error');
+  }
+}
+
+let _openCases=[];
+async function toggleAddToCaseDropdown(){
+  const dd=document.getElementById('addToCaseDropdown');
+  if(dd.style.display!=='none'){dd.style.display='none';return}
+  dd.style.display='';
+  const listEl=document.getElementById('caseDropdownList');
+  listEl.innerHTML='<div style="color:var(--text-muted);font-size:12px;padding:4px">Loading…</div>';
+  try{
+    const resp=await apiFetch('/cases?status=open&limit=20');
+    if(!resp||!resp.ok) throw new Error('Failed to load cases');
+    const data=await resp.json();
+    _openCases=data.cases||[];
+    renderCaseDropdown(_openCases);
+  }catch(e){
+    listEl.innerHTML='<div style="color:var(--red);font-size:12px;padding:4px">'+esc(String(e))+'</div>';
+  }
+}
+
+function filterCaseDropdown(){
+  const q=document.getElementById('caseSearchInput').value.toLowerCase();
+  renderCaseDropdown(_openCases.filter(c=>c.title.toLowerCase().includes(q)));
+}
+
+function renderCaseDropdown(cases){
+  const el=document.getElementById('caseDropdownList');
+  if(!cases.length){el.innerHTML='<div style="color:var(--text-muted);font-size:12px;padding:4px">No open cases found</div>';return}
+  el.innerHTML=cases.map(c=>
+    '<div data-action="link-case" data-case-id="'+esc(c.case_id)+'" data-case-title="'+esc(c.title)+'" style="padding:.4rem .5rem;cursor:pointer;border-radius:4px;font-size:.83rem;color:var(--text)">'+esc(c.title)+'</div>'
+  ).join('');
+}
+
+async function linkAlertToCase(caseId,caseTitle){
+  document.getElementById('addToCaseDropdown').style.display='none';
+  try{
+    const resp=await apiFetch('/cases/'+encodeURIComponent(caseId)+'/alerts',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({alert_ids:[_modalAlert.alert_id]}),
+    });
+    if(!resp||!resp.ok){showToast('Failed to link alert','error');return}
+    showToast('Alert linked to '+esc(caseTitle));
+    loadAlertCaseLinkage(_modalAlert.alert_id);
+  }catch(e){
+    showToast('Error: '+esc(e.message),'error');
+  }
+}
+
+// ── CASE DROPDOWN EVENT DELEGATION ───────────────────────────────────────────
+document.getElementById('caseDropdownList').addEventListener('mouseover',function(e){
+  const item=e.target.closest('[data-action="link-case"]');
+  if(item) item.style.background='var(--surface3)';
+});
+document.getElementById('caseDropdownList').addEventListener('mouseout',function(e){
+  const item=e.target.closest('[data-action="link-case"]');
+  if(item) item.style.background='';
+});
+document.getElementById('caseDropdownList').addEventListener('click',function(e){
+  const item=e.target.closest('[data-action="link-case"]');
+  if(item) linkAlertToCase(item.dataset.caseId,item.dataset.caseTitle);
+});
 
 // keyboard shortcuts
 document.addEventListener('keydown',e=>{
