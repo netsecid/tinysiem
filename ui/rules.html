@@ -188,6 +188,22 @@ async function selectRule(name,isCustom){
           </div>
         </div>
         <div class="msg" id="genMsg"></div>
+      </div>
+      <hr class="hr">
+      <div>
+        <div class="section-title">Playbook</div>
+        <div class="row-actions">
+          <button class="btn btn-secondary" id="btnGeneratePlaybook" onclick="generatePlaybook()">Generate Playbook</button>
+        </div>
+        <div id="playbookGenStatus" class="msg" style="margin-top:8px;"></div>
+        <div id="playbookPreview" style="display:none;margin-top:12px">
+          <div class="section-title">Preview (review before saving)</div>
+          <textarea class="yaml-area" id="playbookYamlPreview" style="min-height:180px" placeholder="Generated playbook YAML will appear here — review and edit before saving"></textarea>
+          <div class="row-actions">
+            <button class="btn btn-primary" onclick="savePlaybookToRule()">Save Playbook to Rule</button>
+            <button class="btn btn-secondary" onclick="discardPlaybook()">Discard</button>
+          </div>
+        </div>
       </div>`:''}
     </div>
   `);
@@ -277,6 +293,77 @@ function useGenerated(){
   const yaml=document.getElementById('genPreview')?.value;
   const editor=document.getElementById('yamlEditor');
   if(editor)editor.value=yaml;
+}
+
+async function generatePlaybook(){
+  const name=S.selected;if(!name)return;
+  const statusEl=document.getElementById('playbookGenStatus');
+  const previewEl=document.getElementById('playbookPreview');
+  const btn=document.getElementById('btnGeneratePlaybook');
+  statusEl.textContent='Generating playbook…';
+  statusEl.className='msg msg-ok';
+  statusEl.style.display='block';
+  previewEl.style.display='none';
+  if(btn){btn.disabled=true;btn.textContent='Generating…';}
+  try{
+    const r=await api('/rules/'+encodeURIComponent(name)+'/playbook/generate',{method:'POST'});
+    if(!r)return;
+    if(!r.ok){
+      const err=await r.json().catch(()=>({}));
+      statusEl.className='msg msg-err';
+      statusEl.style.display='block';
+      if(r.status===503){statusEl.textContent='AI unavailable — set TINYSIEM_CLAUDE_API_KEY to use this feature.';}
+      else{statusEl.textContent='Error: '+(err.detail||r.statusText);}
+      return;
+    }
+    const data=await r.json();
+    const pb=data.playbook||{};
+    const yamlLines=['playbook:','  summary: '+JSON.stringify(pb.summary||''),'  steps:'];
+    for(const step of(pb.steps||[])){
+      yamlLines.push('    - id: '+step.id);
+      yamlLines.push('      name: '+JSON.stringify(step.name||''));
+      if(step.action)yamlLines.push('      action: '+step.action);
+      if(step.auto!==undefined)yamlLines.push('      auto: '+step.auto);
+      if(step.notes)yamlLines.push('      notes: '+JSON.stringify(step.notes));
+    }
+    document.getElementById('playbookYamlPreview').value=yamlLines.join('\n');
+    statusEl.className='msg msg-ok';
+    statusEl.textContent='Generated ('+( data.prompt_tokens||0)+' in / '+(data.completion_tokens||0)+' out tokens) — review and save.';
+    previewEl.style.display='block';
+  }catch(e){
+    statusEl.className='msg msg-err';
+    statusEl.textContent='Request failed: '+e.message;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Generate Playbook';}
+  }
+}
+
+async function savePlaybookToRule(){
+  const name=S.selected;if(!name)return;
+  const currentYaml=document.getElementById('yamlEditor')?.value||'';
+  const playbookYaml=document.getElementById('playbookYamlPreview')?.value||'';
+  // Strip any existing playbook: block (assumed at end) then append new one
+  const stripped=currentYaml.replace(/\nplaybook:[\s\S]*$/,'').trimEnd();
+  const merged=stripped+'\n'+playbookYaml;
+  const r=await api('/rules/'+encodeURIComponent(name),{method:'PUT',body:JSON.stringify({name,yaml_text:merged})});
+  if(!r)return;
+  if(r.ok){
+    discardPlaybook();
+    const tr=document.querySelector('#ruleList tr[data-name]');
+    const isCustom=document.querySelector('#ruleList tr.selected')?.dataset.custom==='true';
+    await selectRule(name,isCustom);
+    showMsg('editMsg','Playbook saved to rule','ok');
+  }else{
+    const err=await r.json().catch(()=>({}));
+    showMsg('editMsg','Save failed: '+(err.detail||r.statusText),'err');
+  }
+}
+
+function discardPlaybook(){
+  const previewEl=document.getElementById('playbookPreview');
+  const statusEl=document.getElementById('playbookGenStatus');
+  if(previewEl)previewEl.style.display='none';
+  if(statusEl){statusEl.style.display='none';statusEl.textContent='';}
 }
 
 function load(){
