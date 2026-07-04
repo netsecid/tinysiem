@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.auth import AuthUser, require_analyst, require_admin
@@ -16,6 +17,31 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 _VALID_STATUSES = {"open", "investigating", "resolved"}
 _VALID_RESOLUTIONS = {"true_positive", "false_positive", "benign", "undetermined"}
 _VALID_SEVERITIES = {"low", "medium", "high", "critical"}
+
+
+def _load_alert_playbooks(alert_ids: list[str]) -> list[dict]:
+    """Return [{alert_id, rule_name, playbook}] for alerts that have a playbook snapshot."""
+    path = Path(settings.tinysiem_alerts_path)
+    if not path.exists() or not alert_ids:
+        return []
+    id_set = set(alert_ids)
+    found = []
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                a = json.loads(line)
+                if a.get("alert_id") in id_set and a.get("playbook"):
+                    found.append({
+                        "alert_id": a["alert_id"],
+                        "rule_name": a.get("rule_name", ""),
+                        "playbook": a["playbook"],
+                    })
+            except json.JSONDecodeError:
+                continue
+    return found
 
 
 def _load_alerts_by_id(alert_ids: list[str]) -> list[dict]:
@@ -75,6 +101,12 @@ class CommentCreate(BaseModel):
 
 class AlertsLink(BaseModel):
     alert_ids: list[str] = Field(..., min_length=1)
+
+
+class StepComplete(BaseModel):
+    rule_name: str = Field(..., min_length=1)
+    step_id: str = Field(..., min_length=1)
+    note: Optional[str] = Field(None, max_length=2000)
 
 
 @router.get("/facets")
@@ -263,3 +295,77 @@ def unlink_alert(case_id: str, alert_id: str, current_user: AuthUser = Depends(r
     case_store.insert_comment(
         case_id, "system", f"Alert {alert_id} unlinked by {current_user.username}", is_system=True
     )
+
+
+@router.get("/{case_id}/playbook")
+def get_case_playbook(case_id: str, _: AuthUser = Depends(require_analyst)):
+    case = case_store.get_case(case_id)
+    if not case:
+        raise HTTPException(404, "Case not found")
+
+    alert_ids = [la["alert_id"] for la in case.get("linked_alert_ids", [])]
+    alert_playbooks = _load_alert_playbooks(alert_ids)
+
+    # Deduplicate: one playbook section per rule_name (first alert wins)
+    seen_rules: set[str] = set()
+    unique: list[dict] = []
+    for ap in alert_playbooks:
+        if ap["rule_name"] not in seen_rules:
+            seen_rules.add(ap["rule_name"])
+            unique.append(ap)
+
+    completed = case_store.get_completed_steps(case_id)
+    # Build lookup: {(rule_name, step_id): completion_record}
+    comp_map: dict[tuple[str, str], dict] = {
+        (c["rule_name"], c["step_id"]): c for c in completed
+    }
+
+    playbooks = []
+    for ap in unique:
+        pb = ap["playbook"]
+        steps = []
+        for step in pb.get("steps", []):
+            key = (ap["rule_name"], step["id"])
+            comp = comp_map.get(key)
+            enriched = {**step, "completed": comp is not None}
+            if comp:
+                enriched["completed_by"] = comp["completed_by"]
+                enriched["completed_at"] = comp["completed_at"]
+                enriched["completion_note"] = comp.get("note")
+            steps.append(enriched)
+        playbooks.append({
+            "rule_name": ap["rule_name"],
+            "summary": pb.get("summary", ""),
+            "steps": steps,
+        })
+
+    return {"playbooks": playbooks}
+
+
+@router.post("/{case_id}/playbook/steps", status_code=201)
+def complete_playbook_step(
+    case_id: str,
+    body: StepComplete,
+    current_user: AuthUser = Depends(require_analyst),
+):
+    if not case_store.get_case(case_id):
+        raise HTTPException(404, "Case not found")
+    record, created = case_store.complete_step(
+        case_id, body.rule_name, body.step_id, current_user.username, body.note
+    )
+    status_code = 201 if created else 200
+    return JSONResponse(content=record, status_code=status_code)
+
+
+@router.delete("/{case_id}/playbook/steps/{step_id}", status_code=204)
+def uncomplete_playbook_step(
+    case_id: str,
+    step_id: str,
+    rule_name: str,
+    _: AuthUser = Depends(require_analyst),
+):
+    if not case_store.get_case(case_id):
+        raise HTTPException(404, "Case not found")
+    removed = case_store.uncomplete_step(case_id, rule_name, step_id)
+    if not removed:
+        raise HTTPException(404, "Step completion not found")

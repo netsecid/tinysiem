@@ -190,3 +190,113 @@ condition:
     assert resp.status_code in (200, 201)
     # Cleanup
     await client.delete("/rules/no-pb-rule", headers=admin_headers)
+
+
+async def test_get_case_playbook_empty(client, analyst_headers):
+    """Case with no linked alerts returns empty playbooks list."""
+    cr = await client.post("/cases", json={"title": "PB Empty"}, headers=analyst_headers)
+    case_id = cr.json()["case_id"]
+    resp = await client.get(f"/cases/{case_id}/playbook", headers=analyst_headers)
+    assert resp.status_code == 200
+    assert resp.json() == {"playbooks": []}
+
+
+async def test_get_case_playbook_with_alert_snapshot(client, analyst_headers):
+    """Case linked to an alert that has a playbook returns that playbook with steps."""
+    import json, uuid
+    from pathlib import Path
+    from app.alerts.file_writer import write_alert
+    from app.config import settings
+
+    # Write an alert with a playbook snapshot
+    alert_id = str(uuid.uuid4())
+    rule = {
+        "name": "nginx-http-404-spike",
+        "severity": "medium",
+        "playbook": {
+            "summary": "Investigate enumeration",
+            "steps": [
+                {"id": "check_ip", "name": "Check IP", "notes": "Look it up"},
+                {"id": "escalate", "name": "Escalate if needed"},
+            ],
+        },
+    }
+    event = {"id": str(uuid.uuid4()), "source_ip": "9.9.9.9"}
+    write_alert(rule, event)
+
+    # Find the alert_id just written
+    path = Path(settings.tinysiem_alerts_path)
+    alerts = [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
+    written = [a for a in alerts if a.get("rule_name") == "nginx-http-404-spike"]
+    assert written
+    alert_id = written[-1]["alert_id"]
+
+    # Create case, link alert
+    cr = await client.post("/cases", json={"title": "PB Case"}, headers=analyst_headers)
+    case_id = cr.json()["case_id"]
+    link = await client.post(f"/cases/{case_id}/alerts", json={"alert_ids": [alert_id]}, headers=analyst_headers)
+    assert link.status_code == 200
+
+    # Get playbook
+    resp = await client.get(f"/cases/{case_id}/playbook", headers=analyst_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["playbooks"]) == 1
+    pb = data["playbooks"][0]
+    assert pb["rule_name"] == "nginx-http-404-spike"
+    assert pb["summary"] == "Investigate enumeration"
+    assert len(pb["steps"]) == 2
+    assert pb["steps"][0]["id"] == "check_ip"
+    assert pb["steps"][0]["completed"] is False
+
+
+async def test_complete_and_uncheck_step_via_api(client, analyst_headers):
+    """POST step marks complete; DELETE unchecks it; GET reflects state."""
+    import json, uuid
+    from pathlib import Path
+    from app.alerts.file_writer import write_alert
+    from app.config import settings
+
+    rule = {
+        "name": "brute-force-then-success",
+        "severity": "high",
+        "playbook": {"summary": "BF", "steps": [{"id": "s1", "name": "Step 1"}]},
+    }
+    event = {"id": str(uuid.uuid4()), "source_ip": "5.5.5.5"}
+    write_alert(rule, event)
+    path = Path(settings.tinysiem_alerts_path)
+    alerts = [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
+    alert_id = [a for a in alerts if a.get("rule_name") == "brute-force-then-success"][-1]["alert_id"]
+
+    cr = await client.post("/cases", json={"title": "Step Case"}, headers=analyst_headers)
+    case_id = cr.json()["case_id"]
+    await client.post(f"/cases/{case_id}/alerts", json={"alert_ids": [alert_id]}, headers=analyst_headers)
+
+    # Complete step
+    resp = await client.post(f"/cases/{case_id}/playbook/steps",
+        json={"rule_name": "brute-force-then-success", "step_id": "s1", "note": "done"},
+        headers=analyst_headers)
+    assert resp.status_code == 201
+    assert resp.json()["step_id"] == "s1"
+
+    # GET shows completed
+    pb_resp = await client.get(f"/cases/{case_id}/playbook", headers=analyst_headers)
+    step = pb_resp.json()["playbooks"][0]["steps"][0]
+    assert step["completed"] is True
+    assert step["completion_note"] == "done"
+
+    # Idempotent POST → 200
+    resp2 = await client.post(f"/cases/{case_id}/playbook/steps",
+        json={"rule_name": "brute-force-then-success", "step_id": "s1"},
+        headers=analyst_headers)
+    assert resp2.status_code == 200
+
+    # DELETE unchecks
+    del_resp = await client.delete(
+        f"/cases/{case_id}/playbook/steps/s1?rule_name=brute-force-then-success",
+        headers=analyst_headers)
+    assert del_resp.status_code == 204
+
+    pb_resp2 = await client.get(f"/cases/{case_id}/playbook", headers=analyst_headers)
+    step2 = pb_resp2.json()["playbooks"][0]["steps"][0]
+    assert step2["completed"] is False
