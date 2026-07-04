@@ -357,13 +357,21 @@ def complete_step(
     completed_by: str,
     note: Optional[str] = None,
 ) -> tuple[dict, bool]:
-    existing = get_step_completion(case_id, rule_name, step_id)
-    if existing:
-        return existing, False
     row_id = str(uuid.uuid4())
     now = _now()
     conn = _get_conn()
     with _lock:
+        existing = conn.execute(
+            "SELECT id, case_id, rule_name, step_id, completed_by, completed_at, note "
+            "FROM case_playbook_steps WHERE case_id = ? AND rule_name = ? AND step_id = ?",
+            [case_id, rule_name, step_id],
+        ).fetchone()
+        if existing:
+            cols = ["id", "case_id", "rule_name", "step_id", "completed_by", "completed_at", "note"]
+            d = dict(zip(cols, existing))
+            if d.get("completed_at") and hasattr(d["completed_at"], "isoformat"):
+                d["completed_at"] = d["completed_at"].isoformat() + "Z"
+            return d, False
         conn.execute(
             "INSERT INTO case_playbook_steps "
             "(id, case_id, rule_name, step_id, completed_by, completed_at, note) "
