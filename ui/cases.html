@@ -686,7 +686,7 @@ async function loadCasePlaybook(caseId){
       html+=`<div class="playbook-rule-name" style="font-size:.7rem;font-weight:600;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:.5rem">${esc(pb.rule_name)}</div>`;
       if(pb.summary)html+=`<div class="playbook-summary" style="font-size:.85rem;margin-bottom:.75rem;color:var(--text)">${esc(pb.summary)}</div>`;
       // AI Refinement button
-      html+=`<button class="btn-sec" style="margin-bottom:.75rem;font-size:12px" onclick="refinePlaybook(${JSON.stringify(caseId)},${JSON.stringify(pb.rule_name)})">AI Refinement</button>`;
+      html+=`<button class="btn-sec" style="margin-bottom:.75rem;font-size:12px" data-case-id="${esc(caseId)}" data-rule-name="${esc(pb.rule_name)}">AI Refinement</button>`;
       html+=`<div id="refineResult-${esc(pb.rule_name)}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:.75rem;font-size:.83rem;margin-bottom:.75rem;white-space:pre-wrap"></div>`;
       html+='<div class="playbook-steps">';
       for(const step of pb.steps){
@@ -712,6 +712,10 @@ async function loadCasePlaybook(caseId){
       html+='</div></div>';
     }
     el.innerHTML=html;
+    // Wire AI Refinement buttons via event delegation (avoids inline onclick XSS)
+    el.querySelectorAll('button[data-rule-name]').forEach(btn=>{
+      btn.addEventListener('click',()=>refinePlaybook(btn.dataset.caseId,btn.dataset.ruleName));
+    });
     const badge=document.getElementById('playbookTabBadge');
     badge.textContent=`${completedSteps}/${totalSteps}`;
     badge.style.display=totalSteps>0?'inline':'none';
