@@ -128,6 +128,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* ── Case tabs ── */
+.case-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;margin-top:4px}
+.tab-btn{background:none;border:none;border-bottom:2px solid transparent;padding:7px 14px;color:var(--text-muted);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;margin-bottom:-1px;white-space:nowrap}
+.tab-btn:hover{color:var(--text-dim)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-badge{display:inline-block;background:var(--surface4);color:var(--text-muted);font-size:10px;padding:1px 5px;border-radius:8px;margin-left:4px;font-family:var(--mono)}
+.muted-text{color:var(--text-muted);font-size:12px}
+.error-text{color:var(--red);font-size:12px}
 </style>
 </head>
 <body>
@@ -236,14 +244,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <div class="detail-grid" id="phGrid"></div>
       <div id="phDesc" style="margin-top:10px;font-size:13px;line-height:1.5;color:var(--text-dim)"></div>
     </div>
-    <!-- Linked Alerts -->
-    <div class="panel-section">
+    <!-- Tab navigation -->
+    <div class="case-tabs">
+      <button class="tab-btn active" data-tab="alerts" onclick="switchCaseTab('alerts')">Linked Alerts</button>
+      <button class="tab-btn" data-tab="comments" onclick="switchCaseTab('comments')">Comments</button>
+      <button class="tab-btn" data-tab="playbook" onclick="switchCaseTab('playbook')">Playbook <span id="playbookTabBadge" class="tab-badge" style="display:none">0/0</span></button>
+    </div>
+    <!-- Alerts tab panel -->
+    <div id="caseTabAlerts" class="case-tab-panel panel-section">
       <div class="panel-section-label" id="alertsSectionLabel">Linked Alerts (0)</div>
       <div id="linkedAlerts"></div>
       <button class="btn-sec" style="margin-top:8px;font-size:12px" onclick="openLinkAlert()">+ Link Alert ID</button>
     </div>
-    <!-- Comments -->
-    <div class="panel-section">
+    <!-- Comments tab panel -->
+    <div id="caseTabComments" class="case-tab-panel panel-section" style="display:none">
       <div class="panel-section-label" id="commentsSectionLabel">Comments &amp; Timeline</div>
       <div id="commentsThread"></div>
       <div class="comment-input-area">
@@ -251,6 +265,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         <div class="comment-add-row">
           <button class="btn-prim" onclick="submitComment()">Add Comment</button>
         </div>
+      </div>
+    </div>
+    <!-- Playbook tab panel -->
+    <div id="caseTabPlaybook" class="case-tab-panel panel-section" style="display:none">
+      <div id="playbookContent">
+        <div class="muted-text">Loading playbook…</div>
       </div>
     </div>
   </div>
@@ -312,8 +332,9 @@ const TH=document.documentElement;
 const S={
   navCollapsed:false,theme:'dark',jwt:'',ep:'',role:'',username:'',
   page:0,limit:25,total:0,
-  currentCaseId:null,currentCase:null,
+  currentCaseId:null,currentCase:null,currentCaseAlerts:[],
   editMode:false,  // false=create, true=edit
+  playbookLoaded:false,
 };
 
 function parseJwt(t){try{const b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b))}catch{return null}}
@@ -470,6 +491,12 @@ function renderPanel(c){
   document.getElementById('resConfirm').disabled=true;
   document.getElementById('resConfirm').classList.remove('ready');
   document.getElementById('commentText').value='';
+  // reset per-case playbook state
+  S.currentCaseAlerts=c.alerts||[];
+  S.playbookLoaded=false;
+  document.getElementById('playbookTabBadge').style.display='none';
+  document.getElementById('playbookContent').innerHTML='<div class="muted-text">Loading playbook…</div>';
+  switchCaseTab('alerts');
 }
 
 function closePanel(){
@@ -617,6 +644,133 @@ async function saveCase(){
     if(S.editMode){await openCase(S.currentCaseId)}
     else{await openCase(saved.case_id)}
   }catch(e){console.error(e)}
+}
+
+// ── apiFetch helper ──
+async function apiFetch(path,opts={}){
+  const headers={...apiHeaders(),...(opts.headers||{})};
+  return fetch(`${S.ep}${path}`,{...opts,headers});
+}
+
+// ── Case tabs ──
+function switchCaseTab(tab){
+  document.querySelectorAll('.case-tabs .tab-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.tab===tab);
+  });
+  document.querySelectorAll('.case-tab-panel').forEach(p=>{p.style.display='none'});
+  const panelMap={alerts:'caseTabAlerts',comments:'caseTabComments',playbook:'caseTabPlaybook'};
+  const panelId=panelMap[tab];
+  if(panelId)document.getElementById(panelId).style.display='block';
+  if(tab==='playbook'&&!S.playbookLoaded){
+    S.playbookLoaded=true;
+    loadCasePlaybook(S.currentCaseId);
+  }
+}
+
+// ── Playbook tab ──
+async function loadCasePlaybook(caseId){
+  const el=document.getElementById('playbookContent');
+  el.innerHTML='<div class="muted-text">Loading…</div>';
+  try{
+    const resp=await apiFetch(`/cases/${caseId}/playbook`);
+    const data=await resp.json();
+    if(!data.playbooks||data.playbooks.length===0){
+      el.innerHTML='<div class="muted-text">No playbook — link an alert from a rule that has a playbook, or add one via Configuration → Rules.</div>';
+      document.getElementById('playbookTabBadge').style.display='none';
+      return;
+    }
+    let totalSteps=0,completedSteps=0;
+    let html='';
+    for(const pb of data.playbooks){
+      html+=`<div class="playbook-section" style="margin-bottom:1.5rem">`;
+      html+=`<div class="playbook-rule-name" style="font-size:.7rem;font-weight:600;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:.5rem">${esc(pb.rule_name)}</div>`;
+      if(pb.summary)html+=`<div class="playbook-summary" style="font-size:.85rem;margin-bottom:.75rem;color:var(--text)">${esc(pb.summary)}</div>`;
+      // AI Refinement button
+      html+=`<button class="btn-sec" style="margin-bottom:.75rem;font-size:12px" onclick="refinePlaybook(${JSON.stringify(caseId)},${JSON.stringify(pb.rule_name)})">AI Refinement</button>`;
+      html+=`<div id="refineResult-${esc(pb.rule_name)}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:.75rem;font-size:.83rem;margin-bottom:.75rem;white-space:pre-wrap"></div>`;
+      html+='<div class="playbook-steps">';
+      for(const step of pb.steps){
+        totalSteps++;
+        if(step.completed)completedSteps++;
+        const checked=step.completed?'checked':'';
+        const autoIcon=step.auto?' <span title="Can be automated" style="font-size:.75rem">⚡</span>':'';
+        const completedBy=step.completed?`<span style="font-size:.73rem;color:var(--text-muted)"> ✓ ${esc(step.completed_by)} · ${step.completed_at?new Date(step.completed_at).toLocaleString():''}</span>`:'';
+        const notes=step.notes?`<div style="font-size:.78rem;color:var(--text-muted);margin-top:.25rem;padding-left:1.5rem">${esc(step.notes)}</div>`:'';
+        html+=`<div class="playbook-step" style="margin-bottom:.5rem">
+          <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer">
+            <input type="checkbox" ${checked}
+              data-case-id="${esc(caseId)}"
+              data-rule-name="${esc(pb.rule_name)}"
+              data-step-id="${esc(step.id)}"
+              onchange="togglePlaybookStep(this)"
+              style="margin-top:.15rem">
+            <span>${esc(step.name)}${autoIcon}${completedBy}</span>
+          </label>
+          ${notes}
+        </div>`;
+      }
+      html+='</div></div>';
+    }
+    el.innerHTML=html;
+    const badge=document.getElementById('playbookTabBadge');
+    badge.textContent=`${completedSteps}/${totalSteps}`;
+    badge.style.display=totalSteps>0?'inline':'none';
+  }catch(e){
+    el.innerHTML=`<div class="error-text">Failed to load playbook: ${esc(String(e))}</div>`;
+  }
+}
+
+async function togglePlaybookStep(checkbox){
+  const caseId=checkbox.dataset.caseId;
+  const ruleName=checkbox.dataset.ruleName;
+  const stepId=checkbox.dataset.stepId;
+  checkbox.disabled=true;
+  try{
+    if(checkbox.checked){
+      const resp=await apiFetch(`/cases/${caseId}/playbook/steps`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({rule_name:ruleName,step_id:stepId}),
+      });
+      if(!resp.ok){checkbox.checked=false;return}
+    }else{
+      const resp=await apiFetch(`/cases/${caseId}/playbook/steps/${encodeURIComponent(stepId)}?rule_name=${encodeURIComponent(ruleName)}`,{method:'DELETE'});
+      if(!resp.ok){checkbox.checked=true;return}
+    }
+    await loadCasePlaybook(caseId);
+  }catch(e){
+    checkbox.checked=!checkbox.checked; // revert on error
+  }finally{
+    checkbox.disabled=false;
+  }
+}
+
+async function refinePlaybook(caseId,ruleName){
+  const alertId=S.currentCaseAlerts?.find(a=>a.rule_name===ruleName)?.alert_id;
+  if(!alertId){
+    alert('No linked alert found for this rule');
+    return;
+  }
+  const resultEl=document.getElementById(`refineResult-${ruleName}`);
+  resultEl.textContent='Refining…';
+  resultEl.style.display='block';
+  try{
+    const resp=await apiFetch(`/cases/${caseId}/playbook/refine`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({alert_id:alertId}),
+    });
+    const data=await resp.json();
+    if(resp.status===503){
+      resultEl.textContent='AI unavailable — set TINYSIEM_CLAUDE_API_KEY to enable AI Refinement.';
+    }else if(!resp.ok){
+      resultEl.textContent=`Error: ${data.detail||resp.statusText}`;
+    }else{
+      resultEl.textContent=data.refinement;
+    }
+  }catch(e){
+    resultEl.textContent=`Request failed: ${e.message}`;
+  }
 }
 
 // ── Helpers ──
