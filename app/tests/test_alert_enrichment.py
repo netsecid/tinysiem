@@ -51,6 +51,7 @@ async def test_get_alert_cases_linked(client, analyst_headers, auth_headers):
     import json
     from pathlib import Path
     from app.alerts.file_writer import write_alert
+    from app.cases import store as case_store
     from app.config import settings
 
     rule = {"name": "test-link-rule", "severity": "medium"}
@@ -72,6 +73,9 @@ async def test_get_alert_cases_linked(client, analyst_headers, auth_headers):
     assert data["cases"][0]["case_id"] == case_id
     assert data["cases"][0]["title"] == "Link Test Case"
     assert "linked_at" in data["cases"][0]
+
+    # Cleanup: remove case so test_cases.py::test_list_cases_empty sees an empty table
+    case_store.delete_case(case_id)
 
 
 async def test_get_alert_cases_requires_auth(client):
