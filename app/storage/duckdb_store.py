@@ -808,6 +808,41 @@ def init_dashboard_tables() -> None:
         )""")
 
 
+def init_playbook_table() -> None:
+    with _lock:
+        # No CREATE INDEX — DuckDB 1.1.3 UPDATE + PRIMARY KEY + secondary index bug.
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS case_playbook_steps (
+                id           VARCHAR PRIMARY KEY,
+                case_id      VARCHAR NOT NULL,
+                rule_name    VARCHAR NOT NULL,
+                step_id      VARCHAR NOT NULL,
+                completed_by VARCHAR NOT NULL,
+                completed_at TIMESTAMP NOT NULL,
+                note         VARCHAR
+            )
+        """)
+
+
+def get_event_full(event_id: str) -> Optional[dict]:
+    with _lock:
+        row = _get_conn().execute(
+            """SELECT id, source, ingested_at, event_time, source_ip, method, uri,
+                      status_code, response_size, user_agent, referer, raw, extra
+               FROM events WHERE id = ?""",
+            [event_id],
+        ).fetchone()
+    if not row:
+        return None
+    cols = ["id", "source", "ingested_at", "event_time", "source_ip", "method",
+            "uri", "status_code", "response_size", "user_agent", "referer", "raw", "extra"]
+    d = dict(zip(cols, row))
+    for f in ("ingested_at", "event_time"):
+        if d.get(f) and hasattr(d[f], "isoformat"):
+            d[f] = d[f].isoformat()
+    return d
+
+
 def get_audit_facets(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,

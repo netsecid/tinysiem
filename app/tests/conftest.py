@@ -61,6 +61,7 @@ def _init_db():
     duckdb_store.init_baselines_tables()
     duckdb_store.init_integrations_tables()
     duckdb_store.init_dashboard_tables()
+    duckdb_store.init_playbook_table()
     duckdb_store.ensure_superadmin(hash_password(os.environ["TINYSIEM_SUPERADMIN_PASSWORD"]))
 
 

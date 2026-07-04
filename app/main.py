@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
     duckdb_store.init_baselines_tables()
     duckdb_store.init_integrations_tables()
     duckdb_store.init_dashboard_tables()
+    duckdb_store.init_playbook_table()
     chroma_store.init_chroma()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
