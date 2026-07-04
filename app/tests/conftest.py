@@ -54,6 +54,8 @@ def _init_db():
     """Initialize DuckDB once per session so tests can use duckdb_store directly."""
     from app.password import hash_password
     from app.storage import duckdb_store
+    from app.decoder import engine as decoder_engine
+    from app.rules import engine as rule_engine
     duckdb_store.init_db(os.environ["TINYSIEM_DUCKDB_PATH"])
     duckdb_store.init_alert_triage_table()
     duckdb_store.init_audit_table()
@@ -62,6 +64,8 @@ def _init_db():
     duckdb_store.init_integrations_tables()
     duckdb_store.init_dashboard_tables()
     duckdb_store.init_playbook_table()
+    decoder_engine.load_decoders()
+    rule_engine.load_rules()
     duckdb_store.ensure_superadmin(hash_password(os.environ["TINYSIEM_SUPERADMIN_PASSWORD"]))
 
 

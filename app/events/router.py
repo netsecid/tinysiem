@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import AuthUser, require_analyst
 from app.storage import duckdb_store
@@ -91,3 +91,11 @@ def event_histogram(
     return duckdb_store.get_event_histogram(
         start=resolved_start, end=resolved_end, buckets=buckets
     )
+
+
+@router.get("/{event_id}")
+def get_event_by_id(event_id: str, _: AuthUser = Depends(require_analyst)):
+    event = duckdb_store.get_event_full(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
