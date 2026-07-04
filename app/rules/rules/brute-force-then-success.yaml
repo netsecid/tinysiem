@@ -16,3 +16,40 @@ condition:
       operator: eq
 mitre_tactic: "Credential Access"
 mitre_technique: "T1110"
+playbook:
+  summary: "Credential stuffing or brute-force succeeded — treat as account compromise until proven otherwise"
+  steps:
+    - id: confirm_sequence
+      name: "Confirm 401→200 sequence and review URIs"
+      action: query_events
+      auto: true
+      params:
+        filter: "source_ip={source_ip}"
+        window_seconds: 300
+      notes: "Verify the 200 followed multiple 401s from same IP within 5 minutes"
+    - id: identify_account
+      name: "Identify which account authenticated successfully"
+      action: query_events
+      auto: false
+      notes: "Check the 200 response URI for username hints or session tokens in logs"
+    - id: check_ip_rep
+      name: "Check source IP — TOR, proxy, or known attacker?"
+      action: lookup_threat_intel
+      auto: false
+    - id: check_post_login
+      name: "Review actions taken after successful login"
+      action: query_events
+      auto: false
+      params:
+        filter: "source_ip={source_ip}"
+        window_seconds: 3600
+      notes: "Attacker activity typically follows login within minutes — data access, privilege escalation"
+    - id: contain
+      name: "Disable account or block IP pending investigation"
+      action: block_ip
+      auto: false
+      notes: "If account compromise is confirmed, disable account before further investigation"
+    - id: notify
+      name: "Notify account owner and security team"
+      action: notify
+      auto: false

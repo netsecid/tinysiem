@@ -11,3 +11,33 @@ condition:
   window_seconds: 60
 mitre_tactic: "Discovery"
 mitre_technique: "T1595"
+playbook:
+  summary: "Investigate potential path/resource enumeration from a single IP"
+  steps:
+    - id: check_ip_rep
+      name: "Check source IP reputation"
+      action: lookup_threat_intel
+      auto: false
+      notes: "Query GreyNoise or AbuseIPDB — known scanner? CDN egress? Tor exit node?"
+    - id: query_24h
+      name: "Pull all events from this IP over 24h"
+      action: query_events
+      auto: true
+      params:
+        filter: "source_ip={source_ip}"
+        window_seconds: 86400
+    - id: check_baseline
+      name: "Compare request rate against baseline"
+      action: check_baseline
+      auto: true
+      notes: "Check if rate is anomalous for this hour-of-day bucket"
+    - id: assess_paths
+      name: "Review URI patterns — enumeration or single-path fuzzing?"
+      action: query_events
+      auto: false
+      notes: "Distinct paths = enumeration; single repeated path = brute-force or fuzzing"
+    - id: block_or_close
+      name: "Block IP at WAF or close as false positive"
+      action: block_ip
+      auto: false
+      notes: "If confirmed scanner: block. If Cloudflare/known CDN: close as false positive."

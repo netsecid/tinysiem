@@ -9,3 +9,33 @@ condition:
   operator: eq
 mitre_tactic: "Impact"
 mitre_technique: "T1499"
+playbook:
+  summary: "Investigate server error — application crash, resource exhaustion, or deliberate disruption"
+  steps:
+    - id: check_frequency
+      name: "Check frequency — isolated or recurring?"
+      action: query_events
+      auto: true
+      params:
+        filter: "source_ip={source_ip}"
+        window_seconds: 3600
+      notes: "Single 500 = likely transient; repeated = exploit attempt or misconfiguration"
+    - id: check_uri
+      name: "Examine the URI that caused the 500"
+      action: query_events
+      auto: false
+      notes: "Known app path = application bug; unusual path = possible injection or path traversal attempt"
+    - id: check_source_ip
+      name: "Check if source IP is a known attacker"
+      action: lookup_threat_intel
+      auto: false
+    - id: check_application_logs
+      name: "Review application logs for stack trace"
+      action: query_events
+      auto: false
+      notes: "Application logs (if ingested) may show the root cause exception"
+    - id: escalate_or_close
+      name: "Escalate to high or close if transient"
+      action: update_severity
+      auto: false
+      notes: "Escalate if repeated, targeted, or from malicious IP. Close if isolated CDN probe."
