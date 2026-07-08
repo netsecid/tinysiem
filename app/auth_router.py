@@ -3,6 +3,7 @@ from fastapi.params import Depends
 from pydantic import BaseModel
 
 from app.auth import AuthUser, create_token, require_analyst
+from app.auth_lockout import is_locked, record_failure, record_success
 from app.audit import store as audit
 from app.config import settings
 from app.password import hash_password, verify_password
@@ -22,11 +23,25 @@ class LoginRequest(BaseModel):
 
 @router.post("/login")
 def login(req: LoginRequest, request: Request):
-    ip = request.client.host if request.client else None
+    ip = request.client.host if request.client else "unknown"
+    lock_key = (req.username, ip)
+
+    remaining = is_locked(lock_key)
+    if remaining > 0:
+        audit.log_event(
+            "auth.lockout", "login", "failure",
+            actor=req.username,
+            detail={"attempted_username": req.username, "retry_after_seconds": round(remaining)},
+            ip_address=ip,
+            error_msg="Account temporarily locked after repeated failed attempts",
+        )
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
+
     user = duckdb_store.get_user_by_username(req.username)
     password_hash = user["password_hash"] if user else _DUMMY_HASH
     password_valid = verify_password(req.password, password_hash)
     if not user or not password_valid:
+        record_failure(lock_key)
         audit.log_event(
             "auth.login", "login", "failure",
             actor=req.username,
@@ -35,6 +50,8 @@ def login(req: LoginRequest, request: Request):
             error_msg="Invalid credentials",
         )
         raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    record_success(lock_key)
     token = create_token(user["id"], user["username"], user["role"])
     audit.log_event(
         "auth.login", "login", "success",

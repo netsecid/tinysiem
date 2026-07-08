@@ -144,3 +144,27 @@ async def test_me_endpoint(client, auth_headers):
     body = response.json()
     assert "username" in body
     assert "role" in body
+
+
+async def test_login_lockout_after_repeated_failures(client):
+    from app.auth_lockout import reset_all
+    h = hash_password("correctpassword1")
+    duckdb_store.create_user("lockouttestuser", h, "analyst")
+    reset_all()
+
+    for _ in range(5):
+        resp = await client.post(
+            "/auth/login", json={"username": "lockouttestuser", "password": "wrongpass"}
+        )
+        assert resp.status_code == 401
+
+    locked_resp = await client.post(
+        "/auth/login", json={"username": "lockouttestuser", "password": "wrongpass"}
+    )
+    assert locked_resp.status_code == 429
+
+    # Even the CORRECT password is rejected while locked out.
+    still_locked = await client.post(
+        "/auth/login", json={"username": "lockouttestuser", "password": "correctpassword1"}
+    )
+    assert still_locked.status_code == 429
