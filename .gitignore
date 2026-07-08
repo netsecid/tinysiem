@@ -60,3 +60,6 @@ Thumbs.db
 *.swp
 *.swo
 *.orig
+
+# ── Local git worktrees (dev tooling scratch) ──────────────────────────────────
+.worktrees/
