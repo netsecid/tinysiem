@@ -63,3 +63,6 @@ Thumbs.db
 
 # ── Local git worktrees (dev tooling scratch) ──────────────────────────────────
 .worktrees/
+
+# ── Local docker-compose port overrides (per-worktree dev scratch) ────────────
+docker-compose.override.yml
