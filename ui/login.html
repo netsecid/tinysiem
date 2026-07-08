@@ -60,6 +60,16 @@ input:focus{border-color:var(--accent)}
     </div>
     <button class="btn" id="loginBtn" onclick="doLogin()">Sign in</button>
     <div class="err" id="errMsg"></div>
+    <div id="pwChangePanel" style="display:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--border)">
+      <div class="field">
+        <label>This account must set a new password before continuing.</label>
+      </div>
+      <div class="field">
+        <label for="newPass">New password (12+ characters)</label>
+        <input type="password" id="newPass" autocomplete="new-password">
+      </div>
+      <button class="btn" id="pwChangeBtn" onclick="doChangePassword()">Set new password</button>
+    </div>
   </div>
 </div>
 <script>
@@ -97,12 +107,43 @@ async function doLogin(){
     localStorage.setItem('ts_jwt',data.access_token);
     localStorage.setItem('ts_username',data.username);
     localStorage.setItem('ts_role',data.role);
+    if(data.must_change_password){
+      window._tsCurrentPass=password;
+      document.getElementById('pwChangePanel').style.display='block';
+      document.getElementById('loginBtn').style.display='none';
+      return;
+    }
     window.location.href='/ui/dashboard.html';
   }catch(e){
     errEl.textContent='Could not connect. Check the Server URL.';
     errEl.style.display='block';
   }finally{
     btn.disabled=false;btn.textContent='Sign in';
+  }
+}
+async function doChangePassword(){
+  const btn=document.getElementById('pwChangeBtn');
+  const errEl=document.getElementById('errMsg');
+  const ep=localStorage.getItem('ts_ep');
+  const newPass=document.getElementById('newPass').value;
+  errEl.style.display='none';
+  if(newPass.length<12){errEl.textContent='New password must be at least 12 characters.';errEl.style.display='block';return}
+  btn.disabled=true;btn.textContent='Updating…';
+  try{
+    const res=await fetch(`${ep}/auth/change-password`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('ts_jwt')}`},
+      body:JSON.stringify({current_password:window._tsCurrentPass,new_password:newPass})
+    });
+    const data=await res.json();
+    if(!res.ok){errEl.textContent=data.detail||'Could not update password';errEl.style.display='block';return}
+    localStorage.setItem('ts_jwt',data.access_token);
+    window.location.href='/ui/dashboard.html';
+  }catch(e){
+    errEl.textContent='Could not connect. Check the Server URL.';
+    errEl.style.display='block';
+  }finally{
+    btn.disabled=false;btn.textContent='Set new password';
   }
 }
 document.getElementById('pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});

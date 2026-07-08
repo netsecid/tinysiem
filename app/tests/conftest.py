@@ -69,22 +69,34 @@ def auth_headers():
     return AUTH_HEADERS
 
 
+def _get_or_create_fixture_user(username: str, role: str) -> dict:
+    from app.password import hash_password
+    from app.storage import duckdb_store
+    existing = duckdb_store.get_user_by_username(username)
+    if existing:
+        return existing
+    return duckdb_store.create_user(username, hash_password("fixture-only-never-logged-in-with"), role)
+
+
 @pytest.fixture
 def superadmin_headers():
     from app.auth import create_token
-    token = create_token("test-superadmin", "admin", "superadmin")
+    user = _get_or_create_fixture_user("fixture-superadmin", "superadmin")
+    token = create_token(user["id"], user["username"], user["role"], epoch=user["token_epoch"])
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
 def analyst_headers():
     from app.auth import create_token
-    token = create_token("test-analyst", "analyst", "analyst")
+    user = _get_or_create_fixture_user("fixture-analyst", "analyst")
+    token = create_token(user["id"], user["username"], user["role"], epoch=user["token_epoch"])
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
 def admin_headers():
     from app.auth import create_token
-    token = create_token("test-admin", "admin", "admin")
+    user = _get_or_create_fixture_user("fixture-admin", "admin")
+    token = create_token(user["id"], user["username"], user["role"], epoch=user["token_epoch"])
     return {"Authorization": f"Bearer {token}"}

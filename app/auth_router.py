@@ -3,10 +3,10 @@ from fastapi.params import Depends
 from pydantic import BaseModel
 
 from app.auth import AuthUser, create_token, require_analyst
-from app.auth_lockout import is_locked, record_failure, record_success
 from app.audit import store as audit
+from app.auth_lockout import is_locked, record_failure, record_success
 from app.config import settings
-from app.password import hash_password, verify_password
+from app.password import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from app.storage import duckdb_store
 
 # Pre-computed dummy hash so bcrypt always runs regardless of whether username exists,
@@ -19,6 +19,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 @router.post("/login")
@@ -52,7 +57,7 @@ def login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     record_success(lock_key)
-    token = create_token(user["id"], user["username"], user["role"])
+    token = create_token(user["id"], user["username"], user["role"], epoch=user.get("token_epoch", 0))
     audit.log_event(
         "auth.login", "login", "success",
         actor=user["username"],
@@ -66,9 +71,38 @@ def login(req: LoginRequest, request: Request):
         "username": user["username"],
         "role": user["role"],
         "expires_in": settings.tinysiem_jwt_expiry_hours * 3600,
+        "must_change_password": user.get("must_change_password", False),
     }
 
 
 @router.get("/me")
 def me(user: AuthUser = Depends(require_analyst)):
     return {"user_id": user.user_id, "username": user.username, "role": user.role}
+
+
+@router.post("/logout")
+def logout(user: AuthUser = Depends(require_analyst)):
+    duckdb_store.bump_token_epoch(user.user_id)
+    audit.log_event(
+        "auth.logout", "logout", "success",
+        actor=user.username, actor_role=user.role,
+    )
+    return {"status": "ok"}
+
+
+@router.post("/change-password")
+def change_password(req: ChangePasswordRequest, user: AuthUser = Depends(require_analyst)):
+    row = duckdb_store.get_user_by_id(user.user_id)
+    if row is None:
+        raise HTTPException(status_code=401, detail="User no longer exists")
+    if not verify_password(req.current_password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    if len(req.new_password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=422, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    updated = duckdb_store.change_own_password(user.user_id, hash_password(req.new_password))
+    token = create_token(updated["id"], updated["username"], updated["role"], epoch=updated["token_epoch"])
+    audit.log_event(
+        "auth.password_change", "updated", "success",
+        actor=user.username, actor_role=user.role,
+    )
+    return {"status": "ok", "access_token": token, "token_type": "bearer"}

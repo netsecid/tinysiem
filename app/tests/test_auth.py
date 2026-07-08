@@ -138,8 +138,8 @@ async def test_login_unknown_user(client):
     assert response.status_code == 401
 
 
-async def test_me_endpoint(client, auth_headers):
-    response = await client.get("/auth/me", headers=auth_headers)
+async def test_me_endpoint(client, analyst_headers):
+    response = await client.get("/auth/me", headers=analyst_headers)
     assert response.status_code == 200
     body = response.json()
     assert "username" in body
@@ -168,3 +168,104 @@ async def test_login_lockout_after_repeated_failures(client):
         "/auth/login", json={"username": "lockouttestuser", "password": "correctpassword1"}
     )
     assert still_locked.status_code == 429
+
+
+async def test_logout_bumps_epoch_and_revokes_old_token(client):
+    from app.auth import create_token
+
+    user = duckdb_store.create_user("epochtest1", hash_password("irrelevant-pw-123"), "analyst")
+    old_token = create_token(user["id"], user["username"], user["role"], epoch=user["token_epoch"])
+    headers = {"Authorization": f"Bearer {old_token}"}
+
+    me_before = await client.get("/auth/me", headers=headers)
+    assert me_before.status_code == 200
+
+    logout_resp = await client.post("/auth/logout", headers=headers)
+    assert logout_resp.status_code == 200
+
+    me_after = await client.get("/auth/me", headers=headers)
+    assert me_after.status_code == 401
+
+
+async def test_deleted_user_token_is_rejected(client):
+    from app.auth import create_token
+
+    user = duckdb_store.create_user("deletedtokentest", hash_password("irrelevant-pw-123"), "analyst")
+    token = create_token(user["id"], user["username"], user["role"], epoch=user["token_epoch"])
+    headers = {"Authorization": f"Bearer {token}"}
+    duckdb_store.delete_user(user["id"])
+
+    resp = await client.get("/auth/me", headers=headers)
+    assert resp.status_code == 401
+
+
+async def test_forced_password_change_blocks_other_endpoints(client):
+    from app.auth import create_token
+
+    user = duckdb_store.create_user(
+        "mustchangetest", hash_password("temporarypassword1"), "analyst", must_change_password=True
+    )
+    token = create_token(user["id"], user["username"], user["role"], epoch=user["token_epoch"])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    blocked = await client.get("/events", headers=headers)
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"] == "password_change_required"
+
+    me_resp = await client.get("/auth/me", headers=headers)
+    assert me_resp.status_code == 200
+
+
+async def test_change_password_clears_flag_and_returns_new_token(client):
+    from app.auth import create_token
+
+    user = duckdb_store.create_user(
+        "changepwtest", hash_password("temporarypassword1"), "analyst", must_change_password=True
+    )
+    token = create_token(user["id"], user["username"], user["role"], epoch=user["token_epoch"])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.post(
+        "/auth/change-password",
+        json={"current_password": "temporarypassword1", "new_password": "brandnewpassword1"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    new_token = resp.json()["access_token"]
+    new_headers = {"Authorization": f"Bearer {new_token}"}
+
+    events_resp = await client.get("/events", headers=new_headers)
+    assert events_resp.status_code == 200
+
+    old_events_resp = await client.get("/events", headers=headers)
+    assert old_events_resp.status_code == 401  # old token's epoch is now stale
+
+
+async def test_change_password_rejects_wrong_current_password(client):
+    from app.auth import create_token
+
+    user = duckdb_store.create_user("changepwwrong", hash_password("correctpassword1"), "analyst")
+    token = create_token(user["id"], user["username"], user["role"], epoch=user["token_epoch"])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.post(
+        "/auth/change-password",
+        json={"current_password": "wrongpassword1", "new_password": "brandnewpassword1"},
+        headers=headers,
+    )
+    assert resp.status_code == 401
+
+
+async def test_change_password_enforces_min_length(client):
+    from app.auth import create_token
+
+    user = duckdb_store.create_user("changepwshort", hash_password("correctpassword1"), "analyst")
+    token = create_token(user["id"], user["username"], user["role"], epoch=user["token_epoch"])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.post(
+        "/auth/change-password",
+        json={"current_password": "correctpassword1", "new_password": "short1"},
+        headers=headers,
+    )
+    assert resp.status_code == 422

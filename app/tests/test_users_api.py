@@ -103,15 +103,25 @@ async def test_cannot_delete_last_superadmin(client, superadmin_headers):
     assert create_res.status_code == 201
     new_id = create_res.json()["id"]
 
+    # Mint a fresh token for the new superadmin itself. This test needs to delete
+    # every OTHER superadmin (including the DB row backing superadmin_headers), so
+    # we can't keep using superadmin_headers past that point — its own row may get
+    # deleted, which would revoke it for any subsequent request.
+    login_res = await client.post(
+        "/auth/login", json={"username": "sole_sadmin_test", "password": "pass"}
+    )
+    assert login_res.status_code == 200
+    new_headers = {"Authorization": f"Bearer {login_res.json()['access_token']}"}
+
     # Delete all other superadmins except our new one so it's the only one
-    users_res = await client.get("/users", headers=superadmin_headers)
+    users_res = await client.get("/users", headers=new_headers)
     other_superadmins = [
         u for u in users_res.json()["users"]
         if u["role"] == "superadmin" and u["id"] != new_id
     ]
     for u in other_superadmins:
-        await client.delete(f"/users/{u['id']}", headers=superadmin_headers)
+        await client.delete(f"/users/{u['id']}", headers=new_headers)
 
     # Now our new user should be the sole superadmin — deletion must be rejected
-    res = await client.delete(f"/users/{new_id}", headers=superadmin_headers)
+    res = await client.delete(f"/users/{new_id}", headers=new_headers)
     assert res.status_code == 409

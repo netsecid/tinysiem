@@ -559,7 +559,9 @@ def ensure_superadmin(password_hash: str) -> None:
     with _lock:
         count = _get_conn().execute("SELECT COUNT(*) FROM users").fetchone()[0]
     if count == 0:
-        create_user("admin", password_hash, "superadmin")
+        from app.config import settings
+        must_change = settings.tinysiem_superadmin_password == "admin"
+        create_user("admin", password_hash, "superadmin", must_change_password=must_change)
         logger.info("Created initial superadmin user 'admin'")
 
 
