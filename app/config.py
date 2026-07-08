@@ -50,7 +50,14 @@ class Settings(BaseSettings):
     # API Integrations (v1.2)
     tinysiem_master_key: str = ""  # Fernet key; required when integrations are configured
 
+    # CORS (v1.4)
+    tinysiem_cors_origins: str = ""   # comma-separated allowed origins; empty = same-origin only
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 settings = Settings()
+
+
+def parse_cors_origins(raw: str) -> list[str]:
+    return [o.strip() for o in raw.split(",") if o.strip()]

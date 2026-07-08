@@ -66,6 +66,14 @@ openssl rand -hex 32   # TINYSIEM_JWT_SECRET
 
 ---
 
+## CORS
+
+| Variable | Default | Description |
+|---|---|---|
+| `TINYSIEM_CORS_ORIGINS` | `` | Comma-separated list of allowed cross-origin URLs (e.g. `http://192.168.1.50:8000`). Empty means same-origin only — set this if you access the UI from a different host/port than the API. |
+
+---
+
 ## Notifications
 
 | Variable | Default | Description |
@@ -141,7 +149,7 @@ Before exposing TinySIEM outside localhost:
 - [ ] `TINYSIEM_DEBUG=false` — never enable Swagger in production
 - [ ] `TINYSIEM_MASTER_KEY` — set if using API Integrations; keep it out of git
 - [ ] `.env` — present in `.gitignore` (it is by default); never committed
-- [ ] CORS — the default `*` origin is acceptable for localhost-only tools; restrict if exposed externally by adding an nginx reverse proxy with appropriate headers
+- [ ] CORS — default is same-origin only; set `TINYSIEM_CORS_ORIGINS` only for the specific origins you need (e.g. a UI hosted on a different port)
 
 ---
 
