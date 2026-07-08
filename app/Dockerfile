@@ -8,6 +8,9 @@ RUN useradd -r -s /bin/false appuser
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # Copy source into /app/ — this becomes the 'app' Python package
 COPY . /app/
 
@@ -17,5 +20,4 @@ RUN mkdir -p /app/data /app/data/archive /app/logs /app/decoder/decoders/custom 
 USER appuser
 
 EXPOSE 8000
-
-ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

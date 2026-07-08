@@ -139,6 +139,32 @@ When enabled, Claude Desktop can query TinySIEM via the MCP protocol using a val
 
 ---
 
+## TLS
+
+| Variable | Default | Description |
+|---|---|---|
+| `TINYSIEM_TLS_CERT` | `` | Path (inside the container) to a PEM certificate. When set together with `TINYSIEM_TLS_KEY`, uvicorn serves HTTPS instead of HTTP. |
+| `TINYSIEM_TLS_KEY` | `` | Path (inside the container) to the matching PEM private key. |
+
+Generate a self-signed certificate and drop it into the persisted `tinysiem_data` volume (already mounted at `/app/data`), then point both variables at it:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+  -keyout key.pem -out cert.pem -subj "/CN=your-hostname"
+docker cp cert.pem tinysiem-tinysiem-1:/app/data/tls/cert.pem
+docker cp key.pem tinysiem-tinysiem-1:/app/data/tls/key.pem
+```
+
+Then set in `.env`:
+```
+TINYSIEM_TLS_CERT=/app/data/tls/cert.pem
+TINYSIEM_TLS_KEY=/app/data/tls/key.pem
+```
+
+and `docker-compose restart tinysiem`. For a real deployment, use a certificate from your own CA or Let's Encrypt instead of a self-signed one.
+
+---
+
 ## Security Checklist
 
 Before exposing TinySIEM outside localhost:
