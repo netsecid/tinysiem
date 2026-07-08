@@ -1,11 +1,11 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.audit import store as audit
 from app.auth import AuthUser, require_superadmin
-from app.password import hash_password
+from app.password import MIN_PASSWORD_LENGTH, hash_password
 from app.storage import duckdb_store
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -15,13 +15,13 @@ _VALID_ROLES = {"superadmin", "admin", "analyst"}
 
 class CreateUserRequest(BaseModel):
     username: str
-    password: str
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH)
     role: str
 
 
 class UpdateUserRequest(BaseModel):
     username: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[str] = Field(default=None, min_length=MIN_PASSWORD_LENGTH)
     role: Optional[str] = None
 
 

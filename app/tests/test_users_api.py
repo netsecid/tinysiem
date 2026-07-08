@@ -21,7 +21,7 @@ async def test_list_users_as_superadmin(client, superadmin_headers):
 async def test_create_user(client, superadmin_headers):
     res = await client.post(
         "/users",
-        json={"username": "newanalyst", "password": "pass123", "role": "analyst"},
+        json={"username": "newanalyst", "password": "pass12345678", "role": "analyst"},
         headers=superadmin_headers,
     )
     assert res.status_code == 201
@@ -34,12 +34,12 @@ async def test_create_user(client, superadmin_headers):
 async def test_create_user_duplicate_username(client, superadmin_headers):
     await client.post(
         "/users",
-        json={"username": "dupuser", "password": "p", "role": "analyst"},
+        json={"username": "dupuser", "password": "duppassword1", "role": "analyst"},
         headers=superadmin_headers,
     )
     res = await client.post(
         "/users",
-        json={"username": "dupuser", "password": "p", "role": "analyst"},
+        json={"username": "dupuser", "password": "duppassword1", "role": "analyst"},
         headers=superadmin_headers,
     )
     assert res.status_code == 409
@@ -48,7 +48,31 @@ async def test_create_user_duplicate_username(client, superadmin_headers):
 async def test_create_user_invalid_role(client, superadmin_headers):
     res = await client.post(
         "/users",
-        json={"username": "baduser", "password": "p", "role": "god"},
+        json={"username": "baduser", "password": "badpassword12", "role": "god"},
+        headers=superadmin_headers,
+    )
+    assert res.status_code == 422
+
+
+async def test_create_user_rejects_short_password(client, superadmin_headers):
+    res = await client.post(
+        "/users",
+        json={"username": "shortpwuser", "password": "short1", "role": "analyst"},
+        headers=superadmin_headers,
+    )
+    assert res.status_code == 422
+
+
+async def test_update_user_rejects_short_password(client, superadmin_headers):
+    create_res = await client.post(
+        "/users",
+        json={"username": "updateshortpw", "password": "password12345", "role": "analyst"},
+        headers=superadmin_headers,
+    )
+    user_id = create_res.json()["id"]
+    res = await client.put(
+        f"/users/{user_id}",
+        json={"password": "short1"},
         headers=superadmin_headers,
     )
     assert res.status_code == 422
@@ -57,7 +81,7 @@ async def test_create_user_invalid_role(client, superadmin_headers):
 async def test_update_user(client, superadmin_headers):
     create_res = await client.post(
         "/users",
-        json={"username": "updateme", "password": "pass", "role": "analyst"},
+        json={"username": "updateme", "password": "updatepass123", "role": "analyst"},
         headers=superadmin_headers,
     )
     user_id = create_res.json()["id"]
@@ -74,7 +98,7 @@ async def test_update_user(client, superadmin_headers):
 async def test_delete_user(client, superadmin_headers):
     create_res = await client.post(
         "/users",
-        json={"username": "deleteme", "password": "pass", "role": "analyst"},
+        json={"username": "deleteme", "password": "deletepass123", "role": "analyst"},
         headers=superadmin_headers,
     )
     user_id = create_res.json()["id"]
@@ -83,8 +107,8 @@ async def test_delete_user(client, superadmin_headers):
 
 
 async def test_update_user_duplicate_username(client, superadmin_headers):
-    await client.post("/users", json={"username": "orig_user", "password": "p", "role": "analyst"}, headers=superadmin_headers)
-    res2 = await client.post("/users", json={"username": "other_user", "password": "p", "role": "analyst"}, headers=superadmin_headers)
+    await client.post("/users", json={"username": "orig_user", "password": "password12345", "role": "analyst"}, headers=superadmin_headers)
+    res2 = await client.post("/users", json={"username": "other_user", "password": "password12345", "role": "analyst"}, headers=superadmin_headers)
     other_id = res2.json()["id"]
     res = await client.put(f"/users/{other_id}", json={"username": "orig_user"}, headers=superadmin_headers)
     assert res.status_code == 409
@@ -97,7 +121,7 @@ async def test_cannot_delete_last_superadmin(client, superadmin_headers):
     # Create a fresh superadmin to use as our isolated test subject
     create_res = await client.post(
         "/users",
-        json={"username": "sole_sadmin_test", "password": "pass", "role": "superadmin"},
+        json={"username": "sole_sadmin_test", "password": "password12345", "role": "superadmin"},
         headers=superadmin_headers,
     )
     assert create_res.status_code == 201
@@ -108,7 +132,7 @@ async def test_cannot_delete_last_superadmin(client, superadmin_headers):
     # we can't keep using superadmin_headers past that point — its own row may get
     # deleted, which would revoke it for any subsequent request.
     login_res = await client.post(
-        "/auth/login", json={"username": "sole_sadmin_test", "password": "pass"}
+        "/auth/login", json={"username": "sole_sadmin_test", "password": "password12345"}
     )
     assert login_res.status_code == 200
     new_headers = {"Authorization": f"Bearer {login_res.json()['access_token']}"}

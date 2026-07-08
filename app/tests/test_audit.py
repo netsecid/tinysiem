@@ -173,7 +173,7 @@ async def test_user_create_creates_audit(client, superadmin_headers):
     username = f"audituser-{uid}"
     resp = await client.post(
         "/users",
-        json={"username": username, "password": "pass123", "role": "analyst"},
+        json={"username": username, "password": "password12345", "role": "analyst"},
         headers=superadmin_headers,
     )
     assert resp.status_code == 201
