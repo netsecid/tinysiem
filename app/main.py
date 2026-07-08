@@ -9,7 +9,11 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.startup_checks import validate_jwt_secret
+from app.startup_checks import (
+    validate_jwt_secret,
+    warn_if_default_superadmin_password,
+    warn_if_integrations_missing_master_key,
+)
 from app.decoder import engine as decoder_engine
 from app.ai.router import router as ai_router
 from app.alerts.router import router as alerts_router
@@ -51,6 +55,8 @@ async def lifespan(app: FastAPI):
     decoder_engine.load_decoders()
     rule_engine.load_rules()
     duckdb_store.ensure_superadmin(hash_password(settings.tinysiem_superadmin_password))
+    warn_if_default_superadmin_password()
+    warn_if_integrations_missing_master_key()
     from app.retention.archiver import start_retention_thread
     from app.reports.generator import start_report_scheduler
     start_retention_thread()
