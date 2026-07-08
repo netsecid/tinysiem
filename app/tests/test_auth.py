@@ -24,6 +24,9 @@ def test_create_and_get_user():
     fetched_by_id = duckdb_store.get_user_by_id(user["id"])
     assert fetched_by_id["username"] == "testuser1"
 
+    assert fetched["must_change_password"] is False
+    assert fetched["token_epoch"] == 0
+
 
 def test_list_users():
     h = hash_password("pass")
@@ -48,6 +51,33 @@ def test_delete_user():
     assert duckdb_store.delete_user(user["id"]) is True
     assert duckdb_store.get_user_by_id(user["id"]) is None
     assert duckdb_store.delete_user(user["id"]) is False
+
+
+def test_update_user_bumps_token_epoch():
+    h = hash_password("pass")
+    user = duckdb_store.create_user("epochbumptest", h, "analyst")
+    assert user["token_epoch"] == 0
+    updated = duckdb_store.update_user(user["id"], role="admin")
+    assert updated["token_epoch"] == 1
+
+
+def test_bump_token_epoch_increments_and_returns_user():
+    h = hash_password("pass")
+    user = duckdb_store.create_user("bumpepochtest2", h, "analyst")
+    result = duckdb_store.bump_token_epoch(user["id"])
+    assert result["token_epoch"] == 1
+    assert duckdb_store.bump_token_epoch("nonexistent-id") is None
+
+
+def test_change_own_password_clears_flag_and_bumps_epoch():
+    h = hash_password("pass")
+    user = duckdb_store.create_user("changepwstoretest", h, "analyst", must_change_password=True)
+    assert user["must_change_password"] is True
+    new_h = hash_password("newpass")
+    result = duckdb_store.change_own_password(user["id"], new_h)
+    assert result["must_change_password"] is False
+    assert result["token_epoch"] == 1
+    assert result["password_hash"] == new_h
 
 
 def test_count_superadmins():

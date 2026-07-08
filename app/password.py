@@ -21,6 +21,8 @@ _bcrypt_module.hashpw = _patched_hashpw
 
 from passlib.context import CryptContext  # noqa: E402 — must come after bcrypt patch
 
+MIN_PASSWORD_LENGTH = 12
+
 _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 

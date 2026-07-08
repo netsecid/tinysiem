@@ -50,9 +50,24 @@ def init_db(path: Optional[str] = None) -> None:
                 username      VARCHAR UNIQUE NOT NULL,
                 password_hash VARCHAR NOT NULL,
                 role          VARCHAR NOT NULL,
-                created_at    TIMESTAMP NOT NULL
+                created_at    TIMESTAMP NOT NULL,
+                must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+                token_epoch   INTEGER NOT NULL DEFAULT 0
             )
         """)
+        # Migrate pre-v1.4 databases: CREATE TABLE IF NOT EXISTS above is a no-op when
+        # the table already exists, so older deployments need these columns added explicitly.
+        # Note: DuckDB 1.1.3 raises "Adding columns with constraints not yet supported" for
+        # ALTER TABLE ... ADD COLUMN with a NOT NULL constraint (with or without DEFAULT), so
+        # these ALTERs omit NOT NULL. DEFAULT alone still backfills existing rows (verified:
+        # existing rows get FALSE / 0, not NULL), and every code path that writes these columns
+        # (create_user, update_user, bump_token_epoch, change_own_password) always supplies an
+        # explicit value, so the missing NOT NULL constraint has no practical effect.
+        _existing_cols = {row[1] for row in _conn.execute("PRAGMA table_info('users')").fetchall()}
+        if "must_change_password" not in _existing_cols:
+            _conn.execute("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE")
+        if "token_epoch" not in _existing_cols:
+            _conn.execute("ALTER TABLE users ADD COLUMN token_epoch INTEGER DEFAULT 0")
 
 
 def close_db() -> None:
@@ -395,27 +410,34 @@ def _user_row_to_dict(row: tuple, include_hash: bool = False) -> dict:
         "username": row[1],
         "role": row[3],
         "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
+        "must_change_password": bool(row[5]),
+        "token_epoch": row[6],
     }
     if include_hash:
         base["password_hash"] = row[2]
     return base
 
 
-def create_user(username: str, password_hash: str, role: str) -> dict:
+def create_user(username: str, password_hash: str, role: str, must_change_password: bool = False) -> dict:
     user_id = str(uuid.uuid4())
     now = datetime.utcnow()
     with _lock:
         _get_conn().execute(
-            "INSERT INTO users VALUES (?, ?, ?, ?, ?)",
-            [user_id, username, password_hash, role, now],
+            "INSERT INTO users (id, username, password_hash, role, created_at, must_change_password, token_epoch) "
+            "VALUES (?, ?, ?, ?, ?, ?, 0)",
+            [user_id, username, password_hash, role, now, must_change_password],
         )
-    return {"id": user_id, "username": username, "role": role, "created_at": now.isoformat()}
+    return {
+        "id": user_id, "username": username, "role": role, "created_at": now.isoformat(),
+        "must_change_password": must_change_password, "token_epoch": 0,
+    }
 
 
 def get_user_by_username(username: str) -> dict | None:
     with _lock:
         row = _get_conn().execute(
-            "SELECT id, username, password_hash, role, created_at FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, role, created_at, must_change_password, token_epoch "
+            "FROM users WHERE username = ?",
             [username],
         ).fetchone()
     return _user_row_to_dict(row, include_hash=True) if row else None
@@ -424,7 +446,8 @@ def get_user_by_username(username: str) -> dict | None:
 def get_user_by_id(user_id: str) -> dict | None:
     with _lock:
         row = _get_conn().execute(
-            "SELECT id, username, password_hash, role, created_at FROM users WHERE id = ?",
+            "SELECT id, username, password_hash, role, created_at, must_change_password, token_epoch "
+            "FROM users WHERE id = ?",
             [user_id],
         ).fetchone()
     return _user_row_to_dict(row, include_hash=True) if row else None
@@ -433,7 +456,8 @@ def get_user_by_id(user_id: str) -> dict | None:
 def list_users() -> list[dict]:
     with _lock:
         rows = _get_conn().execute(
-            "SELECT id, username, password_hash, role, created_at FROM users ORDER BY created_at"
+            "SELECT id, username, password_hash, role, created_at, must_change_password, token_epoch "
+            "FROM users ORDER BY created_at"
         ).fetchall()
     return [_user_row_to_dict(r) for r in rows]
 
@@ -447,7 +471,8 @@ def update_user(
     # Fetch full row first (includes password_hash and created_at raw value)
     with _lock:
         row = _get_conn().execute(
-            "SELECT id, username, password_hash, role, created_at FROM users WHERE id = ?",
+            "SELECT id, username, password_hash, role, created_at, must_change_password, token_epoch "
+            "FROM users WHERE id = ?",
             [user_id],
         ).fetchone()
     if row is None:
@@ -456,14 +481,59 @@ def update_user(
     new_role = role if role is not None else row[3]
     new_hash = password_hash if password_hash is not None else row[2]
     created_at = row[4]
+    must_change_password = row[5]
+    token_epoch = row[6] + 1  # any superadmin-driven update revokes the user's existing sessions
     # DuckDB 1.1.x has an ART index bug that raises spurious duplicate-key errors
     # on UPDATE for tables with primary keys; DELETE + INSERT is the safe workaround.
     with _lock:
         conn = _get_conn()
         conn.execute("DELETE FROM users WHERE id=?", [user_id])
         conn.execute(
-            "INSERT INTO users VALUES (?, ?, ?, ?, ?)",
-            [user_id, new_username, new_hash, new_role, created_at],
+            "INSERT INTO users (id, username, password_hash, role, created_at, must_change_password, token_epoch) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [user_id, new_username, new_hash, new_role, created_at, must_change_password, token_epoch],
+        )
+    return get_user_by_id(user_id)
+
+
+def bump_token_epoch(user_id: str) -> dict | None:
+    """Revoke a user's existing tokens by incrementing their epoch (DELETE+INSERT — see update_user)."""
+    with _lock:
+        row = _get_conn().execute(
+            "SELECT id, username, password_hash, role, created_at, must_change_password, token_epoch "
+            "FROM users WHERE id = ?",
+            [user_id],
+        ).fetchone()
+    if row is None:
+        return None
+    with _lock:
+        conn = _get_conn()
+        conn.execute("DELETE FROM users WHERE id=?", [user_id])
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, role, created_at, must_change_password, token_epoch) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [row[0], row[1], row[2], row[3], row[4], row[5], row[6] + 1],
+        )
+    return get_user_by_id(user_id)
+
+
+def change_own_password(user_id: str, new_password_hash: str) -> dict | None:
+    """Self-service password change: clears must_change_password and bumps token_epoch."""
+    with _lock:
+        row = _get_conn().execute(
+            "SELECT id, username, password_hash, role, created_at, must_change_password, token_epoch "
+            "FROM users WHERE id = ?",
+            [user_id],
+        ).fetchone()
+    if row is None:
+        return None
+    with _lock:
+        conn = _get_conn()
+        conn.execute("DELETE FROM users WHERE id=?", [user_id])
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, role, created_at, must_change_password, token_epoch) "
+            "VALUES (?, ?, ?, ?, ?, FALSE, ?)",
+            [row[0], row[1], new_password_hash, row[3], row[4], row[6] + 1],
         )
     return get_user_by_id(user_id)
 
