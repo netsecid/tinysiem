@@ -24,7 +24,7 @@ Security controls are **mandatory** features of v1.4, not nice-to-haves. Zero ne
 - **Track B (SOC QoL):** per-rule alert suppression window (B1); self-monitoring via `tinysiem_internal` source + built-in brute-force rule (B2); backup endpoint + documented restore (B3)
 - **Track C (footprint):** remove chromadb entirely (C1)
 
-**After v1.4 ships:** update this section to "Current State: v1.4" and set next to v1.5 (deferred candidates: TOTP/2FA, optional-extras dependency split, audit-log hash chaining).
+**After v1.4 ships:** update this section to "Current State: v1.4" and set next to **v1.5 "Analyst Experience"** (approved design: `docs/superpowers/specs/2026-07-08-v1.5-analyst-experience-design.md`) — entity pivot view, IOC watchlists, rule backtesting, saved searches + deep links, per-rule exceptions, CSV export, MITRE coverage matrix. Deferred to v1.6+: TOTP/2FA, deps extras split, audit hash chaining, GeoIP, actor entities.
 
 ---
 

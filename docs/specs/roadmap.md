@@ -1,6 +1,6 @@
-# TinySIEM — Feature Roadmap v1.0 → v1.4
+# TinySIEM — Feature Roadmap v1.0 → v1.5
 
-> Status: v1.0–v1.3 shipped; v1.4 approved design  
+> Status: v1.0–v1.3 shipped; v1.4 and v1.5 approved designs  
 > Current version: 1.3  
 > Author: TinySIEM project
 
@@ -154,4 +154,18 @@ Security controls are **mandatory features** of this release, not nice-to-haves.
 **Track C — Footprint reduction**
 - C1 Remove chromadb entirely (largest image-size win; nothing reads from it)
 
-**Considered and deferred to v1.5+:** TOTP/2FA, optional-extras split for boto3/google-api-python-client, audit-log hash chaining
+**Considered and deferred:** TOTP/2FA, optional-extras split for boto3/google-api-python-client, audit-log hash chaining
+
+### v1.5 — "Analyst Experience" (approved design)
+
+The features a senior SOC analyst reaches for every shift, designed from the daily investigation loop. Zero new Python dependencies. Full spec: [2026-07-08-v1.5-analyst-experience-design.md](../superpowers/specs/2026-07-08-v1.5-analyst-experience-design.md)
+
+- E1 **Entity pivot view** — `GET /entities/ip/{value}` + `ui/entity.html`: first/last seen, histogram, top facets, related alerts and cases; every IP in the UI becomes a pivot link
+- E2 **IOC watchlists** — `watchlist_entries` table, CSV import, ip/cidr/user-agent/URI-substring matching in the ingest pipeline → alerts; doubles as investigation watch mode
+- E3 **Rule backtesting** — run a rule (saved or inline) against 1–30 days of history before deploying; pairs with AI rule generation (generate → backtest → deploy)
+- E4 **Saved searches + deep links** — per-user saved searches; Events/Alerts filter state serialized to the URL for pasteable investigation links
+- E5 **Per-rule exceptions** — permanent false-positive tuning (field+value with mandatory reason, audit-logged) without disabling rules; complements v1.4 suppression
+- E6 **CSV export** — `format=csv` on /events and /alerts honoring active filters
+- E7 **MITRE ATT&CK coverage matrix** — renders existing rule tactic/technique metadata as a coverage view with visible gaps
+
+**Considered and deferred to v1.6+:** GeoIP enrichment, threat-intel feeds (TAXII/MISP), UEBA risk scoring, actor/username entities (blocked on normalized actor field)
