@@ -105,6 +105,20 @@ The correlation engine tracks state in memory. State is cleared on container res
 
 ---
 
+## Alert suppression
+
+Add an optional `suppress_seconds` field at the rule's top level (a sibling of `condition`) to avoid repeated alerts for the same rule + source IP:
+
+```yaml
+name: my-rule
+suppress_seconds: 300   # 0 disables suppression; omit to use the default
+condition: ...
+```
+
+Default: `300` seconds for `threshold` rules, `0` (disabled) for `field_match` and `correlation` rules. Suppressed firings are counted and attached to the next emitted alert as `suppressed_count`.
+
+---
+
 ## Built-in Rules
 
 | Rule | Type | Severity | Description |

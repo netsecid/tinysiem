@@ -23,7 +23,7 @@ def _alerts_path() -> Path:
     return path
 
 
-def write_alert(rule: dict, event: dict) -> None:
+def write_alert(rule: dict, event: dict, suppressed_count: int = 0) -> None:
     alert = {
         "alert_id": str(uuid.uuid4()),
         "triggered_at": datetime.now(timezone.utc).isoformat(),
@@ -33,6 +33,7 @@ def write_alert(rule: dict, event: dict) -> None:
         "mitre_technique": rule.get("mitre_technique"),
         "event_id": event.get("id"),
         "source_ip": event.get("source_ip"),
+        "suppressed_count": suppressed_count,
         "summary": (
             f"Rule '{rule.get('name')}' triggered on event {event.get('id')}"
         ),

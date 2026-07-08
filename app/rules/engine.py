@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -16,6 +17,49 @@ _rules: list[dict] = []
 # Correlation state: {rule_name: {capture_value: {step, triggered_at, first_event_id}}}
 _corr_state: dict[str, dict[str, dict]] = {}
 _corr_lock = threading.Lock()
+
+# Suppression state (independent of correlation state above): tracks per
+# (rule_name, source_ip) how long to withhold repeated alerts, and how many
+# firings were suppressed in the meantime.
+_suppression_until: dict[tuple[str, str], float] = {}
+_suppressed_counts: dict[tuple[str, str], int] = {}
+_suppression_lock = threading.Lock()
+
+
+def _suppress_key(rule: dict, event: dict) -> tuple[str, str]:
+    return (rule.get("name", ""), str(event.get("source_ip") or ""))
+
+
+def _default_suppress_seconds(rule: dict) -> int:
+    explicit = rule.get("suppress_seconds")
+    if explicit is not None:
+        return int(explicit)
+    ctype = rule.get("condition", {}).get("type")
+    return 300 if ctype == "threshold" else 0
+
+
+def _maybe_fire(rule: dict, event: dict) -> None:
+    suppress_seconds = _default_suppress_seconds(rule)
+    if suppress_seconds <= 0:
+        file_writer.write_alert(rule, event)
+        return
+
+    key = _suppress_key(rule, event)
+    now = time.monotonic()
+    with _suppression_lock:
+        until = _suppression_until.get(key, 0.0)
+        if now < until:
+            _suppressed_counts[key] = _suppressed_counts.get(key, 0) + 1
+            return
+        suppressed_count = _suppressed_counts.pop(key, 0)
+        _suppression_until[key] = now + suppress_seconds
+    file_writer.write_alert(rule, event, suppressed_count=suppressed_count)
+
+
+def reset_suppression_state() -> None:
+    with _suppression_lock:
+        _suppression_until.clear()
+        _suppressed_counts.clear()
 
 
 def load_rules(rules_dir: Optional[Path] = None) -> None:
@@ -84,7 +128,7 @@ def _evaluate_rule(rule: dict, event: dict) -> None:
         return
 
     if triggered:
-        file_writer.write_alert(rule, event)
+        _maybe_fire(rule, event)
 
 
 def _check_step(event: dict, step_spec: dict) -> bool:
@@ -138,7 +182,7 @@ def _evaluate_correlation(rule: dict, event: dict) -> None:
             if next_step < len(steps) and _check_step(event, steps[next_step]):
                 if next_step == len(steps) - 1:
                     del state[capture_value]
-                    file_writer.write_alert(rule, event)
+                    _maybe_fire(rule, event)
                 else:
                     entry["step"] = next_step
 
