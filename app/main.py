@@ -15,6 +15,7 @@ from app.startup_checks import (
     warn_if_integrations_missing_master_key,
 )
 from app.decoder import engine as decoder_engine
+from app.listeners import syslog as syslog_listener
 from app.ai.router import router as ai_router
 from app.alerts.router import router as alerts_router
 from app.dashboard.router import router as dashboard_router
@@ -187,6 +188,7 @@ def health():
                 "enabled": settings.tinysiem_beats_enabled,
                 "path": "/ingest/beats",
             },
+            "syslog_dropped": syslog_listener.get_dropped_counts(),
         },
     }
 

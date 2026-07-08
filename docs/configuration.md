@@ -53,6 +53,8 @@ openssl rand -hex 32   # TINYSIEM_JWT_SECRET
 |---|---|---|
 | `TINYSIEM_SYSLOG_UDP_PORT` | `5140` | UDP syslog listener port. Set to `0` to disable. |
 | `TINYSIEM_SYSLOG_TCP_PORT` | `5141` | TCP syslog listener port. Set to `0` to disable. |
+| `TINYSIEM_SYSLOG_ALLOW_CIDRS` | `` | Comma-separated CIDRs allowed to send syslog. Empty = allow all sources. |
+| `TINYSIEM_SYSLOG_MAX_BYTES` | `8192` | Maximum accepted syslog message size in bytes. Oversized messages are dropped and counted in `/health`. |
 
 ---
 

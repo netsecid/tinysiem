@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     tinysiem_syslog_udp_port: int = 5140   # 0 = disabled
     tinysiem_syslog_tcp_port: int = 5141   # 0 = disabled
     tinysiem_beats_enabled: bool = True
+    tinysiem_syslog_allow_cidrs: str = ""   # comma-separated CIDRs; empty = allow all
+    tinysiem_syslog_max_bytes: int = 8192
 
     # Smart Baselines (v1.1)
     tinysiem_baseline_interval_minutes: int = 5

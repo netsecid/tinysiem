@@ -1,9 +1,47 @@
 import asyncio
+import ipaddress
 import logging
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+_dropped_counts = {"cidr": 0, "size": 0}
+
+
+def _parse_allowed_networks() -> list:
+    raw = settings.tinysiem_syslog_allow_cidrs.strip()
+    if not raw:
+        return []
+    networks = []
+    for chunk in raw.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(chunk, strict=False))
+        except ValueError:
+            logger.warning(f"Ignoring invalid syslog CIDR entry: {chunk!r}")
+    return networks
+
+
+def _is_ip_allowed(ip_str: str, networks: list) -> bool:
+    if not networks:
+        return True
+    try:
+        addr = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    return any(addr in net for net in networks)
+
+
+def get_dropped_counts() -> dict:
+    return dict(_dropped_counts)
+
+
+def reset_dropped_counts() -> None:
+    _dropped_counts["cidr"] = 0
+    _dropped_counts["size"] = 0
 
 
 def detect_format(raw: str) -> str:
@@ -26,10 +64,17 @@ def _handle_line(raw: str) -> None:
 
 
 class _UDPProtocol(asyncio.DatagramProtocol):
-    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+    def __init__(self, loop: asyncio.AbstractEventLoop, allowed_networks: list) -> None:
         self._loop = loop
+        self._allowed_networks = allowed_networks
 
     def datagram_received(self, data: bytes, addr) -> None:
+        if len(data) > settings.tinysiem_syslog_max_bytes:
+            _dropped_counts["size"] += 1
+            return
+        if not _is_ip_allowed(addr[0], self._allowed_networks):
+            _dropped_counts["cidr"] += 1
+            return
         raw = data.decode("utf-8", errors="replace").strip()
         if raw:
             self._loop.run_in_executor(None, _handle_line, raw)
@@ -42,10 +87,19 @@ async def _handle_tcp(
     reader: asyncio.StreamReader, writer: asyncio.StreamWriter
 ) -> None:
     loop = asyncio.get_event_loop()
+    peer = writer.get_extra_info("peername")
+    peer_ip = peer[0] if peer else None
+    allowed_networks = _parse_allowed_networks()
     try:
         while True:
             line = await reader.readline()
             if not line:
+                break
+            if len(line) > settings.tinysiem_syslog_max_bytes:
+                _dropped_counts["size"] += 1
+                continue
+            if peer_ip and not _is_ip_allowed(peer_ip, allowed_networks):
+                _dropped_counts["cidr"] += 1
                 break
             raw = line.decode("utf-8", errors="replace").strip()
             if raw:
@@ -60,12 +114,13 @@ async def start_syslog_listeners() -> list:
     """Start configured syslog UDP and TCP servers. Returns server objects for cleanup."""
     servers: list = []
     loop = asyncio.get_event_loop()
+    allowed_networks = _parse_allowed_networks()
 
     udp_port = settings.tinysiem_syslog_udp_port
     if udp_port > 0:
         try:
             transport, _ = await loop.create_datagram_endpoint(
-                lambda: _UDPProtocol(loop),
+                lambda: _UDPProtocol(loop, allowed_networks),
                 local_addr=("0.0.0.0", udp_port),
             )
             servers.append(transport)
