@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
+from app.startup_checks import validate_jwt_secret
 from app.decoder import engine as decoder_engine
 from app.ai.router import router as ai_router
 from app.alerts.router import router as alerts_router
@@ -37,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_jwt_secret(settings.tinysiem_jwt_secret)
     logger.info("TinySIEM starting up")
     duckdb_store.init_db()
     duckdb_store.init_alert_triage_table()
