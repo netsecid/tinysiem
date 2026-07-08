@@ -28,6 +28,7 @@ from app.events.router import router as events_router
 from app.ingest.router import router as ingest_router
 from app.parsers.router import router as parsers_router
 from app.rules.router import router as rules_crud_router
+from app.sbom.router import router as sbom_router
 from app.sources.router import router as sources_router
 from app.users.router import router as users_router
 from app.password import hash_password
@@ -161,6 +162,7 @@ app.include_router(reports_router)
 app.include_router(audit_router)
 app.include_router(integrations_router)
 app.include_router(dashboard_router)
+app.include_router(sbom_router)
 
 app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 

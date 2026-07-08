@@ -14,6 +14,8 @@ RUN chmod +x /docker-entrypoint.sh
 # Copy source into /app/ — this becomes the 'app' Python package
 COPY . /app/
 
+RUN python3 -m app.generate_sbom > /app/sbom.json
+
 RUN mkdir -p /app/data /app/data/archive /app/logs /app/decoder/decoders/custom /app/rules/rules/custom \
     && chown -R appuser:appuser /app
 
