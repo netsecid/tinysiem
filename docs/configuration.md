@@ -33,7 +33,6 @@ openssl rand -hex 32   # TINYSIEM_JWT_SECRET
 | Variable | Default | Description |
 |---|---|---|
 | `TINYSIEM_DUCKDB_PATH` | `/app/data/tinysiem.duckdb` | DuckDB database file path |
-| `TINYSIEM_CHROMA_PATH` | `/app/data/chroma_store` | ChromaDB vector store directory |
 | `TINYSIEM_ALERTS_PATH` | `/app/data/alerts/alerts.log` | Alert JSONL output file |
 | `TINYSIEM_ALERT_MAX_MB` | `50` | Alert file size limit before rotation (MB) |
 

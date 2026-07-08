@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from app.decoder import engine as decoder_engine
 from app.rules import engine as rule_engine
-from app.storage import chroma_store, duckdb_store
+from app.storage import duckdb_store
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +29,5 @@ def process_line(source: str, raw: str, strict: bool = True) -> str:
         }
 
     duckdb_store.insert_event(event)
-
-    try:
-        chroma_store.upsert_event(event)
-    except Exception as exc:
-        logger.warning(f"ChromaDB upsert failed (non-fatal): {exc}")
-
     rule_engine.evaluate(event)
     return event["id"]

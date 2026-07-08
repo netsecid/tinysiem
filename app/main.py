@@ -26,7 +26,7 @@ from app.sources.router import router as sources_router
 from app.users.router import router as users_router
 from app.password import hash_password
 from app.rules import engine as rule_engine
-from app.storage import chroma_store, duckdb_store
+from app.storage import duckdb_store
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,7 +46,6 @@ async def lifespan(app: FastAPI):
     duckdb_store.init_integrations_tables()
     duckdb_store.init_dashboard_tables()
     duckdb_store.init_playbook_table()
-    chroma_store.init_chroma()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
     duckdb_store.ensure_superadmin(hash_password(settings.tinysiem_superadmin_password))
