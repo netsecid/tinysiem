@@ -1,7 +1,7 @@
-# TinySIEM — Feature Roadmap v1.0 → v1.2
+# TinySIEM — Feature Roadmap v1.0 → v1.4
 
-> Status: Design / Pre-implementation  
-> Current version: 0.9.0  
+> Status: v1.0–v1.3 shipped; v1.4 approved design  
+> Current version: 1.3  
 > Author: TinySIEM project
 
 ---
@@ -124,3 +124,34 @@ Configuration page gains new sections: Log Sources, Integrations, Baselines, Das
 - API Integrations: AWS CloudTrail + Google Workspace pollers, Fernet credential store, integration health UI
 - Custom Dashboard: widget grid (6 pre-built widget types), layout persistence, PDF/HTML export
 - UI polish: Integrations page, Dashboard builder page
+
+### v1.3 — Guided Response (shipped)
+- Playbooks: structured YAML response steps on rules, snapshotted into alerts, case Playbook tab with step completion, AI generate + refine
+- Alert Enrichment: tabbed alert modal (Alert | Logs | Rule), triggering-log view, rule condition view, escalate-to-case flow
+- Specs: [2026-07-02-playbook-triage-design.md](../superpowers/specs/2026-07-02-playbook-triage-design.md), [2026-07-02-alert-enrichment-design.md](../superpowers/specs/2026-07-02-alert-enrichment-design.md)
+
+### v1.4 — "Hardened Tiny" (approved design)
+
+Security controls are **mandatory features** of this release, not nice-to-haves. Zero new Python dependencies; one large dependency removed. Full spec: [2026-07-08-v1.4-hardening-design.md](../superpowers/specs/2026-07-08-v1.4-hardening-design.md)
+
+**Track A — Mandatory security controls**
+- A1 Login brute-force lockout (in-memory, exponential backoff; the only carve-out from the no-rate-limiting rule)
+- A2 Forced password change for seeded superadmin + 12-char minimum password policy
+- A3 Token revocation via per-user `token_epoch` + `POST /auth/logout`
+- A4 Global API key scoped to `/ingest/*` only (breaking change)
+- A5 Syslog listener source-CIDR allowlist + message size cap + drop counters in `/health`
+- A6 Content-Security-Policy header + self-hosted IBM Plex fonts (zero external requests, air-gap friendly)
+- A7 CORS default same-origin; `TINYSIEM_CORS_ORIGINS` override (breaking change)
+- A8 Built-in TLS via `TINYSIEM_TLS_CERT`/`TINYSIEM_TLS_KEY`
+- A9 Startup guardrails: refuse weak JWT secret, warn on default superadmin password / missing master key
+- A10 Static `/sbom` endpoint
+
+**Track B — SOC quality of life**
+- B1 Alert suppression window per rule + entity (`suppress_seconds`, alert-fatigue control)
+- B2 Self-monitoring: audit events feed the detection pipeline as `tinysiem_internal` + built-in brute-force rule
+- B3 Backup endpoint (DuckDB export + alerts + custom YAML) with documented restore
+
+**Track C — Footprint reduction**
+- C1 Remove chromadb entirely (largest image-size win; nothing reads from it)
+
+**Considered and deferred to v1.5+:** TOTP/2FA, optional-extras split for boto3/google-api-python-client, audit-log hash chaining

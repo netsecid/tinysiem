@@ -2,25 +2,29 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current State: v1.2
+## Current State: v1.3
 
-All v1.2 features shipped and tested (216 tests passing):
-- All v1.1 features +
-- **API Integrations** (`app/integrations/`): Fernet-encrypted credential storage (`TINYSIEM_MASTER_KEY` env var), pull-based pollers for AWS CloudTrail and Google Workspace, background asyncio scheduler checks every 60s, 2 new DuckDB tables (`integrations`, `integration_runs`), full CRUD API + manual trigger, Integrations section in Configuration UI (admin+)
-- **Custom Dashboard** (`ui/dashboard.html`): 7 configurable widget types (event_volume, top_sources, top_ips, alert_severity, recent_alerts, case_status, baseline_health), per-user layout saved to DuckDB, edit mode with add/remove/edit settings, auto-refresh every 60s per widget, HTML export via `POST /dashboard/export/html`
+All v1.3 features shipped and tested:
+- All v1.2 features +
+- **Playbooks** (`app/` playbook endpoints + `case_playbook_steps` table): structured YAML response steps on rules, snapshotted into alerts at trigger time, case Playbook tab with step completion, AI generate + refine
+- **Alert Enrichment**: tabbed alert modal (Alert | Logs | Rule), triggering-log view via `GET /events/{event_id}`, rule condition view, escalate-to-case footer, `GET /alerts/{alert_id}/cases`
 
-**Known DuckDB constraint:** DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, cases tables, `integrations`, and `integration_runs`. Dashboard uses DELETE+INSERT pattern (no UNIQUE on `owner`) to avoid this.
+**Known DuckDB constraint:** DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, cases tables, `integrations`, `integration_runs`, and `case_playbook_steps`. Dashboard uses DELETE+INSERT pattern (no UNIQUE on `owner`) to avoid this.
 
 **Environment variables added in v1.2:**
 - `TINYSIEM_MASTER_KEY` — Fernet key for credential encryption. Optional (503 if integrations are used without it). Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
 
-**Next version: v1.3** — see `docs/specs/roadmap.md` for the full roadmap.
+**Next version: v1.4 — "Hardened Tiny"** — see `docs/specs/roadmap.md` and the approved design `docs/superpowers/specs/2026-07-08-v1.4-hardening-design.md`.
 
-### What to build next (v1.3)
+### What to build next (v1.4)
 
-TBD — see `docs/specs/roadmap.md`.
+Security controls are **mandatory** features of v1.4, not nice-to-haves. Zero new Python dependencies; chromadb is removed.
 
-**After v1.3 ships:** update this section to "Current State: v1.3" and set next to v1.4.
+- **Track A (mandatory security):** login brute-force lockout (A1); forced password change + 12-char min policy (A2); token revocation via `token_epoch` + `/auth/logout` (A3); global API key scoped to `/ingest/*` only — breaking (A4); syslog CIDR allowlist + size cap (A5); CSP header + self-hosted fonts (A6); CORS same-origin default — breaking (A7); built-in TLS env vars (A8); startup guardrails on weak secrets (A9); static `/sbom` (A10)
+- **Track B (SOC QoL):** per-rule alert suppression window (B1); self-monitoring via `tinysiem_internal` source + built-in brute-force rule (B2); backup endpoint + documented restore (B3)
+- **Track C (footprint):** remove chromadb entirely (C1)
+
+**After v1.4 ships:** update this section to "Current State: v1.4" and set next to v1.5 (deferred candidates: TOTP/2FA, optional-extras dependency split, audit-log hash chaining).
 
 ---
 
