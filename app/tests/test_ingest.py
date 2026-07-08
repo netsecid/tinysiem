@@ -34,3 +34,8 @@ async def test_ingest_raw_malformed_payload_returns_422(client, auth_headers):
         headers=auth_headers,
     )
     assert response.status_code == 422
+
+
+async def test_api_key_cannot_access_non_ingest_endpoints(client, auth_headers):
+    resp = await client.get("/events", headers=auth_headers)
+    assert resp.status_code == 401

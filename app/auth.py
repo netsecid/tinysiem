@@ -44,6 +44,8 @@ def decode_token(token: str) -> Optional[dict]:
 
 
 def _role_ok(user_role: str, min_role: str) -> bool:
+    if min_role == "ingest":
+        return _role_ok(user_role, "admin")  # admin+ JWTs can still hit ingest endpoints
     try:
         return _ROLE_HIERARCHY.index(user_role) >= _ROLE_HIERARCHY.index(min_role)
     except ValueError:
@@ -78,11 +80,9 @@ def require_auth(min_role: str = "analyst"):
 
             return AuthUser(user_id=user_row["id"], username=user_row["username"], role=role)
 
-        # 2. Backward compat: global API key → admin
-        if secrets.compare_digest(token, settings.tinysiem_api_key):
-            if not _role_ok("admin", min_role):
-                raise HTTPException(status_code=403, detail="Insufficient permissions")
-            return AuthUser(user_id="system", username="system", role="admin")
+        # 2. Global API key — ingest-only scope
+        if min_role == "ingest" and secrets.compare_digest(token, settings.tinysiem_api_key):
+            return AuthUser(user_id="system", username="system", role="ingest")
 
         raise HTTPException(status_code=401, detail="Invalid authentication")
 
@@ -92,3 +92,4 @@ def require_auth(min_role: str = "analyst"):
 require_analyst = require_auth("analyst")
 require_admin = require_auth("admin")
 require_superadmin = require_auth("superadmin")
+require_ingest = require_auth("ingest")

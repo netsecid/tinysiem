@@ -6,9 +6,8 @@ async def test_list_users_requires_superadmin(client, analyst_headers):
     assert res.status_code == 403
 
 
-async def test_list_users_requires_superadmin_not_admin(client, auth_headers):
-    # auth_headers uses the global API key which maps to role=admin
-    res = await client.get("/users", headers=auth_headers)
+async def test_list_users_requires_superadmin_not_admin(client, admin_headers):
+    res = await client.get("/users", headers=admin_headers)
     assert res.status_code == 403
 
 

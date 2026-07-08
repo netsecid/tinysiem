@@ -3,7 +3,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 
-from app.auth import AuthUser, require_admin
+from app.auth import AuthUser, require_ingest
 from app.config import settings
 from app.ingest.models import RawIngestRequest
 from app.ingest.pipeline import process_line
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/ingest", tags=["ingest"])
 @router.post("/raw")
 def ingest_raw(
     payload: RawIngestRequest,
-    _: AuthUser = Depends(require_admin),
+    _: AuthUser = Depends(require_ingest),
 ):
     event_id = process_line(payload.source, payload.raw, strict=True)
     return {"status": "ok", "event_id": event_id}
@@ -26,7 +26,7 @@ def ingest_raw(
 def ingest_file(
     source: str,
     file: UploadFile,
-    _: AuthUser = Depends(require_admin),
+    _: AuthUser = Depends(require_ingest),
 ):
     content = file.file.read().decode("utf-8", errors="replace")
     lines = [line for line in content.splitlines() if line.strip()]
@@ -49,7 +49,7 @@ def ingest_file(
 @router.post("/beats")
 async def ingest_beats(
     request: Request,
-    _: AuthUser = Depends(require_admin),
+    _: AuthUser = Depends(require_ingest),
 ):
     if not settings.tinysiem_beats_enabled:
         raise HTTPException(status_code=503, detail="Beats endpoint disabled")
