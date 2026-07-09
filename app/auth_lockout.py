@@ -23,6 +23,21 @@ def is_locked(key: tuple[str, str]) -> float:
         return max(0.0, remaining)
 
 
+def _evict_stale(skip_key: tuple[str, str]) -> None:
+    """Remove entries that are neither actively counting toward a fresh lockout
+    window nor currently serving an active lockout. Caller must hold `_lock`.
+    `skip_key` (the key just processed by record_failure) is never evicted here,
+    since its own state was just written and hasn't been re-checked yet.
+    """
+    now = _now()
+    stale_keys = [
+        k for k, entry in _failures.items()
+        if k != skip_key and now >= entry["locked_until"] and entry["count"] < MAX_ATTEMPTS
+    ]
+    for k in stale_keys:
+        del _failures[k]
+
+
 def record_failure(key: tuple[str, str]) -> None:
     with _lock:
         entry = _failures.setdefault(key, {"count": 0, "locked_until": 0.0})
@@ -31,6 +46,7 @@ def record_failure(key: tuple[str, str]) -> None:
             extra = entry["count"] - MAX_ATTEMPTS
             backoff = min(BASE_BACKOFF_SECONDS * (2 ** extra), MAX_BACKOFF_SECONDS)
             entry["locked_until"] = _now() + backoff
+        _evict_stale(skip_key=key)
 
 
 def record_success(key: tuple[str, str]) -> None:

@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import app.auth_lockout as auth_lockout
 from app.auth_lockout import (
     BASE_BACKOFF_SECONDS,
     MAX_ATTEMPTS,
@@ -77,3 +78,56 @@ def test_different_keys_are_independent():
         record_failure(key_a)
     assert is_locked(key_a) > 0.0
     assert is_locked(key_b) == 0.0
+
+
+def test_stale_subthreshold_entries_are_evicted_and_do_not_grow_unbounded(monkeypatch):
+    """Regression test for a slow-burn memory-exhaustion vector: an attacker varying
+    the username from one IP (or hitting many usernames) previously inserted a
+    permanent dict entry per distinct failed attempt, with no eviction. After the
+    fix, `_failures` must not grow to O(number of distinct attempts)."""
+    reset_all()
+    fake_time = [1000.0]
+    monkeypatch.setattr(auth_lockout, "_now", lambda: fake_time[0])
+
+    for i in range(300):
+        record_failure((f"attacker-user-{i}", "6.6.6.6"))
+        fake_time[0] += 1  # time keeps advancing past each sub-threshold entry
+
+    # Each of these 300 attempts is a distinct key that never reached MAX_ATTEMPTS
+    # on its own, so eviction should have kept the dict from growing unbounded —
+    # nowhere near 300 entries should remain.
+    assert len(auth_lockout._failures) < 10
+
+
+def test_eviction_does_not_disturb_an_in_progress_lockout(monkeypatch):
+    """A key that's actively serving (or building toward) a lockout must survive
+    eviction sweeps triggered by unrelated keys failing in the meantime."""
+    reset_all()
+    fake_time = [1000.0]
+    monkeypatch.setattr(auth_lockout, "_now", lambda: fake_time[0])
+
+    victim_key = ("victim-user", "9.9.9.9")
+    for _ in range(MAX_ATTEMPTS):
+        record_failure(victim_key)
+    assert is_locked(victim_key) > 0.0
+
+    # Flood with many distinct noise keys — none of these should evict the
+    # actively-locked victim entry.
+    for i in range(50):
+        record_failure((f"noise-user-{i}", "9.9.9.9"))
+        fake_time[0] += 1
+
+    assert is_locked(victim_key) > 0.0
+
+
+def test_eviction_preserves_in_progress_count_for_the_key_being_recorded():
+    """The key currently being processed by record_failure must never be evicted
+    by its own sweep, even mid-count before it reaches the threshold."""
+    reset_all()
+    key = ("slow-user", "4.4.4.4")
+    for _ in range(MAX_ATTEMPTS - 1):
+        record_failure(key)
+    # One more failure should still cross the threshold — proving the count
+    # wasn't reset to 0 by the eviction sweep on any of the prior calls.
+    record_failure(key)
+    assert is_locked(key) > 0.0
