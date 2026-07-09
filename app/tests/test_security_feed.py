@@ -1,8 +1,10 @@
+from datetime import datetime
 from pathlib import Path
 
 import yaml
 
 from app.audit import store as audit
+from app.audit import security_feed
 from app.rules import engine as rule_engine
 from app.storage import duckdb_store
 
@@ -62,3 +64,20 @@ def test_internal_brute_force_rule_fires_after_threshold(tmp_path):
     finally:
         # Restore the real rule set for subsequent tests.
         rule_engine.load_rules()
+
+
+def test_feed_handles_non_json_serializable_detail_gracefully():
+    """Verify that feed() never raises even if detail contains non-JSON-serializable
+    values (e.g. datetime objects). The json.dumps() and ingest should both be covered
+    by the try/except handler."""
+    # This call should NOT raise, even though detail contains a datetime object.
+    # Before the fix, json.dumps(payload) was outside the try/except, causing
+    # a TypeError to escape and violate log_event()'s "never raises" contract.
+    security_feed.feed(
+        event_type="auth.login",
+        status="success",
+        actor="test-user",
+        ip_address="192.168.1.1",
+        detail={"when": datetime.now(), "extra": "data"},
+    )
+    # Test passes if no exception is raised.

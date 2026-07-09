@@ -35,8 +35,8 @@ def feed(event_type: str, status: str, actor: str, ip_address, detail) -> None:
         "actor": actor,
         "detail": detail or {},
     }
-    raw = json.dumps(payload)
     try:
+        raw = json.dumps(payload)
         from app.ingest.pipeline import process_line
         process_line("tinysiem_internal", raw, strict=False)
     except Exception as exc:
