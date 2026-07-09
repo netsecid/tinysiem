@@ -67,7 +67,7 @@ mitre_tactic: "Discovery"
 mitre_technique: "T1595"
 ```
 
-The threshold counter is per `(rule_name, field_value)` pair — so 10 × 404s from any source triggers it, not per-IP.
+The threshold counter is scoped to the rule's own `source` (e.g. a rule with `source: nginx` only counts matching events from `nginx`) and is per `field_value`, not per-IP — so 10 × 404s from that source triggers it, regardless of which IP sent them. A rule with `source: "*"` counts matching events across all sources (no source scoping applied).
 
 **Fields eligible for threshold counting** (allowlist for SQL safety):
 `source`, `source_ip`, `method`, `uri`, `status_code`, `response_size`

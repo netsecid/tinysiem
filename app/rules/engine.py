@@ -120,7 +120,9 @@ def _evaluate_rule(rule: dict, event: dict) -> None:
     elif ctype == "threshold":
         threshold_count = condition.get("threshold_count", 1)
         window_seconds = condition.get("window_seconds", 60)
-        count = duckdb_store.count_events_in_window(field, value, window_seconds)
+        rule_source = rule.get("source")
+        scope_source = rule_source if rule_source and rule_source != "*" else None
+        count = duckdb_store.count_events_in_window(field, value, window_seconds, source=scope_source)
         triggered = count >= threshold_count
 
     else:
