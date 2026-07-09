@@ -4,6 +4,7 @@ import app.auth_lockout as auth_lockout
 from app.auth_lockout import (
     BASE_BACKOFF_SECONDS,
     MAX_ATTEMPTS,
+    MAX_BACKOFF_SECONDS,
     is_locked,
     record_failure,
     record_success,
@@ -84,18 +85,32 @@ def test_stale_subthreshold_entries_are_evicted_and_do_not_grow_unbounded(monkey
     """Regression test for a slow-burn memory-exhaustion vector: an attacker varying
     the username from one IP (or hitting many usernames) previously inserted a
     permanent dict entry per distinct failed attempt, with no eviction. After the
-    fix, `_failures` must not grow to O(number of distinct attempts)."""
+    fix, `_failures` must not grow forever — but eviction is now time-based (an
+    entry is only dropped once it's been idle longer than MAX_BACKOFF_SECONDS), so
+    entries created during a short, active burst legitimately stick around until
+    that idle window elapses. This test drives a burst of 300 distinct attempts,
+    confirms they all still accumulate while activity is ongoing (no premature
+    unconditional sweep like the old buggy logic), then simulates the attacker
+    going idle for longer than MAX_BACKOFF_SECONDS and confirms the next failure
+    triggers a sweep that reclaims the stale entries."""
     reset_all()
     fake_time = [1000.0]
     monkeypatch.setattr(auth_lockout, "_now", lambda: fake_time[0])
 
     for i in range(300):
         record_failure((f"attacker-user-{i}", "6.6.6.6"))
-        fake_time[0] += 1  # time keeps advancing past each sub-threshold entry
+        fake_time[0] += 1  # only ~300s of elapsed time — nowhere near the idle window
 
-    # Each of these 300 attempts is a distinct key that never reached MAX_ATTEMPTS
-    # on its own, so eviction should have kept the dict from growing unbounded —
-    # nowhere near 300 entries should remain.
+    # None of these are stale yet (burst took far less than MAX_BACKOFF_SECONDS),
+    # so they should still all be present — proving eviction is no longer an
+    # unconditional per-call sweep.
+    assert len(auth_lockout._failures) == 300
+
+    # Now the attacker goes idle for longer than the staleness window. The next
+    # failure (from anyone) should trigger a sweep that reclaims all the old,
+    # long-untouched entries, keeping memory bounded over time.
+    fake_time[0] += MAX_BACKOFF_SECONDS + 1
+    record_failure(("attacker-user-new", "6.6.6.6"))
     assert len(auth_lockout._failures) < 10
 
 
@@ -131,3 +146,35 @@ def test_eviction_preserves_in_progress_count_for_the_key_being_recorded():
     # wasn't reset to 0 by the eviction sweep on any of the prior calls.
     record_failure(key)
     assert is_locked(key) > 0.0
+
+
+def test_interleaved_decoy_failures_do_not_reset_target_lockout_count(monkeypatch):
+    """Regression test for the eviction-bypass exploit (the actual bug this fix
+    addresses): an attacker brute-forcing a target account interleaves one cheap
+    "decoy" failed login against a throwaway username between each real guess
+    against the target, from the same source IP.
+
+    Under the old (buggy) eviction predicate —
+    `now >= entry["locked_until"] and entry["count"] < MAX_ATTEMPTS` — every
+    sub-threshold entry has `locked_until == 0.0` and `now` (monotonic clock) is
+    always >= 0.0, so that condition was trivially true for the target's entry on
+    every single decoy call. Each decoy failure therefore wiped the target's
+    accumulating count back to zero before it could ever reach MAX_ATTEMPTS, so
+    the target account never locked no matter how many real guesses were made.
+
+    With the fix, eviction is keyed off genuine idle time (`last_seen`), and the
+    target's entry is touched (its own `last_seen` refreshed) on every real guess
+    — only ~1 mocked second apart, far short of MAX_BACKOFF_SECONDS — so it
+    survives the decoys' sweeps and the lockout triggers as expected.
+    """
+    reset_all()
+    fake_time = [1000.0]
+    monkeypatch.setattr(auth_lockout, "_now", lambda: fake_time[0])
+
+    target = ("admin", "10.0.0.1")
+    for i in range(MAX_ATTEMPTS):
+        record_failure(target)                       # real guess against the target
+        record_failure((f"decoy-{i}", "10.0.0.1"))    # cheap decoy failure, same IP
+        fake_time[0] += 1
+
+    assert is_locked(target) > 0.0
