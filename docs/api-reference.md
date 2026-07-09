@@ -3,8 +3,8 @@
 All endpoints except `GET /health` require a valid credential passed as `Authorization: Bearer <token>`.
 
 Two token types are accepted:
-- **API key** (`TINYSIEM_API_KEY` from `.env`) — for machine-to-machine ingest. Treated as `admin` role.
-- **JWT** (obtained from `POST /auth/login`) — for all UI and user-context flows. Encodes `sub` (user ID), `username`, `role`, and `exp`.
+- **API key** (`TINYSIEM_API_KEY` from `.env`) — as of v1.4, scoped to `/ingest/raw`, `/ingest/file`, and `/ingest/beats` only. It is rejected on every other endpoint (401). It does not carry a role — it's a fixed credential for machine-to-machine log shipping, not an `admin` identity. Humans or scripts needing any other endpoint must obtain a JWT via `POST /auth/login`.
+- **JWT** (obtained from `POST /auth/login`) — for all UI and user-context flows. Encodes `sub` (user ID), `username`, `role`, and `exp`. An `admin`+ or `superadmin` JWT also works on the ingest endpoints above, in addition to the API key.
 
 Role hierarchy: `analyst` < `admin` < `superadmin`. A higher role grants all lower-role access.
 
@@ -27,11 +27,14 @@ Authenticate and receive a JWT. No auth required.
   "token_type": "bearer",
   "username": "admin",
   "role": "superadmin",
-  "expires_in": 86400
+  "expires_in": 86400,
+  "must_change_password": false
 }
 ```
 
 JWT expiry defaults to 24 hours (`TINYSIEM_JWT_EXPIRY_HOURS`).
+
+`must_change_password` is `true` when the account still has a forced password-change flag set (e.g. the initial superadmin created with the default `admin` password) — the client should route the user to change their password before allowing further use, since the account's current password is a known/default value until they do.
 
 ---
 
