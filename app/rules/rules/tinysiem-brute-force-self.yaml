@@ -1,0 +1,14 @@
+name: tinysiem-internal-brute-force
+description: "Repeated failed logins against this TinySIEM instance itself"
+severity: high
+source: tinysiem_internal
+condition:
+  type: threshold
+  field: status_code
+  value: 401
+  operator: eq
+  threshold_count: 5
+  window_seconds: 300
+mitre_tactic: "Credential Access"
+mitre_technique: "T1110"
+suppress_seconds: 900

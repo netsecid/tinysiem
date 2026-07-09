@@ -4,6 +4,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from app.audit import security_feed
+
 logger = logging.getLogger(__name__)
 
 _MAX_STR = 5000
@@ -48,3 +50,5 @@ def log_event(
         })
     except Exception as exc:
         logger.error(f"Audit write failed (non-fatal): {exc}")
+
+    security_feed.feed(event_type, status, actor, ip_address, detail)

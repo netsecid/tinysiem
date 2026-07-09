@@ -1,0 +1,8 @@
+name: tinysiem_internal
+source: tinysiem_internal
+type: json
+fields:
+  source_ip: source_ip
+  status_code: status_code
+  uri: event_type
+  method: action
