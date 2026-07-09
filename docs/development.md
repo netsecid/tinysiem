@@ -2,7 +2,7 @@
 
 ## Running Tests
 
-Tests must run inside the Docker container — DuckDB and ChromaDB are installed in the image, not on the host:
+Tests must run inside the Docker container — DuckDB is installed in the image, not on the host:
 
 ```bash
 # Full suite
@@ -18,7 +18,7 @@ docker-compose exec -w /app tinysiem pytest tests/test_audit.py::test_login_succ
 docker-compose exec -w /app tinysiem pytest tests/ -q
 ```
 
-Test coverage: **216 tests** across ingest, events, alerts, parsers, rules, users, auth, correlation, syslog, Beats, retention, reports, notifications, audit, AI, baselines, cases, integrations, and dashboard.
+Test coverage: **306 tests** across ingest, events, alerts, parsers, rules, users, auth, correlation, syslog, Beats, retention, reports, notifications, audit, AI, baselines, cases, integrations, dashboard, playbooks, alert enrichment, and v1.4 hardening (lockout, forced password change, token revocation, API key scoping, syslog guardrails, CORS, TLS, startup guardrails, SBOM, suppression, self-monitoring, backup, footprint).
 
 ---
 
@@ -104,12 +104,11 @@ tinysiem/
 │   │   ├── router.py           — GET /reports/generate, /reports/download, POST /reports/send
 │   │   └── generator.py        — aggregate report data; HTML render
 │   ├── storage/
-│   │   ├── duckdb_store.py     — all DuckDB ops; single _conn + threading.Lock; _escape_like()
-│   │   └── chroma_store.py     — ChromaDB upsert (non-fatal; future AI triage)
+│   │   └── duckdb_store.py     — all DuckDB ops; single _conn + threading.Lock; _escape_like()
 │   ├── listeners/
 │   │   └── syslog.py           — asyncio UDP + TCP syslog listeners; RFC auto-detect
 │   └── tests/
-│       ├── conftest.py         — env vars + chromadb stub + fixtures
+│       ├── conftest.py         — env vars + fixtures
 │       ├── test_ingest.py
 │       ├── test_events.py
 │       ├── test_alerts.py
@@ -187,7 +186,7 @@ A single global `_conn` is protected by `threading.Lock()`. All queries must hol
 Shared by all ingest paths (HTTP routes + syslog listeners). `strict=False` stores a minimal raw event when no decoder matches (used by Beats and syslog where decoder availability isn't guaranteed).
 
 ### conftest.py ordering
-`conftest.py` must set env vars and stub `chromadb` in `sys.modules` before any `app.*` module is imported. Never import `app.*` at module level in test files.
+`conftest.py` must set env vars before any `app.*` module is imported (pydantic-settings reads them at import time). Never import `app.*` at module level in test files.
 
 ---
 

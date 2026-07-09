@@ -169,13 +169,15 @@ and `docker-compose restart tinysiem`. For a real deployment, use a certificate 
 
 Before exposing TinySIEM outside localhost:
 
-- [ ] `TINYSIEM_API_KEY` — long random string, not the default placeholder
-- [ ] `TINYSIEM_JWT_SECRET` — 64+ char random string, not the default placeholder
-- [ ] `TINYSIEM_SUPERADMIN_PASSWORD` — changed from `admin` on first login (or set a strong value before first boot)
+- [ ] `TINYSIEM_API_KEY` — long random string; only authenticates `/ingest/*` as of v1.4
+- [ ] `TINYSIEM_JWT_SECRET` — 64+ char random string; the container refuses to start below 32 characters
+- [ ] `TINYSIEM_SUPERADMIN_PASSWORD` — the seeded `admin` account is forced to change its password on first login if this is left at the default `admin`
 - [ ] `TINYSIEM_DEBUG=false` — never enable Swagger in production
 - [ ] `TINYSIEM_MASTER_KEY` — set if using API Integrations; keep it out of git
+- [ ] `TINYSIEM_CORS_ORIGINS` — default is same-origin only; set explicitly only for origins you actually need
+- [ ] `TINYSIEM_TLS_CERT` / `TINYSIEM_TLS_KEY` — set for HTTPS; plain HTTP otherwise
+- [ ] `TINYSIEM_SYSLOG_ALLOW_CIDRS` — restrict to your log-source networks if the syslog ports are reachable beyond localhost
 - [ ] `.env` — present in `.gitignore` (it is by default); never committed
-- [ ] CORS — default is same-origin only; set `TINYSIEM_CORS_ORIGINS` only for the specific origins you need (e.g. a UI hosted on a different port)
 
 ---
 

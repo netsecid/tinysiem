@@ -2,29 +2,28 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current State: v1.3
+## Current State: v1.4
 
-All v1.3 features shipped and tested:
-- All v1.2 features +
-- **Playbooks** (`app/` playbook endpoints + `case_playbook_steps` table): structured YAML response steps on rules, snapshotted into alerts at trigger time, case Playbook tab with step completion, AI generate + refine
-- **Alert Enrichment**: tabbed alert modal (Alert | Logs | Rule), triggering-log view via `GET /events/{event_id}`, rule condition view, escalate-to-case footer, `GET /alerts/{alert_id}/cases`
+All v1.4 "Hardened Tiny" features shipped and tested:
+- All v1.3 features +
+- **Track A (mandatory security):** login brute-force lockout (A1); forced password change + 12-char min policy (A2); token revocation via `token_epoch` + `/auth/logout` (A3); global API key scoped to `/ingest/*` only — **breaking** (A4); syslog CIDR allowlist + size cap (A5); CSP header + self-hosted fonts (A6); CORS same-origin default — **breaking** (A7); built-in TLS env vars (A8); startup guardrails on weak secrets (A9); static `/sbom` (A10)
+- **Track B (SOC QoL):** per-rule alert suppression window (B1); self-monitoring via `tinysiem_internal` source + built-in brute-force rule (B2); backup endpoint + documented restore (B3)
+- **Track C (footprint):** chromadb removed entirely (C1)
 
-**Known DuckDB constraint:** DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, cases tables, `integrations`, `integration_runs`, and `case_playbook_steps`. Dashboard uses DELETE+INSERT pattern (no UNIQUE on `owner`) to avoid this.
+**Known DuckDB constraints:**
+- DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, cases tables, `integrations`, `integration_runs`, `case_playbook_steps`, and `users`. Dashboard uses DELETE+INSERT pattern (no UNIQUE on `owner`) to avoid this.
+- DuckDB 1.1.3 also rejects `ALTER TABLE ... ADD COLUMN ... NOT NULL` ("Adding columns with constraints not yet supported"). Only plain `ADD COLUMN ... DEFAULT <value>` (no `NOT NULL`) works — discovered adding `token_epoch`/`must_change_password` to `users` in v1.4; future schema migrations must drop `NOT NULL` from `ALTER TABLE` statements (it's fine on `CREATE TABLE`).
 
 **Environment variables added in v1.2:**
 - `TINYSIEM_MASTER_KEY` — Fernet key for credential encryption. Optional (503 if integrations are used without it). Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
 
-**Next version: v1.4 — "Hardened Tiny"** — see `docs/specs/roadmap.md` and the approved design `docs/superpowers/specs/2026-07-08-v1.4-hardening-design.md`.
+**Next version: v1.5 — "Analyst Experience"** — see `docs/specs/roadmap.md` and the approved design `docs/superpowers/specs/2026-07-08-v1.5-analyst-experience-design.md`.
 
-### What to build next (v1.4)
+### What to build next (v1.5)
 
-Security controls are **mandatory** features of v1.4, not nice-to-haves. Zero new Python dependencies; chromadb is removed.
+Entity pivot view, IOC watchlists, rule backtesting, saved searches + deep links, per-rule exceptions, CSV export, MITRE coverage matrix. Deferred to v1.6+: TOTP/2FA, deps extras split, audit hash chaining, GeoIP, actor entities.
 
-- **Track A (mandatory security):** login brute-force lockout (A1); forced password change + 12-char min policy (A2); token revocation via `token_epoch` + `/auth/logout` (A3); global API key scoped to `/ingest/*` only — breaking (A4); syslog CIDR allowlist + size cap (A5); CSP header + self-hosted fonts (A6); CORS same-origin default — breaking (A7); built-in TLS env vars (A8); startup guardrails on weak secrets (A9); static `/sbom` (A10)
-- **Track B (SOC QoL):** per-rule alert suppression window (B1); self-monitoring via `tinysiem_internal` source + built-in brute-force rule (B2); backup endpoint + documented restore (B3)
-- **Track C (footprint):** remove chromadb entirely (C1)
-
-**After v1.4 ships:** update this section to "Current State: v1.4" and set next to **v1.5 "Analyst Experience"** (approved design: `docs/superpowers/specs/2026-07-08-v1.5-analyst-experience-design.md`) — entity pivot view, IOC watchlists, rule backtesting, saved searches + deep links, per-rule exceptions, CSV export, MITRE coverage matrix. Deferred to v1.6+: TOTP/2FA, deps extras split, audit hash chaining, GeoIP, actor entities.
+**After v1.5 ships:** update this section to "Current State: v1.5" and set next to v1.6.
 
 ---
 
@@ -63,7 +62,7 @@ curl http://localhost:8000/health
 ### Volume mounts (docker-compose)
 - `./logs:/app/logs:ro` — nginx logs (read-only in tinysiem)
 - `./ui:/app/ui:ro` — UI HTML files (live-reloaded, no rebuild needed)
-- `tinysiem_data:/app/data` — DuckDB + ChromaDB + alerts (named volume, persists)
+- `tinysiem_data:/app/data` — DuckDB + alerts (named volume, persists)
 
 ### URL layout
 - `http://localhost:8000` → redirects to `/ui/events.html`
@@ -89,7 +88,6 @@ decoder/         → YAML decoder engine; decoders/nginx_access.yaml
 storage/
   duckdb_store.py  → _build_where() helper; query_events(); get_event_facets();
                      get_event_histogram(); insert_event(); count_events_in_window()
-  chroma_store.py  → ChromaDB upsert (non-fatal; plumbing for future AI triage)
 rules/           → YAML rule loader + threshold/field_match evaluator
 ```
 
@@ -123,7 +121,6 @@ POST /ingest/raw
   → auth check (Bearer token)
   → decoder engine (YAML regex → normalized dict + UUID)
   → DuckDB insert (events table)
-  → ChromaDB upsert (non-fatal; embeddings for future AI)
   → rule engine (evaluate all YAML rules for this source)
   → alert writer (JSONL append if rule triggers)
 ```
@@ -205,8 +202,7 @@ mitre_technique: "T1595"
 
 `conftest.py` must run before any app module is imported. It:
 1. Sets `TINYSIEM_*` env vars pointing to temp dirs
-2. Stubs `chromadb` in `sys.modules` before any import resolves it
-3. Provides `client` (session-scoped `AsyncClient` via ASGI transport) and `auth_headers` fixtures
+2. Provides `client` (session-scoped `AsyncClient` via ASGI transport) and `auth_headers` fixtures
 
 Do not import `app.*` at module level in test files — conftest order dependency.
 
@@ -214,28 +210,32 @@ Do not import `app.*` at module level in test files — conftest order dependenc
 
 ## Security Constraints (Non-Negotiable)
 
-- All endpoints except `GET /health` require `Authorization: Bearer <TINYSIEM_API_KEY>`
+- All endpoints except `GET /health` and `POST /auth/login` require a valid JWT (obtained via `POST /auth/login`, `Authorization: Bearer <jwt>`); `TINYSIEM_API_KEY` as of v1.4 only authenticates `/ingest/*` (admin+ JWTs also still work there)
 - FastAPI `/docs` and `/redoc` disabled unless `TINYSIEM_DEBUG=true`
 - Container runs as non-root `appuser`
 - Decoder and rule YAML parsed with `yaml.safe_load()` — never `eval()`/`exec()`
 - All ingest payloads validated via Pydantic v2 (422 on malformed)
 - SQL queries use parameterized `?` placeholders throughout — `count_events_in_window` uses `_ALLOWED_FIELDS` allowlist since field name is interpolated
-- CORS allows `*` origins (local tool, acceptable for this version)
+- CORS defaults to same-origin only as of v1.4; set `TINYSIEM_CORS_ORIGINS` (comma-separated) to allow specific additional origins
 
 ---
 
 ## Environment Variables
 
 ```
-TINYSIEM_API_KEY              # required; long random string (used by log shippers)
+TINYSIEM_API_KEY              # required; long random string; scoped to /ingest/* only as of v1.4
 TINYSIEM_DEBUG                # false | true (enables /docs)
 TINYSIEM_DUCKDB_PATH          # /app/data/tinysiem.duckdb
-TINYSIEM_CHROMA_PATH          # /app/data/chroma_store
 TINYSIEM_ALERTS_PATH          # /app/data/alerts/alerts.log
 TINYSIEM_ALERT_MAX_MB         # 50
 TINYSIEM_JWT_SECRET           # required; use a 64-char random string (no default — container won't start without it)
 TINYSIEM_JWT_EXPIRY_HOURS     # 24
 TINYSIEM_SUPERADMIN_PASSWORD  # initial superadmin password (only used when users table is empty); default: admin
+TINYSIEM_SYSLOG_ALLOW_CIDRS   # comma-separated CIDRs allowed to send syslog; empty = allow all sources
+TINYSIEM_SYSLOG_MAX_BYTES     # 8192; oversized syslog messages are dropped and counted in /health
+TINYSIEM_CORS_ORIGINS         # comma-separated allowed cross-origin URLs; empty = same-origin only
+TINYSIEM_TLS_CERT             # path to PEM certificate; set with TINYSIEM_TLS_KEY to serve HTTPS instead of HTTP
+TINYSIEM_TLS_KEY              # path to matching PEM private key
 ```
 
 ---
