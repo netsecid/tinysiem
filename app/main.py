@@ -16,6 +16,7 @@ from app.startup_checks import (
 )
 from app.decoder import engine as decoder_engine
 from app.listeners import syslog as syslog_listener
+from app.admin.router import router as admin_router
 from app.ai.router import router as ai_router
 from app.alerts.router import router as alerts_router
 from app.dashboard.router import router as dashboard_router
@@ -173,6 +174,7 @@ app.include_router(audit_router)
 app.include_router(integrations_router)
 app.include_router(dashboard_router)
 app.include_router(sbom_router)
+app.include_router(admin_router)
 
 app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 

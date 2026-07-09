@@ -945,3 +945,13 @@ def get_audit_facets(
             "actor": _counts("actor"),
             "status": _counts("status"),
         }
+
+
+def export_database(export_dir: str) -> None:
+    """Export all tables to Parquet for backup. export_dir is always server-generated
+    (a tempfile.mkdtemp() path), never user input — EXPORT DATABASE doesn't support
+    parameter binding for the path, so it's escaped defensively rather than bound.
+    """
+    safe_dir = export_dir.replace("'", "''")
+    with _lock:
+        _get_conn().execute(f"EXPORT DATABASE '{safe_dir}' (FORMAT PARQUET)")
