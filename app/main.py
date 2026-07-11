@@ -57,6 +57,8 @@ async def lifespan(app: FastAPI):
     duckdb_store.init_dashboard_tables()
     duckdb_store.init_playbook_table()
     duckdb_store.init_watchlist_table()
+    from app.watchlists import matcher as watchlist_matcher
+    watchlist_matcher.reload_cache()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
     duckdb_store.ensure_superadmin(hash_password(settings.tinysiem_superadmin_password))

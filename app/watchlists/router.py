@@ -13,10 +13,7 @@ router = APIRouter(prefix="/watchlists", tags=["watchlists"])
 
 
 def _reload_matcher_cache() -> None:
-    try:
-        from app.watchlists import matcher as watchlist_matcher
-    except ImportError:
-        return
+    from app.watchlists import matcher as watchlist_matcher
     watchlist_matcher.reload_cache()
 
 
