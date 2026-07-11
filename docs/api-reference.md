@@ -48,6 +48,33 @@ Returns the currently authenticated user's profile. Requires `analyst` role.
 
 ---
 
+### `POST /auth/logout`
+Revokes every existing token for the current user by bumping their `token_epoch` — any JWT issued before this call (including the one used to call it) stops working immediately. Requires `analyst` role.
+
+**Response:**
+```json
+{ "status": "ok" }
+```
+
+---
+
+### `POST /auth/change-password`
+Change the current user's own password. Requires `analyst` role — this is one of the three endpoints still reachable while `must_change_password` is set (the others are `GET /auth/me` and this endpoint itself).
+
+**Request:**
+```json
+{ "current_password": "old-password", "new_password": "a-new-12-char-or-longer-password" }
+```
+
+**Response:**
+```json
+{ "access_token": "<new jwt>", "token_type": "bearer" }
+```
+
+Returns a **new** token with the bumped `token_epoch` so the caller isn't logged out by their own password change. The old token stops working. Returns `401` if `current_password` is wrong, `422` if `new_password` is under 12 characters.
+
+---
+
 ## Health
 
 ### `GET /health`
@@ -61,17 +88,20 @@ No auth required.
   "listeners": {
     "syslog_udp": { "enabled": true, "port": 5140 },
     "syslog_tcp": { "enabled": true, "port": 5141 },
-    "beats_http": { "enabled": true, "path": "/ingest/beats" }
+    "beats_http": { "enabled": true, "path": "/ingest/beats" },
+    "syslog_dropped": { "cidr": 0, "size": 0 }
   }
 }
 ```
+
+`syslog_dropped` counts messages rejected by `TINYSIEM_SYSLOG_ALLOW_CIDRS` (`cidr`) or `TINYSIEM_SYSLOG_MAX_BYTES` (`size`) since container start.
 
 ---
 
 ## Ingest
 
 ### `POST /ingest/raw`
-Ingest a single log line. Requires `admin` role.
+Ingest a single log line. Accepts the API key or an `admin`+ JWT.
 
 **Request:**
 ```json
@@ -88,7 +118,7 @@ Returns `422` if no decoder matches the source + raw combination.
 ---
 
 ### `POST /ingest/file`
-Bulk ingest from an uploaded text file (one log line per line). Requires `admin` role.
+Bulk ingest from an uploaded text file (one log line per line). Accepts the API key or an `admin`+ JWT.
 
 **Query params:** `source` (required)
 
@@ -102,7 +132,7 @@ Bulk ingest from an uploaded text file (one log line per line). Requires `admin`
 ---
 
 ### `POST /ingest/beats`
-Beats-compatible bulk ingest (Elasticsearch ndjson format). Accepts Filebeat / Winlogbeat / Metricbeat output directly. Requires `admin` role.
+Beats-compatible bulk ingest (Elasticsearch ndjson format). Accepts Filebeat / Winlogbeat / Metricbeat output directly. Accepts the API key or an `admin`+ JWT.
 
 Source resolved from: `fields.source` → `agent.type` → `"beats"`.
 
@@ -212,6 +242,7 @@ Query alerts. Requires `analyst` role.
       "event_id": "uuid",
       "source_ip": "10.0.0.1",
       "summary": "10 events matching status_code=404 in 60s",
+      "suppressed_count": 0,
       "triage_status": "open",
       "notes": "",
       "assigned_to": ""
@@ -219,6 +250,8 @@ Query alerts. Requires `analyst` role.
   ]
 }
 ```
+
+`suppressed_count` is the number of times this rule fired for the same `(rule_name, source_ip)` and was suppressed before this alert was emitted — see [Rules → Alert suppression](rules.md#alert-suppression).
 
 ---
 
@@ -592,22 +625,30 @@ Returns `{ event_type: [...], actor: [...], status: [...] }` counts.
 
 ## Users
 
-Requires `superadmin` for create/delete; `admin` for list/get; `superadmin` for role changes.
+All user-management endpoints require `superadmin` role.
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/users` | List all users |
-| `POST` | `/users` | Create user |
-| `GET` | `/users/{username}` | Get user profile |
-| `PUT` | `/users/{username}` | Update role or password |
-| `DELETE` | `/users/{username}` | Delete user |
+| `POST` | `/users` | Create user (`201`) |
+| `PUT` | `/users/{user_id}` | Update username, role, and/or password (all fields optional) |
+| `DELETE` | `/users/{user_id}` | Delete user (`204`) |
+
+There is no `GET /users/{id}` — use `GET /users` and filter client-side.
 
 **Create request:**
 ```json
-{ "username": "alice", "password": "strong-pass", "role": "analyst" }
+{ "username": "alice", "password": "a-12-char-or-longer-password", "role": "analyst" }
 ```
 
-Valid roles: `analyst`, `admin`, `superadmin`.
+Valid roles: `analyst`, `admin`, `superadmin`. `password` must be 12+ characters (`422` otherwise). Returns `409` if the username already exists.
+
+**Update request** (any subset of fields):
+```json
+{ "role": "admin" }
+```
+
+Updating a user via this endpoint — even just a role change — bumps that user's `token_epoch`, revoking all of their existing JWTs; they'll need to log in again. Returns `409` if the update would demote or delete the last remaining superadmin.
 
 ---
 
@@ -635,6 +676,20 @@ Valid roles: `analyst`, `admin`, `superadmin`.
 | `GET` | `/notifications/config` | admin | Current notification config |
 | `POST` | `/notifications/test` | admin | Send test notification (`{ "channel": "email" \| "webhook" }`) |
 
+### SBOM
+
+| Method | Path | Role | Description |
+|---|---|---|---|
+| `GET` | `/sbom` | admin | Installed dependency inventory (`[{ "name": "fastapi", "version": "0.115.5" }, ...]`), generated from `pip freeze` at image build time |
+
+### Backup
+
+| Method | Path | Role | Description |
+|---|---|---|---|
+| `POST` | `/admin/backup` | superadmin | Streams a `tar.gz` (`application/gzip`) containing a Parquet export of the full DuckDB database, the alerts JSONL, and any custom rules/decoders |
+
+See [Backup & Restore](backup.md) for the response shape and the manual restore procedure.
+
 ---
 
 ## MCP Server
@@ -649,9 +704,9 @@ When `TINYSIEM_MCP_ENABLED=true`, a Model Context Protocol server is mounted at 
 |---|---|
 | `list_events` | Search events (source, source_ip, q, limit) |
 | `get_alerts` | Search alerts (severity, rule_name, limit) |
-| `list_cases` | List cases (status, limit) |
-| `get_baselines` | Get baseline health for a source |
-| `run_integration` | Manually trigger an integration poll (integration_id) |
+| `list_parsers` | List all loaded decoders (built-in and custom) |
+| `list_rules` | List all loaded detection rules |
+| `get_health` | Instance health and summary stats (event count, alert count) |
 
 ---
 

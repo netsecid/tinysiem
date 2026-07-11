@@ -95,6 +95,7 @@ Changes to `ui/*.html` don't need a rebuild (the `ui/` directory is a volume mou
 **Cause options:**
 1. Wrong username or password
 2. Account doesn't exist
+3. Account is temporarily locked out (see next section) — check for `429`, not `401`
 
 **Fix:** The default superadmin account is created on first boot with:
 - Username: `admin`
@@ -108,33 +109,67 @@ docker-compose exec -w /app tinysiem python3 -c "
 from app.storage import duckdb_store
 from app.password import hash_password
 duckdb_store.init_db()
-duckdb_store.update_user_password('admin', hash_password('newpassword'))
+user = duckdb_store.get_user_by_username('admin')
+duckdb_store.update_user(user['id'], password_hash=hash_password('a-new-12-char-or-longer-password'))
 print('done')
 "
 ```
+
+This also bumps the user's `token_epoch`, so any existing sessions for that account are invalidated — log in again with the new password.
+
+---
+
+### `429 Too Many Requests` on login
+
+**Cause:** The account (scoped to `username` + source IP) has failed 5 or more login attempts and is locked out with an exponential backoff (60s, doubling, capped at 15 minutes). The response body includes `retry_after_seconds` in the audit log entry (`auth.lockout` event type), though the HTTP response itself is intentionally generic and doesn't reveal timing or whether the account exists.
+
+**Fix:** Wait for the backoff window to elapse, then try again with the correct password — a successful login immediately clears the lockout counter for that `(username, IP)` pair. There is no manual unlock endpoint; the lockout state is in-memory and also clears on container restart.
+
+---
+
+### Stuck on "set a new password" after logging in
+
+**Cause:** The account has `must_change_password` set — this happens automatically for the seeded `admin` superadmin if `TINYSIEM_SUPERADMIN_PASSWORD` was left at its default (`admin`). While this flag is set, every endpoint except `GET /auth/me`, `POST /auth/logout`, and `POST /auth/change-password` returns `403` with `{"detail": "password_change_required"}` — this is enforced server-side, not just a UI nag screen.
+
+**Fix:** Submit a new password (12+ characters) via the panel that appears after login, or call `POST /auth/change-password` directly:
+```bash
+curl -X POST http://localhost:8000/auth/change-password \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"current_password":"admin","new_password":"a-new-12-char-or-longer-password"}'
+```
+The response includes a fresh token — the old one stops working immediately (password change bumps `token_epoch`).
 
 ---
 
 ### `401 Unauthorized` on API requests
 
 **Cause options:**
-1. Using the wrong token type — the ingest API (`/ingest/*`) accepts `Bearer <TINYSIEM_API_KEY>` (the static key from `.env`). The user-facing API accepts `Bearer <JWT>` (obtained from `POST /auth/login`).
+1. **Using the API key on a non-ingest endpoint.** As of v1.4, `TINYSIEM_API_KEY` only authenticates `/ingest/raw`, `/ingest/file`, and `/ingest/beats` — it is rejected everywhere else. This is a common upgrade gotcha: a script that used to query `/events` or `/alerts` with the API key will now get `401` and must switch to a JWT.
 2. JWT has expired (default: 24 hours).
-3. The API key in `.env` doesn't match what you're sending.
+3. JWT was revoked — the user logged out (`POST /auth/logout`), changed their password, or a superadmin updated their account; all of these bump `token_epoch` and invalidate every previously-issued token for that user.
+4. The user account was deleted after the token was issued.
+5. The API key in `.env` doesn't match what you're sending.
 
 **Fix:**
 ```bash
-# Test the static API key
+# Test the static API key — ingest only
 curl -s http://localhost:8000/health   # no auth needed
-curl -s http://localhost:8000/events -H "Authorization: Bearer $TINYSIEM_API_KEY"
+curl -s -X POST http://localhost:8000/ingest/raw \
+  -H "Authorization: Bearer $TINYSIEM_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"source":"nginx","raw":"..."}'
 
-# Get a fresh JWT
+# Everything else needs a JWT
 curl -s -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin"}'
+curl -s http://localhost:8000/events -H "Authorization: Bearer $JWT"
 ```
 
-In the UI, JWT expiry redirects you to `/ui/login.html`. Log in again to get a new token.
+An `admin`+ or `superadmin` JWT also works on the ingest endpoints, in addition to the API key — the API key is the exception now, not the default credential.
+
+In the UI, JWT expiry (or revocation) redirects you to `/ui/login.html`. Log in again to get a new token.
 
 ---
 
@@ -214,12 +249,14 @@ curl -X POST http://localhost:8000/ingest/raw \
 2. Sending to the wrong port (UDP vs TCP)
 3. Firewall blocking the port
 4. No matching decoder for `syslog_rfc3164` or `syslog_rfc5424`
+5. The source IP isn't in `TINYSIEM_SYSLOG_ALLOW_CIDRS` — messages are silently dropped, not rejected with an error
+6. The message exceeds `TINYSIEM_SYSLOG_MAX_BYTES` (default 8192) — also silently dropped
 
 **Fix:**
 ```bash
-# Verify listeners are up
-curl -s http://localhost:8000/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['listeners'])"
-# Expected: {"udp": true, "tcp": true}
+# Verify listeners are up and check drop counters
+curl -s http://localhost:8000/health | python3 -m json.tool
+# Look at listeners.syslog_udp.enabled, listeners.syslog_tcp.enabled, listeners.syslog_dropped
 
 # Test UDP manually
 echo '<14>Jun 29 10:00:00 host sshd[123]: test message' | nc -u localhost 5140
@@ -228,10 +265,12 @@ echo '<14>Jun 29 10:00:00 host sshd[123]: test message' | nc -u localhost 5140
 echo '<14>Jun 29 10:00:00 host sshd[123]: test message' | nc localhost 5141
 ```
 
-If `listeners.udp` or `listeners.tcp` is `false`, check the logs for port-binding errors:
+If `listeners.syslog_udp.enabled` or `listeners.syslog_tcp.enabled` is `false`, check the logs for port-binding errors:
 ```bash
 docker-compose logs tinysiem | grep "syslog\|5140\|5141"
 ```
+
+If `listeners.syslog_dropped.cidr` is increasing, the sending host's IP isn't covered by `TINYSIEM_SYSLOG_ALLOW_CIDRS` — add its CIDR (or leave the variable empty to allow all sources, the default). If `listeners.syslog_dropped.size` is increasing, messages are larger than `TINYSIEM_SYSLOG_MAX_BYTES` — raise the limit or trim the sender's message format.
 
 Set `TINYSIEM_SYSLOG_UDP_PORT=0` or `TINYSIEM_SYSLOG_TCP_PORT=0` to disable a listener.
 
@@ -330,9 +369,11 @@ Compare the extracted field values against what your rule checks. Integer fields
 
 ### Threshold rule fires but count seems wrong
 
-**Cause:** The threshold counter is global for `(rule_name, field_value)` — not per source IP or per user. If 5 different IPs each send 2 × 404s within the window, the rule fires (total = 10).
+**Cause:** The threshold counter is scoped to the rule's own `source` (a rule with `source: nginx` only counts events from `nginx`; a rule with `source: "*"` counts across all sources) but is **not** further scoped per source IP or per user within that source. If 5 different IPs each send 2 × 404s from `nginx` within the window, the rule fires (total = 10).
 
 If you want per-IP thresholds, use a `correlation` rule with `capture_field: source_ip`.
+
+If you're seeing the *built-in* `tinysiem-internal-brute-force` rule fire unexpectedly, remember it only counts `401`s from the `tinysiem_internal` source (self-monitoring feed) — real `401`s from a monitored application like nginx don't contribute to it, by design.
 
 ---
 
@@ -558,6 +599,44 @@ python scripts/ingest_test_logs.py 2000
 **Cause:** The `PATCH /baselines/violations/{id}` endpoint updates the `acknowledged` field in DuckDB. Due to a known DuckDB 1.1.x constraint (UPDATE fails on tables with a PRIMARY KEY + secondary index), the baselines tables use a pattern that avoids secondary indexes. If you added a `CREATE INDEX` to the `baseline_violations` table manually, UPDATE will silently fail.
 
 **Fix:** Do not add secondary indexes to the baselines, cases, integrations, or integration_runs tables. See the DuckDB constraint note in [Development](development.md).
+
+---
+
+## CORS & Browser Access
+
+### Browser console shows a CORS error / "blocked by CORS policy"
+
+**Cause:** As of v1.4, CORS defaults to same-origin only. If the UI is served from a different host or port than the API it's calling (e.g. you're pointing the login page's "Server URL" field at a different origin than the page itself was loaded from), the browser blocks the cross-origin request.
+
+**Fix:** Set `TINYSIEM_CORS_ORIGINS` to the exact origin(s) that need access, comma-separated:
+```dotenv
+TINYSIEM_CORS_ORIGINS=http://192.168.1.50:8000,http://localhost:3000
+```
+Then recreate the container (env var change, needs `up`, not `restart`):
+```bash
+docker-compose up -d
+```
+If the UI and API are served from the same origin (the default single-container setup), you should never need to set this.
+
+---
+
+## TLS
+
+### Container starts but still serves plain HTTP
+
+**Cause:** `TINYSIEM_TLS_CERT` and `TINYSIEM_TLS_KEY` must **both** be set — the entrypoint script only switches to HTTPS when both are present and non-empty.
+
+**Fix:** Verify both are set and point to files that actually exist inside the container:
+```bash
+docker-compose exec tinysiem sh -c 'echo $TINYSIEM_TLS_CERT $TINYSIEM_TLS_KEY; ls -l $TINYSIEM_TLS_CERT $TINYSIEM_TLS_KEY'
+```
+See [Configuration → TLS](configuration.md#tls) for the full setup recipe.
+
+### `curl: (60) SSL certificate problem` when testing
+
+**Cause:** A self-signed certificate isn't trusted by your client by default — this is expected.
+
+**Fix:** Use `curl -k` (or your client's equivalent "insecure"/skip-verification flag) against a self-signed cert, or install a certificate from a real CA (Let's Encrypt, your org's internal CA) for anything beyond local testing.
 
 ---
 

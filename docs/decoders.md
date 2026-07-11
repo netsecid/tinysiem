@@ -132,6 +132,19 @@ Jun 29 10:00:00 host kernel: [DROPPED] IN=eth0 SRC=1.2.3.4 DST=10.0.0.1 PROTO=TC
 
 ---
 
+### tinysiem-internal
+
+Parses the self-monitoring feed — security-relevant audit events (failed logins, lockouts,
+user/integration changes) that TinySIEM mirrors into its own detection pipeline. You won't
+send this format yourself; it's generated internally. See [Rules → Self-Monitoring](rules.md#self-monitoring).
+
+```
+source: tinysiem_internal
+type: json
+```
+
+---
+
 ## Writing a Custom Decoder
 
 1. Create `app/decoder/decoders/custom/<name>.yaml`

@@ -29,6 +29,11 @@ openssl rand -hex 32   # use for API_KEY
 openssl rand -hex 32   # use for JWT_SECRET
 ```
 
+`TINYSIEM_API_KEY` authenticates log ingestion only (`/ingest/raw`, `/ingest/file`,
+`/ingest/beats`) — it will not work against `/events`, `/alerts`, or any other endpoint. Log
+in via the UI (or `POST /auth/login`) to get a JWT for everything else. `TINYSIEM_JWT_SECRET`
+must be at least 32 characters or the container refuses to start.
+
 If you plan to use **API Integrations** (AWS CloudTrail, Google Workspace), also generate a Fernet key:
 ```bash
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
@@ -57,7 +62,14 @@ Default credentials:
 - **Username:** `admin`
 - **Password:** value of `TINYSIEM_SUPERADMIN_PASSWORD` (default: `admin`)
 
-**Change the password immediately** after first login via **Configuration → Users**.
+If you left `TINYSIEM_SUPERADMIN_PASSWORD` at its default, the login page will require you to
+set a new password (12+ characters) immediately after your first login — this is enforced by
+the server, not a suggestion. Set a strong value in `.env` before first boot (see step 1) to
+skip this prompt entirely.
+
+After five failed login attempts for the same username from the same IP, further attempts are
+locked out with an increasing backoff (starting at 60 seconds) — this is expected, not a bug;
+wait for the backoff to elapse and try again with the correct password.
 
 ---
 
@@ -138,6 +150,15 @@ docker-compose restart tinysiem
 ```bash
 docker-compose exec -w /app tinysiem pytest tests/ -v
 ```
+
+---
+
+## 8. Optional: TLS and Backups
+
+For anything beyond localhost, serve HTTPS directly by setting `TINYSIEM_TLS_CERT` /
+`TINYSIEM_TLS_KEY` — see [Configuration → TLS](configuration.md#tls) for the self-signed-cert
+recipe. Trigger an on-demand backup (DuckDB export + alerts + custom rules) with
+`POST /admin/backup` as a superadmin — see [Backup & Restore](backup.md).
 
 ---
 

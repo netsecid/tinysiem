@@ -119,6 +119,37 @@ Default: `300` seconds for `threshold` rules, `0` (disabled) for `field_match` a
 
 ---
 
+## Self-Monitoring
+
+Security-relevant audit events — failed logins, lockouts, and user/integration changes — are
+mirrored into the detection pipeline as their own source, `tinysiem_internal`, alongside
+whatever other logs TinySIEM ingests. This lets ordinary rules (like the built-in
+`tinysiem-internal-brute-force`) alert on attacks against the SIEM itself.
+
+Only a fixed allowlist of event types is fed through — `auth.login`, `auth.lockout`,
+`user.create`/`update`/`delete`, `integration.create`/`update`/`delete` — not every audit
+entry. Login outcomes map onto the existing `status_code` field so the standard threshold
+engine can count them: `401` for a failed login, `200` for success, `429` for a lockout.
+
+Threshold rules are scoped to their own `source`, so a rule with `source: tinysiem_internal`
+only ever counts events from this internal feed — unrelated `401`s from a monitored
+application (e.g. nginx) never contribute to it. Write your own rules against this source the
+same way you'd write one for any other:
+
+```yaml
+name: my-internal-rule
+source: tinysiem_internal
+condition:
+  type: threshold
+  field: status_code
+  value: 401
+  operator: eq
+  threshold_count: 3
+  window_seconds: 120
+```
+
+---
+
 ## Built-in Rules
 
 | Rule | Type | Severity | Description |
@@ -126,6 +157,7 @@ Default: `300` seconds for `threshold` rules, `0` (disabled) for `field_match` a
 | `http-404-spike` | threshold | medium | 10+ 404s in 60s |
 | `nginx-http-500-error` | field_match | high | Any 500 response |
 | `brute-force-then-success` | correlation | high | 5+ 401s followed by 200 from same IP in 5 min |
+| `tinysiem-internal-brute-force` | threshold | high | 5+ failed logins against TinySIEM itself in 5 min (source `tinysiem_internal`, `suppress_seconds: 900`) — see [Self-Monitoring](#self-monitoring) |
 
 ---
 
