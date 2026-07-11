@@ -94,3 +94,28 @@ async def test_bulk_add(client, admin_headers):
     )
     assert r.status_code == 201
     assert len(r.json()["created"]) == 2
+
+
+async def test_csv_import_ragged_row_graceful_degradation(client, admin_headers):
+    """Test that ragged CSV rows (missing columns) are handled gracefully without crashing."""
+    # CSV with a valid first row and a second row missing the "severity" column (ragged row)
+    # When csv.DictReader encounters a short row, missing columns are set to None
+    csv_body = "type,value,severity,note\nip,203.0.113.99,high,valid entry\ncidr,203.0.113.0/25\n"
+    files = {"file": ("watchlist.csv", csv_body, "text/csv")}
+    r = await client.post(
+        "/watchlists/import?list_name=api-test-ragged",
+        files=files,
+        headers=admin_headers,
+    )
+    # Should return 201 (not 500) even with a ragged row
+    assert r.status_code == 201
+    body = r.json()
+    # Valid row should be created
+    assert len(body["created"]) == 1
+    assert body["created"][0]["value"] == "203.0.113.99"
+    # Ragged row should land in errors (not crash the request)
+    assert len(body["errors"]) == 1
+    assert body["errors"][0]["row"] == 1
+    assert body["errors"][0]["value"] == "203.0.113.0/25"
+    # Error message should reflect the validation failure (None stripped to empty string, then validated)
+    assert "severity must be one of" in body["errors"][0]["error"]

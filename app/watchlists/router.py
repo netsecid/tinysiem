@@ -133,8 +133,8 @@ async def import_watchlist_csv(
     for i, row in enumerate(reader):
         try:
             entry = watchlist_store.add_entry(
-                list_name, row["type"].strip(), row["value"].strip(),
-                row["severity"].strip(), (row.get("note") or "").strip() or None, actor.username,
+                list_name, (row.get("type") or "").strip(), (row.get("value") or "").strip(),
+                (row.get("severity") or "").strip(), (row.get("note") or "").strip() or None, actor.username,
             )
             created.append(entry)
         except ValueError as exc:
