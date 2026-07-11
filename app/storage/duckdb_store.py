@@ -721,6 +721,23 @@ def init_cases_tables() -> None:
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_case ON case_comments(case_id)")
 
 
+def init_watchlist_table() -> None:
+    with _lock:
+        _conn.execute("""CREATE TABLE IF NOT EXISTS watchlist_entries (
+            id             VARCHAR PRIMARY KEY,
+            list_name      VARCHAR NOT NULL,
+            indicator_type VARCHAR NOT NULL,
+            value          VARCHAR NOT NULL,
+            severity       VARCHAR NOT NULL,
+            note           VARCHAR,
+            added_by       VARCHAR NOT NULL,
+            added_at       TIMESTAMP NOT NULL,
+            active         BOOLEAN NOT NULL DEFAULT TRUE
+        )""")
+        # Rows get UPDATEd (the `active` toggle) — no secondary index, per the
+        # DuckDB 1.1.3 PRIMARY KEY + secondary-index UPDATE bug (see CLAUDE.md).
+
+
 # ── Log Sources ────────────────────────────────────────────────────────────────
 
 _ACTIVE_MINUTES = 30
