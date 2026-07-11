@@ -338,7 +338,7 @@ const S={
 
 function parseJwt(t){try{const b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b))}catch{return null}}
 function clearAuth(){['ts_jwt','ts_username','ts_role','ts_key'].forEach(k=>localStorage.removeItem(k))}
-function logout(){clearAuth();location.href='/ui/login.html'}
+async function logout(){try{await fetch(S.ep+'/auth/logout',{method:'POST',headers:{Authorization:`Bearer ${S.jwt}`}})}catch(e){}clearAuth();location.href='/ui/login.html'}
 function apiHeaders(){return{'Content-Type':'application/json','Authorization':'Bearer '+(S.jwt||localStorage.getItem('ts_key')||'')}}
 
 function init(){

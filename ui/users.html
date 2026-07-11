@@ -144,7 +144,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 
 function parseJwt(t){try{const b64=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b64))}catch{return null}}
 function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role');localStorage.removeItem('ts_key')}
-function logout(){clearAuth();window.location.href='/ui/login.html'}
+async function logout(){try{await fetch(S.ep+'/auth/logout',{method:'POST',headers:{Authorization:`Bearer ${S.jwt}`}})}catch(e){}clearAuth();window.location.href='/ui/login.html'}
 function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
 function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}
 function toggleTheme(){S.theme=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',S.theme);localStorage.setItem('ts_theme',S.theme)}
@@ -154,6 +154,13 @@ async function api(path,opts={}){
   const res=await fetch(S.ep+path,{...opts,headers:{...opts.headers,'Authorization':'Bearer '+S.jwt}});
   if(res.status===401){clearAuth();window.location.href='/ui/login.html';return null}
   return res;
+}
+
+function formatErrorDetail(detail){
+  if(Array.isArray(detail)){
+    return detail.map(e=>e && e.msg ? e.msg : JSON.stringify(e)).join('; ');
+  }
+  return detail || 'Error';
 }
 
 function roleBadge(role){return `<span class="role-badge role-${esc(role)}">${esc(role)}</span>`}
@@ -174,7 +181,7 @@ async function submitAdd(){
   if(!username||!password){errEl.textContent='Username and password are required.';errEl.style.display='block';return}
   const res=await api('/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,role})});
   if(!res)return;
-  if(!res.ok){const d=await res.json();errEl.textContent=d.detail||'Error';errEl.style.display='block';return}
+  if(!res.ok){const d=await res.json();errEl.textContent=formatErrorDetail(d.detail);errEl.style.display='block';return}
   closeModal('addModal');
   loadUsers();
 }
@@ -191,7 +198,7 @@ async function submitEdit(){
   if(password)body.password=password;
   const res=await api(`/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!res)return;
-  if(!res.ok){const d=await res.json();errEl.textContent=d.detail||'Error';errEl.style.display='block';return}
+  if(!res.ok){const d=await res.json();errEl.textContent=formatErrorDetail(d.detail);errEl.style.display='block';return}
   closeModal('editModal');
   loadUsers();
 }
@@ -200,7 +207,7 @@ async function deleteUser(id,username){
   if(!confirm(`Delete user "${username}"? This cannot be undone.`))return;
   const res=await api(`/users/${id}`,{method:'DELETE'});
   if(!res)return;
-  if(!res.ok){const d=await res.json();alert(d.detail||'Error');return}
+  if(!res.ok){const d=await res.json();alert(formatErrorDetail(d.detail));return}
   loadUsers();
 }
 

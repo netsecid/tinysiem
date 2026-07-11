@@ -341,7 +341,7 @@ const S = {
 
 function parseJwt(t){try{const b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b))}catch{return null}}
 function clearAuth(){['ts_jwt','ts_username','ts_role','ts_key'].forEach(k=>localStorage.removeItem(k))}
-function logout(){clearAuth();window.location.href='/ui/login.html'}
+async function logout(){try{await fetch(S.ep+'/auth/logout',{method:'POST',headers:{Authorization:`Bearer ${S.jwt}`}})}catch(e){}clearAuth();window.location.href='/ui/login.html'}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function fmtTime(iso){if(!iso)return'—';const d=new Date(iso+(iso.endsWith('Z')?'':'Z'));return d.toLocaleString([],{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})}
 

@@ -173,7 +173,7 @@ const SEV_COLORS={critical:'#e85555',high:'#f5c842',medium:'#4d9fff',low:'#3ddc8
 
 function parseJwt(t){try{const b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b))}catch{return null}}
 function clearAuth(){['ts_jwt','ts_username','ts_role','ts_key'].forEach(k=>localStorage.removeItem(k))}
-function logout(){clearAuth();window.location.href='/ui/login.html'}
+async function logout(){try{await fetch(S.ep+'/auth/logout',{method:'POST',headers:{Authorization:`Bearer ${S.jwt}`}})}catch(e){}clearAuth();window.location.href='/ui/login.html'}
 function updateNavUser(){const el=document.getElementById('navUser');const n=localStorage.getItem('ts_username')||'';const r=localStorage.getItem('ts_role')||'';if(el)el.textContent=n+(r?' · '+r:'')}
 function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
 function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}
