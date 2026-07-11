@@ -118,6 +118,11 @@ def _evaluate_rule(rule: dict, event: dict) -> None:
         triggered = _check_operator(event.get(field), operator, value)
 
     elif ctype == "threshold":
+        # The triggering event must itself match field/value — otherwise an unrelated
+        # event (of the right source) re-evaluates a stale aggregate count and fires
+        # using its own id/source_ip, misattributing the alert.
+        if not _check_operator(event.get(field), operator, value):
+            return
         threshold_count = condition.get("threshold_count", 1)
         window_seconds = condition.get("window_seconds", 60)
         rule_source = rule.get("source")
