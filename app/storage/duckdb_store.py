@@ -361,6 +361,15 @@ def get_ip_summary(ip: str, start: datetime, end: datetime) -> dict:
 
 _BACKTEST_OP_SQL = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
 
+# Operators that perform a numeric comparison. The rule engine's _check_operator
+# casts both sides with float(...) and returns False (never matches) if either side
+# isn't a valid float — so these operators are only meaningful against genuinely
+# numeric columns. VARCHAR columns (source, source_ip, method, uri, user_agent,
+# referer) would otherwise silently fall back to SQL's lexicographic string
+# comparison, producing a backtest count that could never occur live.
+_NUMERIC_COMPARISON_OPERATORS = {"gt", "gte", "lt", "lte"}
+_NUMERIC_FIELDS = {"status_code", "response_size"}
+
 _EVENT_COLUMNS = [
     "id", "source", "ingested_at", "event_time", "source_ip", "method",
     "uri", "status_code", "response_size", "user_agent", "referer", "raw", "extra",
@@ -370,11 +379,19 @@ _EVENT_COLUMNS = [
 def _backtest_condition_clause(field: str, operator: str, value) -> tuple[str, list]:
     if field not in _ALLOWED_FIELDS:
         raise ValueError(f"Field '{field}' not permitted in backtest queries")
+    if operator in _NUMERIC_COMPARISON_OPERATORS and field not in _NUMERIC_FIELDS:
+        raise ValueError(
+            f"Operator '{operator}' is only supported for numeric fields "
+            f"(status_code, response_size), not '{field}'"
+        )
     op_sql = _BACKTEST_OP_SQL.get(operator)
     if op_sql:
         return f"{field} {op_sql} ?", [value]
     if operator == "contains":
-        return f"{field} ILIKE ? ESCAPE '\\'", [f"%{_escape_like(str(value))}%"]
+        # Case-sensitive substring match, mirroring the live rule engine's
+        # `str(rule_value) in str(event_value)` (Python `in` is case-sensitive).
+        # DuckDB's LIKE (unlike ILIKE) is case-sensitive by default.
+        return f"{field} LIKE ? ESCAPE '\\'", [f"%{_escape_like(str(value))}%"]
     raise ValueError(f"Unknown operator '{operator}'")
 
 
