@@ -171,6 +171,15 @@ async function selectRule(name,isCustom){
         </div>`:''}
         <div class="msg" id="editMsg"></div>
       </div>
+      <hr class="hr">
+      <div>
+        <div class="section-title">Backtest</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="field-input" id="btDays" type="number" min="1" max="30" value="7" style="width:80px;margin-bottom:0" title="Days to look back">
+          <button class="btn btn-secondary" id="btnBacktest" onclick="runBacktest()">Run Backtest</button>
+        </div>
+        <div id="backtestResult" style="margin-top:10px"></div>
+      </div>
       ${canGen?`<hr class="hr">
       <div>
         <div class="section-title">AI Generator</div>
@@ -292,6 +301,47 @@ function useGenerated(){
   const yaml=document.getElementById('genPreview')?.value;
   const editor=document.getElementById('yamlEditor');
   if(editor)editor.value=yaml;
+}
+
+async function runBacktest(){
+  const name=S.selected;if(!name)return;
+  const days=parseInt(document.getElementById('btDays')?.value||'7',10);
+  const btn=document.getElementById('btnBacktest');
+  const resultEl=document.getElementById('backtestResult');
+  btn.disabled=true;btn.textContent='Running…';
+  resultEl.innerHTML='';
+  try{
+    const r=await api('/rules/'+encodeURIComponent(name)+'/backtest',{method:'POST',body:JSON.stringify({days})});
+    if(!r)return;
+    const data=await r.json();
+    if(!r.ok){
+      resultEl.innerHTML=`<div class="msg msg-err" style="display:block">${esc(data.detail||'Backtest failed')}</div>`;
+      return;
+    }
+    if(!data.supported){
+      resultEl.innerHTML=`<div class="msg" style="display:block;background:var(--surface3);color:var(--text-dim)">${esc(data.reason||'Not supported')}</div>`;
+      return;
+    }
+    const perDayRows=(data.per_day||[]).map(d=>`
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;padding:2px 0">
+        <span>${esc(d.date)}</span><span>${d.count}</span>
+      </div>`).join('')||'<div style="color:var(--text-muted);font-size:11px">No matching events in range</div>';
+    const sampleRows=(data.samples||[]).slice(0,20).map(ev=>`
+      <div style="padding:4px 6px;background:var(--surface3);border:1px solid var(--border);border-radius:4px;margin-bottom:4px;font-family:var(--mono);font-size:11px;word-break:break-all">
+        ${esc(ev.ingested_at||'')} — ${esc(ev.source_ip||'')} — ${esc((ev.raw||'').slice(0,120))}
+      </div>`).join('')||'<div style="color:var(--text-muted);font-size:11px">No sample events</div>';
+    resultEl.innerHTML=`
+      <div style="font-size:13px;margin-bottom:8px">Would have fired <b>${data.would_fire_count}</b> time(s) in the last ${days} day(s) (${esc(data.condition_type)})</div>
+      <div class="section-title">Per Day</div>
+      <div style="margin-bottom:10px">${perDayRows}</div>
+      <div class="section-title">Sample Matches (up to 20)</div>
+      ${sampleRows}
+    `;
+  }catch(e){
+    resultEl.innerHTML=`<div class="msg msg-err" style="display:block">${esc(e.message)}</div>`;
+  }finally{
+    btn.disabled=false;btn.textContent='Run Backtest';
+  }
 }
 
 async function generatePlaybook(){
