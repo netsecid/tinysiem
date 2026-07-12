@@ -118,3 +118,62 @@ def test_excepted_event_excluded_from_threshold_counting():
     finally:
         rule_engine.load_rules()
         rule_engine.load_exceptions()
+
+
+def _insert_event_full(source: str, status_code: int, method: str = "GET", referer=None) -> str:
+    event_id = str(uuid.uuid4())
+    duckdb_store.insert_event({
+        "id": event_id, "source": source, "ingested_at": datetime.utcnow(), "event_time": None,
+        "source_ip": "10.0.0.1", "method": method, "uri": "/x", "status_code": status_code,
+        "response_size": 100, "user_agent": "test", "referer": referer,
+        "raw": f"{source} {status_code}", "extra": {},
+    })
+    return event_id
+
+
+def test_count_events_in_window_exclude_is_null_safe():
+    """Whole-branch review Finding 2: `count_events_in_window`'s exclude clause
+    used `AND NOT (exc_field = ?)`. Under SQL three-valued logic, a row where
+    exc_field IS NULL makes `exc_field = ?` evaluate to NULL, and `NOT NULL` is
+    ALSO NULL (not TRUE) — so that row was silently dropped from COUNT(*), even
+    though it never matched the excepted value. This proves the `IS DISTINCT
+    FROM` fix: NULL-field events must still count, only the genuinely-matching
+    value must be excluded."""
+    marker_source = f"nullsafe-{uuid.uuid4().hex[:8]}"
+
+    # 2 events with referer matching the exception value -> must be excluded.
+    _insert_event_full(marker_source, 200, referer="https://excepted.example")
+    _insert_event_full(marker_source, 200, referer="https://excepted.example")
+    # 2 events with referer NULL -> must NOT be excluded (still counted).
+    _insert_event_full(marker_source, 200, referer=None)
+    _insert_event_full(marker_source, 200, referer=None)
+    # 2 events with a different, non-excepted, non-NULL referer -> still counted.
+    _insert_event_full(marker_source, 200, referer="https://other.example")
+    _insert_event_full(marker_source, 200, referer="https://other.example")
+
+    count = duckdb_store.count_events_in_window(
+        "status_code", 200, 3600, source=marker_source,
+        exclude=[("referer", "https://excepted.example")],
+    )
+    assert count == 4, (
+        "NULL-referer and other-referer events must still count; only the "
+        "2 events with the excepted referer value should be dropped"
+    )
+
+
+def test_count_events_in_window_exclude_coerces_integer_column():
+    """Additional coverage per whole-branch reviewer: exceptions on a genuinely
+    INTEGER-typed column (status_code) must still exclude via DuckDB's implicit
+    VARCHAR->INTEGER coercion, since rule_exceptions.value is always stored as
+    VARCHAR regardless of the excepted field's underlying column type."""
+    marker_source = f"intcoerce-{uuid.uuid4().hex[:8]}"
+
+    _insert_event_full(marker_source, 404, method="GET")
+    _insert_event_full(marker_source, 404, method="GET")
+    _insert_event_full(marker_source, 500, method="GET")
+
+    count = duckdb_store.count_events_in_window(
+        "method", "GET", 3600, source=marker_source,
+        exclude=[("status_code", "404")],
+    )
+    assert count == 1, "the 2 status_code=404 events must be excluded via VARCHAR->INTEGER coercion"

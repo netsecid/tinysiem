@@ -186,7 +186,7 @@ def count_events_in_window(
     for exc_field, exc_value in (exclude or []):
         if exc_field not in _ALLOWED_FIELDS:
             continue
-        clauses += f" AND NOT ({exc_field} = ?)"
+        clauses += f" AND ({exc_field} IS DISTINCT FROM ?)"
         params.append(exc_value)
     with _lock:
         result = conn.execute(
@@ -417,6 +417,7 @@ def _rows_to_events(rows: list[tuple]) -> list[dict]:
 def query_events_matching(
     field: str, operator: str, value, source: Optional[str],
     start: datetime, end: datetime, limit: int = 20,
+    exclude: Optional[list[tuple[str, str]]] = None,
 ) -> dict:
     """Used by rule backtesting (E3) for `field_match` conditions."""
     cond, params = _backtest_condition_clause(field, operator, value)
@@ -430,6 +431,11 @@ def query_events_matching(
     params.append(s)
     conditions.append("ingested_at <= ?")
     params.append(e)
+    for exc_field, exc_value in (exclude or []):
+        if exc_field not in _ALLOWED_FIELDS:
+            continue
+        conditions.append(f"({exc_field} IS DISTINCT FROM ?)")
+        params.append(exc_value)
     where = "WHERE " + " AND ".join(conditions)
 
     conn = _get_conn()
@@ -456,6 +462,7 @@ def query_events_windowed_counts(
     field: str, operator: str, value, source: Optional[str],
     start: datetime, end: datetime, window_seconds: int, threshold_count: int,
     limit: int = 20,
+    exclude: Optional[list[tuple[str, str]]] = None,
 ) -> dict:
     """Used by rule backtesting (E3) for `threshold` conditions. Splits [start, end]
     into fixed consecutive windows of `window_seconds` and counts matching events per
@@ -472,6 +479,11 @@ def query_events_windowed_counts(
     where_params.append(s)
     conditions.append("ingested_at <= ?")
     where_params.append(e)
+    for exc_field, exc_value in (exclude or []):
+        if exc_field not in _ALLOWED_FIELDS:
+            continue
+        conditions.append(f"({exc_field} IS DISTINCT FROM ?)")
+        where_params.append(exc_value)
     where = "WHERE " + " AND ".join(conditions)
 
     conn = _get_conn()

@@ -103,7 +103,7 @@ function applyNav(){const nav=document.getElementById('sidenav');const icon=docu
 function toggleTheme(){const t=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',t);localStorage.setItem('ts_theme',t);if(_chart)renderHistogram(_lastHist)}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function fmtTime(ts){if(!ts)return'—';try{const d=new Date(ts);return d.toLocaleString()}catch{return ts}}
-function sevClass(s){return 'badge sev-'+(s||'unknown').toLowerCase()}
+function sevClass(s){return 'badge sev-'+esc((s||'unknown').toLowerCase())}
 
 async function api(path){
   const res=await fetch(S.ep+path,{headers:{Authorization:'Bearer '+S.jwt}});

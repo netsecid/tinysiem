@@ -20,9 +20,14 @@ def run_backtest(rule: dict, days: int) -> dict:
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
 
+    from app.rules import engine as rule_engine
+    exclude = rule_engine._exception_pairs(rule.get("name", ""))
+
     try:
         if ctype == "field_match":
-            result = duckdb_store.query_events_matching(field, operator, value, source, start, end)
+            result = duckdb_store.query_events_matching(
+                field, operator, value, source, start, end, exclude=exclude,
+            )
             return {
                 "supported": True,
                 "condition_type": "field_match",
@@ -35,6 +40,7 @@ def run_backtest(rule: dict, days: int) -> dict:
             window_seconds = condition.get("window_seconds", 60)
             result = duckdb_store.query_events_windowed_counts(
                 field, operator, value, source, start, end, window_seconds, threshold_count,
+                exclude=exclude,
             )
             return {
                 "supported": True,
