@@ -316,6 +316,49 @@ def get_event_histogram(start: datetime, end: datetime, buckets: int = 60) -> li
     return [{"ts": int(r[0]) * 1000, "count": r[1]} for r in rows]
 
 
+def get_ip_summary(ip: str, start: datetime, end: datetime) -> dict:
+    conn = _get_conn()
+    s = start.replace(tzinfo=None) if start.tzinfo else start
+    e = end.replace(tzinfo=None) if end.tzinfo else end
+    with _lock:
+        bounds = conn.execute(
+            "SELECT MIN(ingested_at), MAX(ingested_at), COUNT(*) FROM events WHERE source_ip = ?",
+            [ip],
+        ).fetchone()
+        method_rows = conn.execute(
+            "SELECT method, COUNT(*) FROM events WHERE source_ip = ? AND method IS NOT NULL "
+            "GROUP BY method ORDER BY COUNT(*) DESC LIMIT 10", [ip],
+        ).fetchall()
+        uri_rows = conn.execute(
+            "SELECT uri, COUNT(*) FROM events WHERE source_ip = ? AND uri IS NOT NULL "
+            "GROUP BY uri ORDER BY COUNT(*) DESC LIMIT 10", [ip],
+        ).fetchall()
+        status_rows = conn.execute(
+            "SELECT status_code, COUNT(*) FROM events WHERE source_ip = ? AND status_code IS NOT NULL "
+            "GROUP BY status_code ORDER BY COUNT(*) DESC LIMIT 10", [ip],
+        ).fetchall()
+        source_rows = conn.execute(
+            "SELECT source, COUNT(*) FROM events WHERE source_ip = ? AND source IS NOT NULL "
+            "GROUP BY source ORDER BY COUNT(*) DESC LIMIT 10", [ip],
+        ).fetchall()
+        hist_rows = conn.execute(
+            """SELECT CAST(epoch(ingested_at) / ? AS BIGINT) * ? AS ts, COUNT(*) AS cnt
+               FROM events WHERE source_ip = ? AND ingested_at >= ? AND ingested_at <= ?
+               GROUP BY ts ORDER BY ts""",
+            [3600, 3600, ip, s, e],
+        ).fetchall()
+    return {
+        "first_seen": bounds[0].isoformat() if bounds[0] else None,
+        "last_seen": bounds[1].isoformat() if bounds[1] else None,
+        "total_events": bounds[2] or 0,
+        "top_sources": [{"value": r[0], "count": r[1]} for r in source_rows],
+        "top_methods": [{"value": r[0], "count": r[1]} for r in method_rows],
+        "top_uris": [{"value": r[0], "count": r[1]} for r in uri_rows],
+        "top_status_codes": [{"value": r[0], "count": r[1]} for r in status_rows],
+        "histogram": [{"ts": int(r[0]) * 1000, "count": r[1]} for r in hist_rows],
+    }
+
+
 # ── Alert triage store ────────────────────────────────────────────────────────
 
 def init_alert_triage_table() -> None:

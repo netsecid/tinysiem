@@ -20,6 +20,7 @@ from app.admin.router import router as admin_router
 from app.ai.router import router as ai_router
 from app.alerts.router import router as alerts_router
 from app.dashboard.router import router as dashboard_router
+from app.entities.router import router as entities_router
 from app.integrations.router import router as integrations_router
 from app.audit.router import router as audit_router
 from app.auth_router import router as auth_router
@@ -180,6 +181,7 @@ app.include_router(dashboard_router)
 app.include_router(sbom_router)
 app.include_router(watchlists_router)
 app.include_router(admin_router)
+app.include_router(entities_router)
 
 app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 
