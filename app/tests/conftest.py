@@ -51,6 +51,7 @@ def _init_db():
     duckdb_store.init_playbook_table()
     duckdb_store.init_watchlist_table()
     duckdb_store.init_saved_searches_table()
+    duckdb_store.init_rule_exceptions_table()
     from app.watchlists import matcher as watchlist_matcher
     watchlist_matcher.reload_cache()
     decoder_engine.load_decoders()

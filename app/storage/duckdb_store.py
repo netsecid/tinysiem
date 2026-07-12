@@ -928,6 +928,20 @@ def init_saved_searches_table() -> None:
         # Insert/delete only — no UPDATE, so no secondary-index concern.
 
 
+def init_rule_exceptions_table() -> None:
+    with _lock:
+        _conn.execute("""CREATE TABLE IF NOT EXISTS rule_exceptions (
+            id         VARCHAR PRIMARY KEY,
+            rule_name  VARCHAR NOT NULL,
+            field      VARCHAR NOT NULL,
+            value      VARCHAR NOT NULL,
+            reason     VARCHAR NOT NULL,
+            added_by   VARCHAR NOT NULL,
+            added_at   TIMESTAMP NOT NULL
+        )""")
+        # Insert/delete only — no UPDATE, so no secondary-index concern.
+
+
 # ── Log Sources ────────────────────────────────────────────────────────────────
 
 _ACTIVE_MINUTES = 30

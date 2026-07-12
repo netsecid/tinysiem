@@ -10,6 +10,7 @@ from app.audit import store as audit
 from app.auth import AuthUser, require_admin, require_analyst
 from app.rules import backtest as backtest_module
 from app.rules import engine as rule_engine
+from app.rules import exceptions_store
 
 router = APIRouter(prefix="/rules", tags=["rules"])
 
@@ -99,6 +100,12 @@ def _validate_playbook(playbook: dict) -> None:
 class RuleRequest(BaseModel):
     name: str
     yaml_text: str
+
+
+class ExceptionRequest(BaseModel):
+    field: str
+    value: str
+    reason: str
 
 
 class GenerateRuleRequest(BaseModel):
@@ -296,6 +303,51 @@ def delete_rule(name: str, actor: AuthUser = Depends(require_admin)):
         "rule.delete", "deleted", "success",
         actor=actor.username, actor_role=actor.role,
         resource_type="rule", resource_id=name,
+        detail={"rule_name": name},
+    )
+    return Response(status_code=204)
+
+
+@router.get("/{name}/exceptions")
+def list_rule_exceptions(name: str, _: AuthUser = Depends(require_admin)):
+    _check_name(name)
+    return {"exceptions": exceptions_store.list_exceptions(name)}
+
+
+@router.post("/{name}/exceptions", status_code=201)
+def add_rule_exception(name: str, req: ExceptionRequest, actor: AuthUser = Depends(require_admin)):
+    _check_name(name)
+    if not req.reason.strip():
+        raise HTTPException(status_code=422, detail="reason is required")
+    try:
+        exc = exceptions_store.add_exception(name, req.field, req.value, req.reason, actor.username)
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err))
+    from app.rules import engine as rule_engine
+    if hasattr(rule_engine, "load_exceptions"):
+        rule_engine.load_exceptions()
+    audit.log_event(
+        "rule.exception.add", "created", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule_exception", resource_id=exc["id"],
+        detail={"rule_name": name, "field": req.field, "value": req.value, "reason": req.reason},
+    )
+    return exc
+
+
+@router.delete("/{name}/exceptions/{exception_id}", status_code=204)
+def delete_rule_exception(name: str, exception_id: str, actor: AuthUser = Depends(require_admin)):
+    _check_name(name)
+    ok = exceptions_store.delete_exception(name, exception_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Exception not found")
+    from app.rules import engine as rule_engine
+    if hasattr(rule_engine, "load_exceptions"):
+        rule_engine.load_exceptions()
+    audit.log_event(
+        "rule.exception.delete", "deleted", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule_exception", resource_id=exception_id,
         detail={"rule_name": name},
     )
     return Response(status_code=204)
