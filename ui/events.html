@@ -406,6 +406,19 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
         <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M5.5 7.5L2.5 4.5H4.5V1h2v3.5h2L5.5 7.5zM1 9.5v1h9v-1H1z"/></svg>
         Export CSV
       </button>
+      <span style="position:relative">
+        <button class="ctrl-btn" onclick="toggleSavedSearchDD()">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M5.5 0l1.3 3.6H11L7.7 5.8l1.2 3.6-3.4-2.3L2 9.4l1.2-3.6L0 3.6h4.2z"/></svg>
+          Saved Searches
+        </button>
+        <div id="savedSearchDD" style="display:none;position:absolute;top:30px;left:0;z-index:50;background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:8px;width:240px;box-shadow:0 4px 16px rgba(0,0,0,.4)">
+          <div style="display:flex;gap:5px;margin-bottom:8px">
+            <input id="ssName" placeholder="Name this search" style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11.5px;padding:4px 6px;outline:none">
+            <button class="ctrl-btn" onclick="saveCurrentSearch()">Save</button>
+          </div>
+          <div id="savedSearchList" style="max-height:200px;overflow-y:auto"></div>
+        </div>
+      </span>
       <button class="ctrl-btn" id="aiAnalyzeBtn" style="display:none;color:var(--accent);border-color:var(--accent)" onclick="openAiModal()">
         ✦ Analyze with AI (<span id="aiSelCount">0</span>)
       </button>
@@ -700,11 +713,43 @@ function buildQS(extra={}){
     const range=r||plain;
     if(range){p.set('status_min',range[0]);p.set('status_max',range[1]);}
   }
+  if(S.fq.status_min && !S.af.status_class) p.set('status_min',S.fq.status_min);
+  if(S.fq.status_max && !S.af.status_class) p.set('status_max',S.fq.status_max);
   // time
   if(tr.start)p.set('start',tr.start);
   if(tr.end)  p.set('end',tr.end);
   Object.entries(extra).forEach(([k,v])=>v!=null&&p.set(k,v));
   return p;
+}
+function hydrateFromURL(){
+  const params=new URLSearchParams(window.location.search);
+  if(![...params.keys()].length)return false;
+  if(params.has('source'))S.fq.source=params.get('source');
+  if(params.has('source_ip'))S.fq.source_ip=params.get('source_ip');
+  if(params.has('status_code'))S.fq.status_code=params.get('status_code');
+  if(params.has('status_min'))S.fq.status_min=params.get('status_min');
+  if(params.has('status_max'))S.fq.status_max=params.get('status_max');
+  if(params.has('method'))S.fq.method=params.get('method');
+  if(params.has('uri'))S.fq.uri=params.get('uri');
+  if(params.has('q'))S.q=params.get('q');
+  if(params.has('start')&&params.has('end')){
+    S.tv='custom';S.cs=params.get('start');S.ce=params.get('end');
+    document.getElementById('timeLabel').textContent='Custom range';
+  }
+  if(params.has('limit'))S.limit=parseInt(params.get('limit'),10)||S.limit;
+  if(params.has('offset'))S.offset=parseInt(params.get('offset'),10)||0;
+  const aliases={source_ip:'ip',status_code:'status'};
+  const searchTokens=Object.entries(S.fq)
+    .filter(([k])=>k!=='status_min'&&k!=='status_max')
+    .map(([k,v])=>`${aliases[k]||k}:${v}`);
+  document.getElementById('searchInput').value=searchTokens.concat(S.q?[S.q]:[]).join(' ');
+  document.getElementById('limitSel').value=String(S.limit);
+  renderChips();
+  return true;
+}
+function serializeCurrentURL(){
+  const qs=buildQS({limit:S.limit,offset:S.offset});
+  history.replaceState(null,'',window.location.pathname+'?'+qs.toString());
 }
 async function get(path,qs){
   const r=await fetch(`${S.ep}${path}?${qs}`,{headers:hdrs()});
@@ -715,6 +760,7 @@ async function get(path,qs){
 
 // ── FETCH ──────────────────────────────────────────────────────────────
 async function fetchAll(){
+  serializeCurrentURL();
   fetchEvents();
   fetchFacets();
   fetchHistogram();
@@ -977,6 +1023,64 @@ function exportCSV(){
   a.download=`tinysiem-${Date.now()}.csv`;a.click();
 }
 
+// ── SAVED SEARCHES ────────────────────────────────────────────────────
+let _savedSearches=[];
+function toggleSavedSearchDD(){
+  const dd=document.getElementById('savedSearchDD');
+  if(dd.style.display!=='none'){dd.style.display='none';return}
+  dd.style.display='block';
+  loadSavedSearches();
+}
+async function loadSavedSearches(){
+  const listEl=document.getElementById('savedSearchList');
+  listEl.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:4px">Loading…</div>';
+  try{
+    const d=await get('/searches',new URLSearchParams({page:'events'}));
+    _savedSearches=d.searches||[];
+    renderSavedSearchList();
+  }catch(e){
+    listEl.innerHTML=`<div style="color:var(--red);font-size:11px;padding:4px">${esc(e.message)}</div>`;
+  }
+}
+function renderSavedSearchList(){
+  const listEl=document.getElementById('savedSearchList');
+  if(!_savedSearches.length){
+    listEl.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:4px">No saved searches</div>';
+    return;
+  }
+  listEl.innerHTML=_savedSearches.map(s=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 2px">
+      <span style="flex:1;font-size:12px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="runSavedSearch('${esc(s.id)}')" title="${esc(s.query_string)}">${esc(s.name)}</span>
+      <button class="chip-rm" onclick="deleteSavedSearch('${esc(s.id)}')" title="Delete">✕</button>
+    </div>`).join('');
+}
+function runSavedSearch(id){
+  const s=_savedSearches.find(x=>x.id===id);
+  if(!s)return;
+  window.location.href='/ui/events.html?'+s.query_string;
+}
+async function deleteSavedSearch(id){
+  try{
+    await fetch(`${S.ep}/searches/${id}`,{method:'DELETE',headers:hdrs()});
+    _savedSearches=_savedSearches.filter(s=>s.id!==id);
+    renderSavedSearchList();
+  }catch(e){/* best-effort */}
+}
+async function saveCurrentSearch(){
+  const nameInput=document.getElementById('ssName');
+  const name=nameInput.value.trim();
+  if(!name)return;
+  const qs=buildQS({limit:S.limit,offset:S.offset}).toString();
+  try{
+    const r=await fetch(`${S.ep}/searches`,{
+      method:'POST',
+      headers:{...hdrs(),'Content-Type':'application/json'},
+      body:JSON.stringify({name,page:'events',query_string:qs}),
+    });
+    if(r.ok){nameInput.value='';loadSavedSearches();}
+  }catch(e){/* best-effort */}
+}
+
 // ── UTILS ─────────────────────────────────────────────────────────────
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function dim(s){return`<span style="color:var(--text-muted)">${s}</span>`}
@@ -1017,6 +1121,7 @@ function copyT(s){navigator.clipboard.writeText(s).catch(()=>{})}
   const _p=parseJwt(S.jwt);
   if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
   updateNavUser();
+  hydrateFromURL();
   boot();
   document.getElementById('sidebarContent').addEventListener('click',e=>{
     const fv=e.target.closest('[data-fkey]');
