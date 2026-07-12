@@ -809,7 +809,7 @@ function rowH(e,anim){
     <td style="color:var(--text-muted);font-size:10px;text-align:center">›</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">${fmtT(e.ingested_at)}</td>
     <td>${e.source?`<span class="badge bsrc">${esc(e.source)}</span>`:'—'}</td>
-    <td style="font-family:var(--mono);font-size:11px">${e.source_ip||dim('—')}</td>
+    <td style="font-family:var(--mono);font-size:11px">${ipLink(e.source_ip)}</td>
     <td>${mBadge(e.method)}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text-dim)" title="${esc(e.uri||'')}">
       ${e.uri?esc(e.uri).slice(0,24)+(e.uri.length>24?'…':''):'—'}</td>
@@ -842,7 +842,9 @@ function toggleRow(row,encoded){
     <div class="exp-fields">${fields.map(([k,v])=>`
       <div class="ef">
         <span class="ef-k">${esc(String(k))}</span>
-        <span class="ef-v ef-filter" data-fk="${esc(String(k))}" data-fv="${esc(String(v))}" title="Click to filter">${esc(String(v))}</span>
+        ${k==='source_ip'
+          ?`<span class="ef-v">${ipLink(v)} <span class="ef-filter" data-fk="${esc(String(k))}" data-fv="${esc(String(v))}" style="cursor:pointer;color:var(--text-muted)" title="Click to filter">(filter)</span></span>`
+          :`<span class="ef-v ef-filter" data-fk="${esc(String(k))}" data-fv="${esc(String(v))}" title="Click to filter">${esc(String(v))}</span>`}
       </div>`).join('')}
     </div>
     <div class="exp-raw-lbl">Raw</div>
@@ -879,7 +881,7 @@ function openRaw(ev,encoded){
     ...Object.entries(xtra(e.extra)),
   ].filter(([,v])=>v!=null&&v!=='');
   document.getElementById('rmFields').innerHTML=fields.map(([k,v])=>
-    `<div class="rm-field"><span class="rf-k">${esc(String(k))}</span><span class="rf-v">${esc(String(v))}</span></div>`
+    `<div class="rm-field"><span class="rf-k">${esc(String(k))}</span><span class="rf-v">${k==='source_ip'?ipLink(v):esc(String(v))}</span></div>`
   ).join('');
   const btn=document.getElementById('rmCopyRaw');
   btn.textContent='Copy Raw';btn.classList.remove('ok');
@@ -978,6 +980,10 @@ function exportCSV(){
 // ── UTILS ─────────────────────────────────────────────────────────────
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function dim(s){return`<span style="color:var(--text-muted)">${s}</span>`}
+function ipLink(ip){
+  if(!ip)return dim('—');
+  return `<a href="/ui/entity.html?ip=${encodeURIComponent(ip)}" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-family:var(--mono)" title="View entity">${esc(ip)}</a>`;
+}
 function fmtT(iso){
   if(!iso)return'—';
   const d=new Date(iso),p=n=>String(n).padStart(2,'0');
