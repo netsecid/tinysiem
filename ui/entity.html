@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TinySIEM — Entity</title>
+<link href="fonts.css" rel="stylesheet">
+<link rel="stylesheet" href="/ui/shared.css">
+<script src="vendor/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0e17;--surface:#12131f;--surface2:#191a2d;--surface3:#1f2138;
+  --border:#252840;--border2:#323560;--text:#cdd0eb;--text-dim:#7b7fa8;
+  --text-muted:#454870;--accent:#4d9fff;--accent-dim:#0d2a50;--err:#ef4444;--ok:#22c55e;
+  --sev-low:#22c55e;--sev-medium:#f59e0b;--sev-high:#ef4444;--sev-critical:#a855f7;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+[data-theme="light"]{
+  --bg:#f0f2f8;--surface:#ffffff;--surface2:#f5f7fc;--surface3:#eaecf5;
+  --border:#dde0f0;--border2:#c0c6e0;--text:#1a1c2e;--text-dim:#4a4f6a;
+  --text-muted:#9096b8;--accent:#2979ff;--accent-dim:#e3ecff;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
+.nav-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
+.nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
+.entity-body{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:18px}
+.entity-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.entity-ip{font-family:var(--mono);font-size:22px;font-weight:600}
+.entity-meta{font-size:12px;color:var(--text-dim)}
+.section-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:8px}
+.card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media (max-width:900px){.grid-2,.grid-4{grid-template-columns:1fr}}
+.stat-box{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.stat-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.stat-value{font-family:var(--mono);font-size:18px;font-weight:600}
+.facet-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}
+.facet-row .fr-label{flex:1;font-family:var(--mono);color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.facet-row .fr-count{color:var(--text-muted);font-family:var(--mono)}
+.badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:3px;font-family:var(--mono);font-size:11px;font-weight:600;line-height:16px;text-transform:uppercase;letter-spacing:.04em}
+.sev-critical{background:#320c0c;color:#e85555;border:1px solid #e85555}
+.sev-high{background:#2a1800;color:#f07832;border:1px solid #f07832}
+.sev-medium{background:#322800;color:#f5c842;border:1px solid #f5c842}
+.sev-low{background:#0a2e1c;color:#3ddc84;border:1px solid #3ddc84}
+.sev-unknown{background:var(--surface3);color:var(--text-muted);border:1px solid var(--border2)}
+.list-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.list-row:last-child{border-bottom:none}
+.list-row a{color:var(--accent);text-decoration:none}
+.list-row a:hover{text-decoration:underline}
+.empty{color:var(--text-muted);font-size:12px;padding:8px 0}
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidenav" id="sidenav">
+    <div class="sidenav-header">
+      <a href="/ui/dashboard.html" class="sidenav-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span class="sidenav-logo-text">TinySIEM</span>
+      </a>
+      <button class="sidenav-collapse-btn" onclick="toggleNav()" title="Toggle sidebar">
+        <svg id="collapseIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+    <ul class="sidenav-items">
+      <li><a href="/ui/dashboard.html" class="nav-link" title="Home"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span class="nav-link-label">Home</span></a></li>
+      <li><a href="/ui/events.html" class="nav-link" title="Events"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span class="nav-link-label">Events</span></a></li>
+      <li><a href="/ui/alerts.html" class="nav-link" title="Alerts"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="nav-link-label">Alerts</span></a></li>
+      <li><a href="/ui/cases.html" class="nav-link" title="Cases"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span class="nav-link-label">Cases</span></a></li>
+      <li><a href="/ui/rules.html" class="nav-link" title="Rules"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span class="nav-link-label">Rules</span></a></li>
+      <li><a href="/ui/parsers.html" class="nav-link" title="Parsers"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span class="nav-link-label">Parsers</span></a></li>
+      <li><a href="/ui/audit.html" class="nav-link" title="Audit Log"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg><span class="nav-link-label">Audit Log</span></a></li>
+      <li><a href="/ui/configuration.html" class="nav-link" title="Configuration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg><span class="nav-link-label">Configuration</span></a></li>
+    </ul>
+    <div class="sidenav-footer">
+      <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">&#9681;</button>
+      <span class="sidenav-user" id="navUser"></span>
+      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">&#9167;</button>
+    </div>
+  </nav>
+  <div class="main-wrap">
+    <div class="topbar">
+      <span class="topbar-title">Entity</span>
+      <button class="nav-btn" onclick="history.back()" title="Back" style="width:auto;padding:0 10px">&larr; Back</button>
+    </div>
+    <div class="entity-body" id="entityBody">
+      <div class="empty">Loading&hellip;</div>
+    </div>
+  </div>
+</div>
+<script>
+const TH=document.documentElement;
+const S={jwt:'',ep:'',navCollapsed:false,ip:''};
+
+function parseJwt(t){try{const b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b))}catch{return null}}
+function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role');localStorage.removeItem('ts_key')}
+async function logout(){try{await fetch(S.ep+'/auth/logout',{method:'POST',headers:{Authorization:`Bearer ${S.jwt}`}})}catch(e){}clearAuth();window.location.href='/ui/login.html'}
+function updateNavUser(){const el=document.getElementById('navUser');const name=localStorage.getItem('ts_username')||'';const role=localStorage.getItem('ts_role')||'';if(el)el.textContent=name+(role?' \xb7 '+role:'')}
+function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
+function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}
+function toggleTheme(){const t=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',t);localStorage.setItem('ts_theme',t);if(_chart)renderHistogram(_lastHist)}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function fmtTime(ts){if(!ts)return'—';try{const d=new Date(ts);return d.toLocaleString()}catch{return ts}}
+function sevClass(s){return 'badge sev-'+(s||'unknown').toLowerCase()}
+
+async function api(path){
+  const res=await fetch(S.ep+path,{headers:{Authorization:'Bearer '+S.jwt}});
+  if(res.status===401){logout();return null}
+  return res;
+}
+
+function statBox(label,value){
+  return `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`;
+}
+
+function facetCard(title,items){
+  const max=Math.max(1,...(items||[]).map(i=>i.count));
+  const rows=(items||[]).length
+    ? items.map(i=>`<div class="facet-row"><span class="fr-label" title="${esc(i.value)}">${esc(i.value)}</span><span class="fr-count">${i.count}</span></div>`).join('')
+    : '<div class="empty">No data</div>';
+  return `<div class="card"><div class="section-title">${esc(title)}</div>${rows}</div>`;
+}
+
+let _chart=null;
+let _lastHist=[];
+function renderHistogram(buckets){
+  _lastHist=buckets;
+  const canvas=document.getElementById('entityHist');
+  if(!canvas)return;
+  const dark=TH.getAttribute('data-theme')!=='light';
+  if(_chart)_chart.destroy();
+  _chart=new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels:buckets.map(b=>new Date(b.ts).toLocaleString()),
+      datasets:[{
+        data:buckets.map(b=>b.count),
+        backgroundColor:dark?'rgba(77,159,255,.35)':'rgba(41,121,255,.3)',
+        borderColor:dark?'rgba(77,159,255,.6)':'rgba(41,121,255,.6)',
+        borderWidth:1,borderRadius:1,
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false},tooltip:{
+        callbacks:{title:i=>i[0].label,label:i=>` ${i.raw} events`},
+      }},
+      scales:{x:{display:false},y:{display:false,beginAtZero:true}},
+    }
+  });
+}
+
+async function loadEntity(){
+  const body=document.getElementById('entityBody');
+  const r=await api('/entities/ip/'+encodeURIComponent(S.ip));
+  if(!r)return;
+  if(!r.ok){
+    body.innerHTML=`<div class="empty">Failed to load entity: HTTP ${r.status}</div>`;
+    return;
+  }
+  const d=await r.json();
+  const alertsRows=(d.related_alerts||[]).length
+    ? d.related_alerts.map(a=>`
+        <div class="list-row">
+          <span class="${sevClass(a.severity)}">${esc(a.severity||'unknown')}</span>
+          <span style="flex:1">${esc(a.rule_name||'—')}</span>
+          <span style="color:var(--text-muted);font-family:var(--mono);font-size:11px">${fmtTime(a.triggered_at)}</span>
+        </div>`).join('')
+    : '<div class="empty">No related alerts</div>';
+  const casesRows=(d.related_cases||[]).length
+    ? d.related_cases.map(c=>`
+        <div class="list-row">
+          <a href="/ui/cases.html?case_id=${esc(c.case_id)}">${esc(c.title)}</a>
+          <span style="color:var(--text-muted);font-size:11px">${esc(c.status||'')}</span>
+        </div>`).join('')
+    : '<div class="empty">No related cases</div>';
+
+  body.innerHTML=`
+    <div class="entity-head">
+      <span class="entity-ip">${esc(d.ip)}</span>
+      <span class="entity-meta">First seen: ${fmtTime(d.first_seen)}</span>
+      <span class="entity-meta">Last seen: ${fmtTime(d.last_seen)}</span>
+    </div>
+    <div class="grid-4">
+      ${statBox('Total events', (d.total_events||0).toLocaleString())}
+      ${statBox('Related alerts', (d.related_alerts||[]).length)}
+      ${statBox('Related cases', (d.related_cases||[]).length)}
+      ${statBox('Top source', (d.top_sources&&d.top_sources[0])?d.top_sources[0].value:'—')}
+    </div>
+    <div class="card">
+      <div class="section-title">Event volume (last 7 days)</div>
+      <canvas id="entityHist" style="width:100%;height:120px;display:block"></canvas>
+    </div>
+    <div class="grid-2">
+      ${facetCard('Top Methods', d.top_methods)}
+      ${facetCard('Top Status Codes', d.top_status_codes)}
+      ${facetCard('Top URIs', d.top_uris)}
+      ${facetCard('Top Sources', d.top_sources)}
+    </div>
+    <div class="card">
+      <div class="section-title">Related Alerts</div>
+      ${alertsRows}
+    </div>
+    <div class="card">
+      <div class="section-title">Related Cases</div>
+      ${casesRows}
+    </div>
+  `;
+  renderHistogram(d.histogram||[]);
+}
+
+(function init(){
+  S.theme=localStorage.getItem('ts_theme')||'dark';
+  S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';
+  if(window.innerWidth<768)S.navCollapsed=true;
+  TH.setAttribute('data-theme',S.theme);
+  applyNav();
+  S.jwt=localStorage.getItem('ts_jwt')||'';
+  S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
+  if(!S.jwt){window.location.href='/ui/login.html';return}
+  const p=parseJwt(S.jwt);
+  if(!p||p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  updateNavUser();
+  const params=new URLSearchParams(window.location.search);
+  S.ip=params.get('ip')||'';
+  if(!S.ip){
+    document.getElementById('entityBody').innerHTML='<div class="empty">No IP specified — open this page as entity.html?ip=&lt;value&gt;</div>';
+    return;
+  }
+  loadEntity();
+})();
+</script>
+</body>
+</html>
