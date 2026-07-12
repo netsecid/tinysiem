@@ -359,6 +359,123 @@ def get_ip_summary(ip: str, start: datetime, end: datetime) -> dict:
     }
 
 
+_BACKTEST_OP_SQL = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+
+_EVENT_COLUMNS = [
+    "id", "source", "ingested_at", "event_time", "source_ip", "method",
+    "uri", "status_code", "response_size", "user_agent", "referer", "raw", "extra",
+]
+
+
+def _backtest_condition_clause(field: str, operator: str, value) -> tuple[str, list]:
+    if field not in _ALLOWED_FIELDS:
+        raise ValueError(f"Field '{field}' not permitted in backtest queries")
+    op_sql = _BACKTEST_OP_SQL.get(operator)
+    if op_sql:
+        return f"{field} {op_sql} ?", [value]
+    if operator == "contains":
+        return f"{field} ILIKE ? ESCAPE '\\'", [f"%{_escape_like(str(value))}%"]
+    raise ValueError(f"Unknown operator '{operator}'")
+
+
+def _rows_to_events(rows: list[tuple]) -> list[dict]:
+    events = []
+    for row in rows:
+        ev = dict(zip(_EVENT_COLUMNS, row))
+        for f in ("ingested_at", "event_time"):
+            if ev[f] is not None:
+                ev[f] = ev[f].isoformat()
+        events.append(ev)
+    return events
+
+
+def query_events_matching(
+    field: str, operator: str, value, source: Optional[str],
+    start: datetime, end: datetime, limit: int = 20,
+) -> dict:
+    """Used by rule backtesting (E3) for `field_match` conditions."""
+    cond, params = _backtest_condition_clause(field, operator, value)
+    conditions = [cond]
+    if source and source != "*":
+        conditions.append("source = ?")
+        params.append(source)
+    s = start.replace(tzinfo=None) if start.tzinfo else start
+    e = end.replace(tzinfo=None) if end.tzinfo else end
+    conditions.append("ingested_at >= ?")
+    params.append(s)
+    conditions.append("ingested_at <= ?")
+    params.append(e)
+    where = "WHERE " + " AND ".join(conditions)
+
+    conn = _get_conn()
+    with _lock:
+        total = conn.execute(f"SELECT COUNT(*) FROM events {where}", params).fetchone()[0]
+        day_rows = conn.execute(
+            f"SELECT CAST(ingested_at AS DATE) AS d, COUNT(*) FROM events {where} GROUP BY d ORDER BY d",
+            params,
+        ).fetchall()
+        sample_rows = conn.execute(
+            f"""SELECT {','.join(_EVENT_COLUMNS)} FROM events {where}
+                ORDER BY ingested_at DESC LIMIT ?""",
+            params + [limit],
+        ).fetchall()
+
+    return {
+        "total": total,
+        "per_day": [{"date": str(r[0]), "count": r[1]} for r in day_rows],
+        "samples": _rows_to_events(sample_rows),
+    }
+
+
+def query_events_windowed_counts(
+    field: str, operator: str, value, source: Optional[str],
+    start: datetime, end: datetime, window_seconds: int, threshold_count: int,
+    limit: int = 20,
+) -> dict:
+    """Used by rule backtesting (E3) for `threshold` conditions. Splits [start, end]
+    into fixed consecutive windows of `window_seconds` and counts matching events per
+    window — an approximation of the rule engine's live sliding window (documented as
+    such; good enough for tuning, not an exact replay)."""
+    cond, where_params = _backtest_condition_clause(field, operator, value)
+    conditions = [cond]
+    if source and source != "*":
+        conditions.append("source = ?")
+        where_params.append(source)
+    s = start.replace(tzinfo=None) if start.tzinfo else start
+    e = end.replace(tzinfo=None) if end.tzinfo else end
+    conditions.append("ingested_at >= ?")
+    where_params.append(s)
+    conditions.append("ingested_at <= ?")
+    where_params.append(e)
+    where = "WHERE " + " AND ".join(conditions)
+
+    conn = _get_conn()
+    with _lock:
+        bucket_rows = conn.execute(
+            f"""SELECT CAST(epoch(ingested_at) / ? AS BIGINT) AS bucket, COUNT(*) AS cnt
+                FROM events {where}
+                GROUP BY bucket ORDER BY bucket""",
+            [window_seconds] + where_params,
+        ).fetchall()
+        sample_rows = conn.execute(
+            f"""SELECT {','.join(_EVENT_COLUMNS)} FROM events {where}
+                ORDER BY ingested_at DESC LIMIT ?""",
+            where_params + [limit],
+        ).fetchall()
+
+    firing_buckets = [r for r in bucket_rows if r[1] >= threshold_count]
+    per_day: dict[str, int] = {}
+    for bucket_ts, cnt in bucket_rows:
+        day = datetime.utcfromtimestamp(bucket_ts * window_seconds).date().isoformat()
+        per_day[day] = per_day.get(day, 0) + cnt
+
+    return {
+        "would_fire_count": len(firing_buckets),
+        "per_day": [{"date": d, "count": c} for d, c in sorted(per_day.items())],
+        "samples": _rows_to_events(sample_rows),
+    }
+
+
 # ── Alert triage store ────────────────────────────────────────────────────────
 
 def init_alert_triage_table() -> None:
