@@ -44,3 +44,27 @@ async def test_owner_cannot_see_or_delete_others_search(client, analyst_headers,
 async def test_requires_auth(client):
     r = await client.get("/searches")
     assert r.status_code == 401
+
+
+async def test_delete_search_is_owner_scoped(client, analyst_headers, admin_headers):
+    # Regression test: verify the DELETE statement itself is owner-scoped,
+    # not just guarded by a preceding SELECT check.
+    # Creates a search as admin, then attempts to delete it as analyst
+    # via the storage layer directly. Verifies deletion fails and search persists.
+    from app.searches.store import create_search, delete_search, list_searches
+
+    # Create a search owned by admin
+    search = create_search("admin", "test", "events", "status_code=500")
+    search_id = search["id"]
+
+    # Verify it exists
+    admin_searches = list_searches("admin")
+    assert any(s["id"] == search_id for s in admin_searches)
+
+    # Attempt to delete it as a different owner (analyst) via storage layer
+    result = delete_search(search_id, "analyst")
+    assert result is False  # deletion should fail
+
+    # Verify the search still exists under admin's ownership
+    admin_searches_after = list_searches("admin")
+    assert any(s["id"] == search_id for s in admin_searches_after)

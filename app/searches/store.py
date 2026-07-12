@@ -46,10 +46,8 @@ def create_search(owner: str, name: str, page: str, query_string: str) -> dict:
 def delete_search(search_id: str, owner: str) -> bool:
     conn = _get_conn()
     with _lock:
-        existing = conn.execute(
-            "SELECT id FROM saved_searches WHERE id = ? AND owner = ?", [search_id, owner]
-        ).fetchone()
-        if not existing:
-            return False
-        conn.execute("DELETE FROM saved_searches WHERE id = ?", [search_id])
-    return True
+        result = conn.execute(
+            "DELETE FROM saved_searches WHERE id = ? AND owner = ? RETURNING id",
+            [search_id, owner],
+        ).fetchall()
+    return len(result) > 0
