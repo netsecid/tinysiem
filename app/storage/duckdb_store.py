@@ -915,6 +915,19 @@ def init_watchlist_table() -> None:
         # DuckDB 1.1.3 PRIMARY KEY + secondary-index UPDATE bug (see CLAUDE.md).
 
 
+def init_saved_searches_table() -> None:
+    with _lock:
+        _conn.execute("""CREATE TABLE IF NOT EXISTS saved_searches (
+            id           VARCHAR PRIMARY KEY,
+            owner        VARCHAR NOT NULL,
+            name         VARCHAR NOT NULL,
+            page         VARCHAR NOT NULL,
+            query_string VARCHAR NOT NULL,
+            created_at   TIMESTAMP NOT NULL
+        )""")
+        # Insert/delete only — no UPDATE, so no secondary-index concern.
+
+
 # ── Log Sources ────────────────────────────────────────────────────────────────
 
 _ACTIVE_MINUTES = 30

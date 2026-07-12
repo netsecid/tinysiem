@@ -34,6 +34,7 @@ from app.sbom.router import router as sbom_router
 from app.sources.router import router as sources_router
 from app.users.router import router as users_router
 from app.watchlists.router import router as watchlists_router
+from app.searches.router import router as searches_router
 from app.password import hash_password
 from app.rules import engine as rule_engine
 from app.storage import duckdb_store
@@ -58,6 +59,7 @@ async def lifespan(app: FastAPI):
     duckdb_store.init_dashboard_tables()
     duckdb_store.init_playbook_table()
     duckdb_store.init_watchlist_table()
+    duckdb_store.init_saved_searches_table()
     from app.watchlists import matcher as watchlist_matcher
     watchlist_matcher.reload_cache()
     decoder_engine.load_decoders()
@@ -180,6 +182,7 @@ app.include_router(integrations_router)
 app.include_router(dashboard_router)
 app.include_router(sbom_router)
 app.include_router(watchlists_router)
+app.include_router(searches_router)
 app.include_router(admin_router)
 app.include_router(entities_router)
 
