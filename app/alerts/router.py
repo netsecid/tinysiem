@@ -1,5 +1,3 @@
-import csv
-import io
 import json
 from collections import Counter
 from datetime import datetime
@@ -13,6 +11,7 @@ from pydantic import BaseModel
 from app.auth import AuthUser, require_analyst
 from app.config import settings
 from app.cases import store as case_store
+from app.storage.csv_export import rows_to_csv
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -92,15 +91,6 @@ _ALERT_CSV_COLUMNS = [
 ]
 
 
-def _alerts_to_csv(alerts: list[dict]) -> str:
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=_ALERT_CSV_COLUMNS, extrasaction="ignore")
-    writer.writeheader()
-    for a in alerts:
-        writer.writerow(a)
-    return buf.getvalue()
-
-
 class TriagePatch(BaseModel):
     status: Optional[str] = None
     notes: Optional[str] = None
@@ -136,7 +126,7 @@ def list_alerts(
     alerts = _apply_filters(alerts, severity, rule_name, source_ip, status, q, start, end)
     alerts.sort(key=lambda a: a.get("triggered_at", ""), reverse=True)
     if format == "csv":
-        csv_text = _alerts_to_csv(alerts[:_CSV_EXPORT_CAP])
+        csv_text = rows_to_csv(alerts[:_CSV_EXPORT_CAP], _ALERT_CSV_COLUMNS)
         return StreamingResponse(
             iter([csv_text]),
             media_type="text/csv",

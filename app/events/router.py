@@ -1,5 +1,3 @@
-import csv
-import io
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -8,6 +6,7 @@ from fastapi.responses import StreamingResponse
 
 from app.auth import AuthUser, require_analyst
 from app.storage import duckdb_store
+from app.storage.csv_export import rows_to_csv
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -23,15 +22,6 @@ _CSV_COLUMNS = [
     "id", "source", "ingested_at", "event_time", "source_ip", "method",
     "uri", "status_code", "response_size", "user_agent", "referer", "raw",
 ]
-
-
-def _events_to_csv(events: list[dict]) -> str:
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=_CSV_COLUMNS, extrasaction="ignore")
-    writer.writeheader()
-    for ev in events:
-        writer.writerow(ev)
-    return buf.getvalue()
 
 
 def _filter_kwargs(
@@ -74,7 +64,7 @@ def list_events(
                                     method, uri, q, start, end)
     if format == "csv":
         result = duckdb_store.query_events(limit=_CSV_EXPORT_CAP, offset=0, **filter_kwargs)
-        csv_text = _events_to_csv(result["events"])
+        csv_text = rows_to_csv(result["events"], _CSV_COLUMNS)
         return StreamingResponse(
             iter([csv_text]),
             media_type="text/csv",
