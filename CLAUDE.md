@@ -17,7 +17,7 @@ All v1.4 "Hardened Tiny" features shipped and tested:
 **Environment variables added in v1.2:**
 - `TINYSIEM_MASTER_KEY` — Fernet key for credential encryption. Optional (503 if integrations are used without it). Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
 
-**Next version: v1.5 — "Analyst Experience"** — see `docs/specs/roadmap.md` and the approved design `docs/superpowers/specs/2026-07-08-v1.5-analyst-experience-design.md`.
+**Next version: v1.5 — "Analyst Experience"** — see the approved design `docs/superpowers/specs/2026-07-08-v1.5-analyst-experience-design.md`.
 
 ### What to build next (v1.5)
 
