@@ -23,7 +23,7 @@ def get_ip_entity(value: str, _: AuthUser = Depends(require_analyst)):
 
     case_ids_seen: set = set()
     related_cases = []
-    for alert in related_alerts:
+    for alert in related_alerts[:50]:
         for c in case_store.get_cases_for_alert(alert.get("alert_id", "")):
             if c["case_id"] not in case_ids_seen:
                 case_ids_seen.add(c["case_id"])
