@@ -420,6 +420,7 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
       <div id="alertEscalateButtons" style="display:flex;gap:.5rem;align-items:center">
         <button id="btnNewCase" class="rm-btn" onclick="showNewCaseForm()">New Case</button>
         <button id="btnAddToCase" class="rm-btn" onclick="toggleAddToCaseDropdown()">Add to Case</button>
+        <button id="btnAddException" class="rm-btn" onclick="showAddExceptionForm()">Add Exception</button>
       </div>
       <!-- Inline new case form (hidden by default) -->
       <div id="newCaseForm" style="display:none;width:100%;padding:.75rem;border-top:1px solid var(--border);margin-top:.25rem">
@@ -434,6 +435,30 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
             </select>
             <button class="rm-btn" onclick="createCaseFromAlert()" style="color:var(--green);border-color:var(--green)">Create</button>
             <button class="rm-btn" onclick="document.getElementById('newCaseForm').style.display='none'">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <!-- Inline add exception form (hidden by default) -->
+      <div id="addExceptionForm" style="display:none;width:100%;padding:.75rem;border-top:1px solid var(--border);margin-top:.25rem">
+        <div style="display:flex;flex-direction:column;gap:.5rem">
+          <div style="font-size:.78rem;color:var(--text-muted)">Except this rule for a field/value — the rule engine will skip matching events entirely.</div>
+          <div style="display:flex;gap:.5rem">
+            <select id="excModalField" style="background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:3px 7px;height:26px">
+              <option value="source_ip">source_ip</option>
+              <option value="source">source</option>
+              <option value="method">method</option>
+              <option value="uri">uri</option>
+              <option value="status_code">status_code</option>
+              <option value="response_size">response_size</option>
+              <option value="user_agent">user_agent</option>
+              <option value="referer">referer</option>
+            </select>
+            <input id="excModalValue" style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12.5px;padding:5px 8px;outline:none" placeholder="Value">
+          </div>
+          <input id="excModalReason" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12.5px;padding:5px 8px;outline:none" placeholder="Reason (required)">
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <button class="rm-btn" onclick="submitAddException()" style="color:var(--green);border-color:var(--green)">Add</button>
+            <button class="rm-btn" onclick="document.getElementById('addExceptionForm').style.display='none'">Cancel</button>
           </div>
         </div>
       </div>
@@ -794,6 +819,7 @@ function openDetail(i){
     </div>`).join('');
   document.getElementById('addToCaseDropdown').style.display='none';
   document.getElementById('newCaseForm').style.display='none';
+  document.getElementById('addExceptionForm').style.display='none';
   switchAlertTab('alert',document.querySelector('.modal-tab-btn[data-tab="alert"]'));
   loadAlertCaseLinkage(al.alert_id);
   document.getElementById('detailModal').classList.add('show');
@@ -802,6 +828,7 @@ function closeDetail(){
   document.getElementById('detailModal').classList.remove('show');
   document.getElementById('addToCaseDropdown').style.display='none';
   document.getElementById('newCaseForm').style.display='none';
+  document.getElementById('addExceptionForm').style.display='none';
 }
 function onDetailBg(e){if(e.target.id==='detailModal') closeDetail()}
 function copyDetailJSON(){
@@ -1196,6 +1223,39 @@ function showNewCaseForm(){
   if(_modalAlert&&form.style.display!=='none'){
     document.getElementById('newCaseTitle').value='Alert: '+(_modalAlert.rule_name||'')+' from '+(_modalAlert.source_ip||'unknown');
     document.getElementById('newCaseSeverity').value=_modalAlert.severity||'medium';
+  }
+}
+
+function showAddExceptionForm(){
+  const form=document.getElementById('addExceptionForm');
+  form.style.display=form.style.display==='none'?'':'none';
+  if(_modalAlert&&form.style.display!=='none'){
+    document.getElementById('excModalField').value='source_ip';
+    document.getElementById('excModalValue').value=_modalAlert.source_ip||'';
+    document.getElementById('excModalReason').value='';
+  }
+}
+async function submitAddException(){
+  if(!_modalAlert||!_modalAlert.rule_name){showToast('This alert has no associated rule','error');return}
+  const field=document.getElementById('excModalField').value;
+  const value=document.getElementById('excModalValue').value.trim();
+  const reason=document.getElementById('excModalReason').value.trim();
+  if(!value||!reason){showToast('Value and reason are required','error');return}
+  try{
+    const r=await apiFetch('/rules/'+encodeURIComponent(_modalAlert.rule_name)+'/exceptions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({field,value,reason}),
+    });
+    if(!r||!r.ok){
+      const err=r?await r.json().catch(()=>({})):{};
+      showToast('Failed to add exception: '+(err.detail||'error'),'error');
+      return;
+    }
+    document.getElementById('addExceptionForm').style.display='none';
+    showToast('Exception added for '+esc(_modalAlert.rule_name));
+  }catch(e){
+    showToast('Error: '+esc(e.message),'error');
   }
 }
 

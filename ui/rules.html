@@ -180,6 +180,28 @@ async function selectRule(name,isCustom){
         </div>
         <div id="backtestResult" style="margin-top:10px"></div>
       </div>
+      <hr class="hr">
+      <div>
+        <div class="section-title">Exceptions</div>
+        <div id="exceptionsList" style="margin-bottom:8px">Loading&hellip;</div>
+        ${(S.role==='admin'||S.role==='superadmin')?`
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <select class="field-input" id="excField" style="width:140px;margin-bottom:0">
+            <option value="source_ip">source_ip</option>
+            <option value="source">source</option>
+            <option value="method">method</option>
+            <option value="uri">uri</option>
+            <option value="status_code">status_code</option>
+            <option value="response_size">response_size</option>
+            <option value="user_agent">user_agent</option>
+            <option value="referer">referer</option>
+          </select>
+          <input class="field-input" id="excValue" placeholder="Value" style="width:140px;margin-bottom:0">
+          <input class="field-input" id="excReason" placeholder="Reason (required)" style="flex:1;min-width:160px;margin-bottom:0">
+          <button class="btn btn-secondary" onclick="addException()">Add Exception</button>
+        </div>
+        <div class="msg" id="excMsg"></div>`:''}
+      </div>
       ${canGen?`<hr class="hr">
       <div>
         <div class="section-title">AI Generator</div>
@@ -215,6 +237,7 @@ async function selectRule(name,isCustom){
       </div>`:''}
     </div>
   `);
+  loadExceptions(name);
 }
 
 function newRule(){
@@ -271,6 +294,53 @@ async function saveRule(){
   const data=await r.json();
   if(r.ok)showMsg('editMsg','Saved','ok');
   else showMsg('editMsg',data.detail||'Error','err');
+}
+
+async function loadExceptions(name){
+  const el=document.getElementById('exceptionsList');
+  if(!el)return;
+  const r=await api('/rules/'+encodeURIComponent(name)+'/exceptions');
+  if(!r){return}
+  if(!r.ok){el.innerHTML='<span style="color:var(--text-muted);font-size:12px">Could not load exceptions (admin only)</span>';return}
+  const data=await r.json();
+  renderExceptions(data.exceptions||[]);
+}
+function renderExceptions(exceptions){
+  const el=document.getElementById('exceptionsList');
+  if(!el)return;
+  if(!exceptions.length){el.innerHTML='<div style="color:var(--text-muted);font-size:12px">No exceptions</div>';return}
+  el.innerHTML=exceptions.map(e=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border)">
+      <span style="font-family:var(--mono)">${esc(e.field)}=${esc(e.value)}</span>
+      <span style="flex:1;color:var(--text-dim)">${esc(e.reason)}</span>
+      <span style="color:var(--text-muted);font-size:11px">${esc(e.added_by)}</span>
+      ${(S.role==='admin'||S.role==='superadmin')?`<button class="btn btn-secondary" style="padding:2px 8px;font-size:11px" data-action="delete-exception" data-id="${esc(e.id)}">Remove</button>`:''}
+    </div>`).join('');
+}
+async function addException(){
+  const name=S.selected;if(!name)return;
+  const field=document.getElementById('excField').value;
+  const value=document.getElementById('excValue').value.trim();
+  const reason=document.getElementById('excReason').value.trim();
+  if(!value||!reason){showMsg('excMsg','Value and reason are required','err');return}
+  const r=await api('/rules/'+encodeURIComponent(name)+'/exceptions',{
+    method:'POST',body:JSON.stringify({field,value,reason}),
+  });
+  if(!r)return;
+  const data=await r.json();
+  if(r.ok){
+    document.getElementById('excValue').value='';
+    document.getElementById('excReason').value='';
+    showMsg('excMsg','Exception added','ok');
+    loadExceptions(name);
+  }else{
+    showMsg('excMsg',data.detail||'Error','err');
+  }
+}
+async function deleteException(exceptionId){
+  const name=S.selected;if(!name)return;
+  const r=await api('/rules/'+encodeURIComponent(name)+'/exceptions/'+encodeURIComponent(exceptionId),{method:'DELETE'});
+  if(r&&r.ok)loadExceptions(name);
 }
 
 async function deleteRule(){
@@ -432,6 +502,10 @@ function load(){
   document.getElementById('ruleList').addEventListener('click',e=>{
     const tr=e.target.closest('tr[data-name]');
     if(tr)selectRule(tr.dataset.name,tr.dataset.custom==='true');
+  });
+  document.getElementById('detailPanel').addEventListener('click',e=>{
+    const btn=e.target.closest('[data-action="delete-exception"]');
+    if(btn)deleteException(btn.dataset.id);
   });
   loadRules();
 }
