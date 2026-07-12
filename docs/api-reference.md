@@ -638,7 +638,7 @@ Returns `503` if `TINYSIEM_CLAUDE_API_KEY` is not set.
 
 ## Rules
 
-`GET` endpoints require `analyst` role; all others require `admin` role.
+`GET /rules`, `GET /rules/{name}`, and `GET /rules/mitre-coverage` require `analyst` role; every other endpoint requires `admin` role.
 
 | Method | Path | Role | Description |
 |---|---|---|---|
