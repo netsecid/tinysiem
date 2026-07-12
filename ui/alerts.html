@@ -329,6 +329,19 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
         <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M5.5 7.5L2.5 4.5H4.5V1h2v3.5h2L5.5 7.5zM1 9.5v1h9v-1H1z"/></svg>
         Export CSV
       </button>
+      <span style="position:relative">
+        <button class="ctrl-btn" onclick="toggleSavedSearchDD()">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M5.5 0l1.3 3.6H11L7.7 5.8l1.2 3.6-3.4-2.3L2 9.4l1.2-3.6L0 3.6h4.2z"/></svg>
+          Saved Searches
+        </button>
+        <div id="savedSearchDD" style="display:none;position:absolute;top:30px;left:0;z-index:50;background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:8px;width:240px;box-shadow:0 4px 16px rgba(0,0,0,.4)">
+          <div style="display:flex;gap:5px;margin-bottom:8px">
+            <input id="ssName" placeholder="Name this search" style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11.5px;padding:4px 6px;outline:none">
+            <button class="ctrl-btn" onclick="saveCurrentSearch()">Save</button>
+          </div>
+          <div id="savedSearchList" style="max-height:200px;overflow-y:auto"></div>
+        </div>
+      </span>
       <div class="ctrl-space"></div>
       <span class="result-info" id="resultInfo">—</span>
       <div class="pager">
@@ -494,6 +507,7 @@ function applyNav(){
   const _p=parseJwt(S.jwt);
   if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
   updateNavUser();
+  hydrateFromURL();
   fetchFacets();
   fetchAlerts();
   document.getElementById('activeFilters').addEventListener('click',e=>{
@@ -528,6 +542,22 @@ function buildQS(){
   if(S.af.rule_name) p.set('rule_name',S.af.rule_name);
   return p.toString();
 }
+function hydrateFromURL(){
+  const params=new URLSearchParams(window.location.search);
+  if(![...params.keys()].length)return false;
+  if(params.has('q')){S.q=params.get('q');document.getElementById('searchInput').value=S.q;}
+  if(params.has('severity'))S.af.severity=params.get('severity');
+  if(params.has('rule_name'))S.af.rule_name=params.get('rule_name');
+  if(params.has('limit')){S.limit=parseInt(params.get('limit'),10)||S.limit;document.getElementById('limitSel').value=String(S.limit);}
+  if(params.has('offset'))S.offset=parseInt(params.get('offset'),10)||0;
+  S.page=Math.floor(S.offset/S.limit)+1;
+  renderChips();
+  return true;
+}
+function serializeCurrentURL(){
+  const qs=buildQS();
+  history.replaceState(null,'',window.location.pathname+'?'+qs);
+}
 
 // ── API ────────────────────────────────────────────────────────────────
 async function api(path){
@@ -541,6 +571,7 @@ async function api(path){
 async function fetchAlerts(){
   const tbody=document.getElementById('tbody');
   tbody.innerHTML='<tr class="empty-row"><td colspan="9"><span class="spinner"></span>Loading…</td></tr>';
+  serializeCurrentURL();
   try{
     const d=await api(`/alerts?${buildQS()}`);
     if(!d) return;
@@ -856,6 +887,72 @@ function exportCSV(){
   const a=document.createElement('a'); a.href=url; a.download='tinysiem_alerts.csv'; a.click();
   URL.revokeObjectURL(url);
 }
+
+// ── SAVED SEARCHES ─────────────────────────────────────────────────────
+let _savedSearches=[];
+function toggleSavedSearchDD(){
+  const dd=document.getElementById('savedSearchDD');
+  if(dd.style.display!=='none'){dd.style.display='none';return}
+  dd.style.display='block';
+  loadSavedSearches();
+}
+async function loadSavedSearches(){
+  const listEl=document.getElementById('savedSearchList');
+  listEl.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:4px">Loading…</div>';
+  try{
+    const d=await api('/searches?page=alerts');
+    if(!d)return;
+    _savedSearches=d.searches||[];
+    renderSavedSearchList();
+  }catch(e){
+    listEl.innerHTML=`<div style="color:var(--red);font-size:11px;padding:4px">${esc(e.message)}</div>`;
+  }
+}
+function renderSavedSearchList(){
+  const listEl=document.getElementById('savedSearchList');
+  if(!_savedSearches.length){
+    listEl.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:4px">No saved searches</div>';
+    return;
+  }
+  listEl.innerHTML=_savedSearches.map(s=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 2px">
+      <span class="ss-run" data-id="${esc(s.id)}" style="flex:1;font-size:12px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.query_string)}">${esc(s.name)}</span>
+      <button class="chip-rm ss-del" data-id="${esc(s.id)}" title="Delete">✕</button>
+    </div>`).join('');
+}
+function runSavedSearch(id){
+  const s=_savedSearches.find(x=>x.id===id);
+  if(!s)return;
+  window.location.href='/ui/alerts.html?'+s.query_string;
+}
+async function deleteSavedSearch(id){
+  try{
+    await apiFetch(`/searches/${id}`,{method:'DELETE'});
+    _savedSearches=_savedSearches.filter(s=>s.id!==id);
+    renderSavedSearchList();
+  }catch(e){/* best-effort */}
+}
+async function saveCurrentSearch(){
+  const nameInput=document.getElementById('ssName');
+  const name=nameInput.value.trim();
+  if(!name)return;
+  const qs=buildQS();
+  try{
+    const r=await apiFetch('/searches',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,page:'alerts',query_string:qs}),
+    });
+    if(r&&r.ok){nameInput.value='';loadSavedSearches();}
+  }catch(e){/* best-effort */}
+}
+// ── SAVED SEARCH LIST EVENT DELEGATION ─────────────────────────────────
+document.getElementById('savedSearchList').addEventListener('click',function(e){
+  const run=e.target.closest('.ss-run');
+  if(run){runSavedSearch(run.dataset.id);return}
+  const del=e.target.closest('.ss-del');
+  if(del){deleteSavedSearch(del.dataset.id);return}
+});
 
 // ── UTILS ──────────────────────────────────────────────────────────────
 function esc(s){
