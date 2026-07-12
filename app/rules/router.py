@@ -323,9 +323,7 @@ def add_rule_exception(name: str, req: ExceptionRequest, actor: AuthUser = Depen
         exc = exceptions_store.add_exception(name, req.field, req.value, req.reason, actor.username)
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err))
-    from app.rules import engine as rule_engine
-    if hasattr(rule_engine, "load_exceptions"):
-        rule_engine.load_exceptions()
+    rule_engine.load_exceptions()
     audit.log_event(
         "rule.exception.add", "created", "success",
         actor=actor.username, actor_role=actor.role,
@@ -341,9 +339,7 @@ def delete_rule_exception(name: str, exception_id: str, actor: AuthUser = Depend
     ok = exceptions_store.delete_exception(name, exception_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Exception not found")
-    from app.rules import engine as rule_engine
-    if hasattr(rule_engine, "load_exceptions"):
-        rule_engine.load_exceptions()
+    rule_engine.load_exceptions()
     audit.log_event(
         "rule.exception.delete", "deleted", "success",
         actor=actor.username, actor_role=actor.role,

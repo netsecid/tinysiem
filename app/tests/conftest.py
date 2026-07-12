@@ -56,6 +56,7 @@ def _init_db():
     watchlist_matcher.reload_cache()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
+    rule_engine.load_exceptions()
     duckdb_store.ensure_superadmin(hash_password(os.environ["TINYSIEM_SUPERADMIN_PASSWORD"]))
 
 

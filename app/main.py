@@ -65,6 +65,7 @@ async def lifespan(app: FastAPI):
     watchlist_matcher.reload_cache()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
+    rule_engine.load_exceptions()
     duckdb_store.ensure_superadmin(hash_password(settings.tinysiem_superadmin_password))
     warn_if_default_superadmin_password()
     warn_if_integrations_missing_master_key()

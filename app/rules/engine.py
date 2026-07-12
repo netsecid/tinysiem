@@ -25,6 +25,36 @@ _suppression_until: dict[tuple[str, str], float] = {}
 _suppressed_counts: dict[tuple[str, str], int] = {}
 _suppression_lock = threading.Lock()
 
+# Rule exceptions cache (E5): {rule_name: [{"field":..., "value":...}, ...]}
+_exceptions: dict[str, list[dict]] = {}
+_exceptions_lock = threading.Lock()
+
+
+def load_exceptions() -> None:
+    global _exceptions
+    from app.rules import exceptions_store
+    rows = exceptions_store.get_all_exceptions()
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(row["rule_name"], []).append({"field": row["field"], "value": row["value"]})
+    with _exceptions_lock:
+        _exceptions = grouped
+
+
+def _is_excepted(rule_name: str, event: dict) -> bool:
+    with _exceptions_lock:
+        rule_exceptions = _exceptions.get(rule_name, [])
+    for exc in rule_exceptions:
+        if str(event.get(exc["field"])) == str(exc["value"]):
+            return True
+    return False
+
+
+def _exception_pairs(rule_name: str) -> list[tuple[str, str]]:
+    with _exceptions_lock:
+        rule_exceptions = _exceptions.get(rule_name, [])
+    return [(exc["field"], exc["value"]) for exc in rule_exceptions]
+
 
 def _suppress_key(rule: dict, event: dict) -> tuple[str, str]:
     return (rule.get("name", ""), str(event.get("source_ip") or ""))
@@ -97,6 +127,9 @@ def reset_corr_state() -> None:
 def evaluate(event: dict) -> None:
     source = event.get("source")
     for rule in _rules:
+        rule_name = rule.get("name", "")
+        if _is_excepted(rule_name, event):
+            continue
         ctype = rule.get("condition", {}).get("type")
         try:
             if ctype == "correlation":
@@ -127,7 +160,10 @@ def _evaluate_rule(rule: dict, event: dict) -> None:
         window_seconds = condition.get("window_seconds", 60)
         rule_source = rule.get("source")
         scope_source = rule_source if rule_source and rule_source != "*" else None
-        count = duckdb_store.count_events_in_window(field, value, window_seconds, source=scope_source)
+        exclude = _exception_pairs(rule.get("name", ""))
+        count = duckdb_store.count_events_in_window(
+            field, value, window_seconds, source=scope_source, exclude=exclude,
+        )
         triggered = count >= threshold_count
 
     else:

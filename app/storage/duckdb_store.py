@@ -170,19 +170,27 @@ def insert_event(event: dict) -> None:
         )
 
 
-def count_events_in_window(field: str, value, window_seconds: int, source: Optional[str] = None) -> int:
+def count_events_in_window(
+    field: str, value, window_seconds: int, source: Optional[str] = None,
+    exclude: Optional[list[tuple[str, str]]] = None,
+) -> int:
     if field not in _ALLOWED_FIELDS:
         raise ValueError(f"Field '{field}' not permitted in threshold queries")
     conn = _get_conn()
     since_ts = datetime.utcnow().timestamp() - window_seconds
     params = [value, since_ts]
-    source_clause = ""
+    clauses = ""
     if source:
-        source_clause = "AND source = ?"
+        clauses += " AND source = ?"
         params.append(source)
+    for exc_field, exc_value in (exclude or []):
+        if exc_field not in _ALLOWED_FIELDS:
+            continue
+        clauses += f" AND NOT ({exc_field} = ?)"
+        params.append(exc_value)
     with _lock:
         result = conn.execute(
-            f"SELECT COUNT(*) FROM events WHERE {field} = ? AND epoch(ingested_at) >= ? {source_clause}",
+            f"SELECT COUNT(*) FROM events WHERE {field} = ? AND epoch(ingested_at) >= ? {clauses}",
             params,
         ).fetchone()
     return result[0] if result else 0
