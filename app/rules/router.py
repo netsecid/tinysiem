@@ -241,6 +241,12 @@ def generate_playbook_endpoint(name: str, actor: AuthUser = Depends(require_admi
     return result
 
 
+@router.get("/mitre-coverage")
+def mitre_coverage(_: AuthUser = Depends(require_analyst)):
+    from app.rules.mitre import compute_coverage
+    return compute_coverage(_list_rule_files())
+
+
 @router.get("/{name}")
 def get_rule(name: str, _: AuthUser = Depends(require_analyst)):
     _check_name(name)
