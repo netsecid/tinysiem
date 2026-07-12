@@ -1050,8 +1050,8 @@ function renderSavedSearchList(){
   }
   listEl.innerHTML=_savedSearches.map(s=>`
     <div style="display:flex;align-items:center;gap:6px;padding:4px 2px">
-      <span style="flex:1;font-size:12px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="runSavedSearch('${esc(s.id)}')" title="${esc(s.query_string)}">${esc(s.name)}</span>
-      <button class="chip-rm" onclick="deleteSavedSearch('${esc(s.id)}')" title="Delete">✕</button>
+      <span class="ss-run" data-id="${esc(s.id)}" style="flex:1;font-size:12px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.query_string)}">${esc(s.name)}</span>
+      <button class="chip-rm ss-del" data-id="${esc(s.id)}" title="Delete">✕</button>
     </div>`).join('');
 }
 function runSavedSearch(id){
@@ -1080,6 +1080,13 @@ async function saveCurrentSearch(){
     if(r.ok){nameInput.value='';loadSavedSearches();}
   }catch(e){/* best-effort */}
 }
+// ── SAVED SEARCH LIST EVENT DELEGATION ─────────────────────────────────
+document.getElementById('savedSearchList').addEventListener('click',function(e){
+  const run=e.target.closest('.ss-run');
+  if(run){runSavedSearch(run.dataset.id);return}
+  const del=e.target.closest('.ss-del');
+  if(del){deleteSavedSearch(del.dataset.id);return}
+});
 
 // ── UTILS ─────────────────────────────────────────────────────────────
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
@@ -1121,8 +1128,7 @@ function copyT(s){navigator.clipboard.writeText(s).catch(()=>{})}
   const _p=parseJwt(S.jwt);
   if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
   updateNavUser();
-  hydrateFromURL();
-  boot();
+  if(hydrateFromURL()){fetchAll()}else{boot()}
   document.getElementById('sidebarContent').addEventListener('click',e=>{
     const fv=e.target.closest('[data-fkey]');
     if(fv) clickFacet(fv.dataset.fkey,fv.dataset.fval);
