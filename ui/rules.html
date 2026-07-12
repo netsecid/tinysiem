@@ -53,6 +53,10 @@ tr.selected td,.list-panel tr:hover td{background:var(--accent-dim)}
 .hr{border:none;border-top:1px solid var(--border);margin:4px 0}
 .field-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;margin-bottom:8px}
 .field-input:focus{border-color:var(--accent)}
+.mitre-col{min-width:150px;flex-shrink:0}
+.mitre-col-hdr{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:6px;white-space:nowrap}
+.mitre-tech{padding:5px 7px;border-radius:4px;margin-bottom:4px;font-family:var(--mono);font-size:11px;cursor:default}
+.mitre-tech-empty{color:var(--text-muted);font-size:11px;padding:5px 0}
 </style>
 </head>
 <body>
@@ -102,6 +106,10 @@ tr.selected td,.list-panel tr:hover td{background:var(--accent-dim)}
         <div class="detail-panel" id="detailPanel" style="display:none"></div>
       </div>
     </div>
+    <div id="mitreSection" style="border-top:1px solid var(--border);padding:14px 20px;overflow-x:auto">
+      <div class="section-title" style="margin-bottom:10px">MITRE ATT&amp;CK Coverage</div>
+      <div id="mitreGrid" style="display:flex;gap:10px;min-width:max-content">Loading&hellip;</div>
+    </div>
   </div>
 </div>
 <script>
@@ -148,6 +156,32 @@ async function loadRules(){
       <td><span class="${sevClass(rule.severity)}">${esc(rule.severity)}</span></td>
       <td>${esc(rule.source)}</td>
     </tr>`).join('');
+}
+
+function mitreCellColor(count){
+  if(count<=0)return'transparent';
+  if(count===1)return'rgba(77,159,255,.18)';
+  if(count===2)return'rgba(77,159,255,.32)';
+  return'rgba(77,159,255,.5)';
+}
+async function loadMitreCoverage(){
+  const grid=document.getElementById('mitreGrid');
+  const r=await api('/rules/mitre-coverage');
+  if(!r)return;
+  if(!r.ok){grid.innerHTML='<span style="color:var(--text-muted);font-size:12px">Could not load coverage</span>';return}
+  const data=await r.json();
+  grid.innerHTML=(data.tactics||[]).map(t=>{
+    const techRows=(t.techniques||[]).length
+      ? t.techniques.map(tech=>`
+          <div class="mitre-tech" style="background:${mitreCellColor(tech.count)}" title="${esc(tech.rules.join(', '))}">
+            ${esc(tech.technique)} <span style="color:var(--text-muted)">(${tech.count})</span>
+          </div>`).join('')
+      : '<div class="mitre-tech-empty">—</div>';
+    return `<div class="mitre-col">
+      <div class="mitre-col-hdr">${esc(t.tactic)}</div>
+      ${techRows}
+    </div>`;
+  }).join('');
 }
 
 async function selectRule(name,isCustom){
@@ -508,6 +542,7 @@ function load(){
     if(btn)deleteException(btn.dataset.id);
   });
   loadRules();
+  loadMitreCoverage();
 }
 window.addEventListener('DOMContentLoaded',load);
 </script>
