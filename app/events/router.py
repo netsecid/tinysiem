@@ -1,7 +1,10 @@
+import csv
+import io
 from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from app.auth import AuthUser, require_analyst
 from app.storage import duckdb_store
@@ -14,6 +17,21 @@ _FILTER_PARAMS = dict(
     method=None, uri=None, q=None,
     start=None, end=None,
 )
+
+_CSV_EXPORT_CAP = 10_000
+_CSV_COLUMNS = [
+    "id", "source", "ingested_at", "event_time", "source_ip", "method",
+    "uri", "status_code", "response_size", "user_agent", "referer", "raw",
+]
+
+
+def _events_to_csv(events: list[dict]) -> str:
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=_CSV_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+    for ev in events:
+        writer.writerow(ev)
+    return buf.getvalue()
 
 
 def _filter_kwargs(
@@ -49,12 +67,22 @@ def list_events(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    format: Optional[str] = None,
     _: AuthUser = Depends(require_analyst),
 ):
+    filter_kwargs = _filter_kwargs(source, source_ip, status_code, status_min, status_max,
+                                    method, uri, q, start, end)
+    if format == "csv":
+        result = duckdb_store.query_events(limit=_CSV_EXPORT_CAP, offset=0, **filter_kwargs)
+        csv_text = _events_to_csv(result["events"])
+        return StreamingResponse(
+            iter([csv_text]),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="events.csv"'},
+        )
     return duckdb_store.query_events(
         limit=limit, offset=offset,
-        **_filter_kwargs(source, source_ip, status_code, status_min, status_max,
-                         method, uri, q, start, end),
+        **filter_kwargs,
     )
 
 
