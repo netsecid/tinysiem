@@ -51,10 +51,12 @@ One accepted tradeoff: there's a brief instant before `nav.js` runs where the na
 `ui/configuration.html` → `ui/settings.html`. Its 9 existing sections (Instance Info, Users & Access, Alert Notifications, Log Retention, Log Ingestion, Smart Baselines, Integrations, Log Sources, Reports) currently stack vertically on one long-scrolling page. This spec adds a horizontal tab strip at the top of the content area:
 
 ```
-[ Instance | Users & Access | Notifications | Retention | Ingestion | Baselines | Integrations | Sources | Reports ]
+[ Instance | Users & Access | Notifications | Retention | Ingestion | Baselines | Integrations | Sources | Reports | AI Config ]
 ```
 
-Clicking a tab swaps the panel shown below it; only one section's content is visible at a time, eliminating the long scroll. Each panel's *internal* fields, buttons, and behavior are unchanged — this is purely a navigation-within-the-page change, styled via `nav.css`'s new tab-strip classes.
+Clicking a tab swaps the panel shown below it; only one section's content is visible at a time, eliminating the long scroll. Each of the 9 existing panels' *internal* fields, buttons, and behavior are unchanged — this is purely a navigation-within-the-page change, styled via `nav.css`'s new tab-strip classes.
+
+**AI Config** is a new 10th tab, added now as a reserved placeholder for Sub-project B (the AI provider abstraction layer — choosing Anthropic/OpenAI/DeepSeek/Ollama/etc., API keys, base URLs). In this spec it renders a simple "Coming soon" panel with no functional fields or backend calls — the tab exists so the Settings navigation doesn't need to change shape again when Sub-project B ships; only its panel content gets filled in later.
 
 ## Profile Dropdown
 
@@ -92,4 +94,4 @@ This is almost entirely a frontend change with no new backend endpoints (only th
 
 - Visual restyle of existing page *content* (Events/Alerts/Cases/Rules/Parsers/Audit/Settings-panel-internals/Users) — future phase(s), one page at a time, once this shell is validated in daily use.
 - Dashboard enhancements (time-range picker, clickable pivot-to-entity-view charts) — future phase.
-- AI provider abstraction (Sub-project B) and the Home AI search itself (Sub-project C) — separate specs, B ships before C.
+- AI provider abstraction (Sub-project B) and the Home AI search itself (Sub-project C) — separate specs, B ships before C. This spec only reserves the "AI Config" tab slot in Settings; Sub-project B's spec defines what actually goes in it.
