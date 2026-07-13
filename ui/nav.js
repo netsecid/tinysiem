@@ -30,7 +30,7 @@ function toggleProfileMenu(){
   if(dd) dd.classList.toggle('show');
 }
 
-function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function navEsc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 
 function renderNav(){
   const root=document.getElementById('nav-root');
@@ -41,7 +41,7 @@ function renderNav(){
   const path=window.location.pathname;
   const linksHtml=NAV_ITEMS.map(item=>{
     const active=path===item.href?' active':'';
-    return `<a href="${item.href}" class="top-nav-link${active}">${esc(item.label)}</a>`;
+    return `<a href="${item.href}" class="top-nav-link${active}">${navEsc(item.label)}</a>`;
   }).join('');
   const auditItem=role==='superadmin'
     ? `<a href="/ui/audit.html" class="profile-dropdown-item">Audit Log</a>`
@@ -55,11 +55,11 @@ function renderNav(){
       <div class="top-nav-links">${linksHtml}</div>
       <div class="top-nav-right">
         <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">&#9681;</button>
-        <button class="profile-avatar" onclick="toggleProfileMenu()" title="${esc(username)}">${esc(initial)}</button>
+        <button class="profile-avatar" onclick="toggleProfileMenu()" title="${navEsc(username)}">${navEsc(initial)}</button>
         <div class="profile-dropdown" id="profileDropdown">
           <div class="profile-dropdown-header">
-            <div class="profile-dropdown-name">${esc(username)}</div>
-            <div class="profile-dropdown-role">${esc(role)}</div>
+            <div class="profile-dropdown-name">${navEsc(username)}</div>
+            <div class="profile-dropdown-role">${navEsc(role)}</div>
           </div>
           <a href="/ui/settings.html" class="profile-dropdown-item">Settings</a>
           ${auditItem}
