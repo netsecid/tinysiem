@@ -1,6 +1,5 @@
 import json
 from datetime import datetime, timezone
-from typing import Optional
 
 _VALID_TARGETS = {"events", "alerts", "cases"}
 
