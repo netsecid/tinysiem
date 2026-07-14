@@ -9,6 +9,10 @@ from app.crypto import MasterKeyNotConfigured
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 
+class HomeSearchRequest(BaseModel):
+    question: Annotated[str, Field(min_length=1, max_length=1000)]
+
+
 class ExplainAlertRequest(BaseModel):
     alert_id: str
 
@@ -38,6 +42,17 @@ def analyze_events_endpoint(req: AnalyzeEventsRequest, actor: AuthUser = Depends
         return enrichment.analyze_events(req.event_ids, req.question, actor=actor.username)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI provider error: {exc}")
+
+
+@router.post("/search")
+def home_search_endpoint(req: HomeSearchRequest, actor: AuthUser = Depends(require_analyst)):
+    from app.ai import home_search
+    try:
+        return home_search.run_search(req.question, actor=actor.username)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
