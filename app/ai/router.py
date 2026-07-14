@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.auth import AuthUser, require_admin, require_analyst
+from app.crypto import MasterKeyNotConfigured
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -87,13 +88,16 @@ def save_ai_config_endpoint(req: SaveAIConfigRequest, actor: AuthUser = Depends(
             if not has_matching_key:
                 raise HTTPException(status_code=422, detail=f"api_key is required for {req.provider}")
 
-    cfg = config_store.save_ai_config(
-        provider=req.provider,
-        model=req.model,
-        base_url=req.base_url if req.provider == "custom" else None,
-        api_key=req.api_key,
-        updated_by=actor.username,
-    )
+    try:
+        cfg = config_store.save_ai_config(
+            provider=req.provider,
+            model=req.model,
+            base_url=req.base_url if req.provider == "custom" else None,
+            api_key=req.api_key,
+            updated_by=actor.username,
+        )
+    except MasterKeyNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e))
     audit.log_event(
         "ai_config.update", "updated", "success",
         actor=actor.username, actor_role=actor.role,

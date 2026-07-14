@@ -198,6 +198,21 @@ async def test_test_ai_config_success(client, admin_headers):
     assert body["detail"] == "OK"
 
 
+async def test_put_ai_config_without_master_key_returns_503(client, admin_headers, monkeypatch):
+    """When TINYSIEM_MASTER_KEY is unset, saving a config with an api_key must not leak
+    an uncaught 500/traceback from crypto.encrypt() — it should be converted to a clean
+    503, matching the pattern used by the integrations router."""
+    from app.config import settings
+    monkeypatch.setattr(settings, "tinysiem_master_key", "")
+    r = await client.put(
+        "/ai/config",
+        json={"provider": "anthropic", "model": "claude-sonnet-4-6", "api_key": "sk-ant-test"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 503
+    assert "TINYSIEM_MASTER_KEY" in r.json()["detail"]
+
+
 async def test_test_ai_config_provider_error_returns_failure_not_exception(client, admin_headers):
     await client.put(
         "/ai/config",
