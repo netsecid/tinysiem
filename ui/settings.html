@@ -223,11 +223,41 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         </div>
         </div>
 
-        <!-- AI Config (placeholder — reserved for a future sub-project) -->
+        <!-- AI Config (admin+) -->
         <div class="settings-panel" data-panel="ai-config">
-        <div class="card">
+        <div class="card" id="aiConfigCard" style="display:none">
           <div class="section-label">AI Config</div>
-          <div style="color:var(--text-muted);font-size:12px">Coming soon — configure which AI provider (Anthropic, OpenAI, DeepSeek, Ollama, etc.) powers TinySIEM's AI features.</div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Provider</label>
+            <select id="aiProvider" onchange="onAIProviderChange()" style="width:100%;max-width:360px;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+              <option value="anthropic">Anthropic</option>
+              <option value="openai">OpenAI</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="custom">Custom (OpenAI-Compatible)</option>
+            </select>
+          </div>
+          <div style="margin-bottom:12px" id="aiModelPresetRow">
+            <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Model</label>
+            <select id="aiModelPreset" style="width:100%;max-width:360px;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px"></select>
+          </div>
+          <div style="margin-bottom:12px;display:none" id="aiModelCustomRow">
+            <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Model</label>
+            <input id="aiModelCustom" type="text" placeholder="e.g. llama3.1" style="width:100%;max-width:360px;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+          </div>
+          <div style="margin-bottom:12px;display:none" id="aiBaseUrlRow">
+            <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Base URL</label>
+            <input id="aiBaseUrl" type="text" placeholder="http://localhost:11434/v1" style="width:100%;max-width:360px;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+          </div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">API Key</label>
+            <input id="aiApiKey" type="password" placeholder="(leave blank to keep the existing key)" style="width:100%;max-width:360px;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+            <div id="aiApiKeyStatus" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn-prim" onclick="saveAIConfig()">Save</button>
+            <button class="btn-sec" onclick="testAIConfig()">Test Connection</button>
+          </div>
+          <div class="msg" id="aiConfigMsg"></div>
         </div>
         </div>
 
@@ -284,10 +314,12 @@ async function loadConfig(){
       document.getElementById('retentionCard').style.display='';
       document.getElementById('ingestCard').style.display='';
       document.getElementById('integrationsCard').style.display='';
+      document.getElementById('aiConfigCard').style.display='';
       document.getElementById('sendReport').style.display='';
       loadNotifications();
       loadRetention();
       loadIntegrations();
+      loadAIConfig();
     }
   }
 }
@@ -317,6 +349,76 @@ async function testNotify(channel){
   if(d.email) parts.push('Email: '+d.email);
   if(d.webhook) parts.push('Webhook: '+d.webhook);
   showMsg('notifMsg',parts.join(' | ')||'Done','info');
+}
+
+const AI_PROVIDER_PRESETS={
+  anthropic:{models:['claude-sonnet-4-6','claude-opus-4-8']},
+  openai:{models:['gpt-4o','gpt-4o-mini']},
+  deepseek:{models:['deepseek-chat','deepseek-reasoner']},
+};
+
+function onAIProviderChange(){
+  const provider=document.getElementById('aiProvider').value;
+  const presetRow=document.getElementById('aiModelPresetRow');
+  const customRow=document.getElementById('aiModelCustomRow');
+  const baseUrlRow=document.getElementById('aiBaseUrlRow');
+  if(provider==='custom'){
+    presetRow.style.display='none';
+    customRow.style.display='';
+    baseUrlRow.style.display='';
+  }else{
+    presetRow.style.display='';
+    customRow.style.display='none';
+    baseUrlRow.style.display='none';
+    const sel=document.getElementById('aiModelPreset');
+    sel.innerHTML=AI_PROVIDER_PRESETS[provider].models.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  }
+}
+
+async function loadAIConfig(){
+  const res=await api('/ai/config');
+  if(!res) return;
+  const d=await res.json();
+  if(d.configured){
+    document.getElementById('aiProvider').value=d.provider;
+    onAIProviderChange();
+    if(d.provider==='custom'){
+      document.getElementById('aiModelCustom').value=d.model;
+      document.getElementById('aiBaseUrl').value=d.base_url||'';
+    }else{
+      document.getElementById('aiModelPreset').value=d.model;
+    }
+    document.getElementById('aiApiKeyStatus').textContent=d.has_api_key?'An API key is already configured. Leave blank to keep it.':'No API key stored.';
+  }else{
+    onAIProviderChange();
+    document.getElementById('aiApiKeyStatus').textContent='Not yet configured.';
+  }
+}
+
+async function saveAIConfig(){
+  const provider=document.getElementById('aiProvider').value;
+  const isCustom=provider==='custom';
+  const model=isCustom?document.getElementById('aiModelCustom').value.trim():document.getElementById('aiModelPreset').value;
+  const base_url=isCustom?document.getElementById('aiBaseUrl').value.trim():null;
+  const api_key=document.getElementById('aiApiKey').value||undefined;
+  if(isCustom&&!base_url){showMsg('aiConfigMsg','Base URL is required for the custom provider','err');return}
+  const res=await api('/ai/config',{method:'PUT',body:JSON.stringify({provider,model,base_url,api_key})});
+  if(!res) return;
+  if(res.ok){
+    document.getElementById('aiApiKey').value='';
+    showMsg('aiConfigMsg','Saved','info');
+    loadAIConfig();
+  }else{
+    const e=await res.json();
+    showMsg('aiConfigMsg','Error: '+(e.detail||res.status),'err');
+  }
+}
+
+async function testAIConfig(){
+  const res=await api('/ai/config/test',{method:'POST'});
+  if(!res) return;
+  const d=await res.json();
+  showMsg('aiConfigMsg',d.success?'✓ Connection successful: '+d.detail:'✗ '+d.detail,d.success?'info':'err');
 }
 
 async function loadRetention(){
