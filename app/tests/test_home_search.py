@@ -95,3 +95,101 @@ def test_extract_search_intent_raises_when_ai_unconfigured():
     from app.ai.home_search import extract_search_intent
     with pytest.raises(RuntimeError, match="AI features require configuration"):
         extract_search_intent("show me alerts")
+
+
+def test_run_search_alerts_target_builds_link_and_answer():
+    from app.ai import home_search
+    _configure_ai()
+
+    mock_intent_result = MagicMock()
+    mock_intent_result.text = json.dumps({"target": "alerts", "filters": {"severity": "critical"}})
+    mock_answer_result = MagicMock()
+    mock_answer_result.text = "There are 2 critical alerts, both brute-force attempts from 192.168.1.50."
+
+    with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", side_effect=[mock_intent_result, mock_answer_result]):
+        with patch("app.ai.home_search._query_alerts", return_value=(2, {"severity_breakdown": {"critical": 2}})):
+            result = home_search.run_search("show me critical alerts", actor="analyst1")
+
+    assert result["answer"] == "There are 2 critical alerts, both brute-force attempts from 192.168.1.50."
+    assert result["link"] == "/ui/alerts.html?severity=critical"
+    assert result["link_label"] == "View 2 alerts"
+
+
+def test_run_search_events_target_builds_link_with_multiple_filters():
+    from app.ai import home_search
+    _configure_ai()
+
+    mock_intent_result = MagicMock()
+    mock_intent_result.text = json.dumps({"target": "events", "filters": {"status_code": 404, "method": "GET"}})
+    mock_answer_result = MagicMock()
+    mock_answer_result.text = "12 GET requests returned 404."
+
+    with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", side_effect=[mock_intent_result, mock_answer_result]):
+        with patch("app.ai.home_search._query_events", return_value=(12, {"status_code_breakdown": {"404": 12}})):
+            result = home_search.run_search("show me 404 GET requests", actor="analyst1")
+
+    assert result["link"] == "/ui/events.html?status_code=404&method=GET"
+    assert result["link_label"] == "View 12 events"
+
+
+def test_run_search_cases_target_builds_link():
+    from app.ai import home_search
+    _configure_ai()
+
+    mock_intent_result = MagicMock()
+    mock_intent_result.text = json.dumps({"target": "cases", "filters": {"status": "open"}})
+    mock_answer_result = MagicMock()
+    mock_answer_result.text = "There are 3 open cases."
+
+    with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", side_effect=[mock_intent_result, mock_answer_result]):
+        with patch("app.ai.home_search._query_cases", return_value=(3, {"status_breakdown": {"open": 3}})):
+            result = home_search.run_search("open cases", actor="analyst1")
+
+    assert result["link"] == "/ui/cases.html?status=open"
+    assert result["link_label"] == "View 3 cases"
+
+
+def test_run_search_zero_results_still_returns_link():
+    from app.ai import home_search
+    _configure_ai()
+
+    mock_intent_result = MagicMock()
+    mock_intent_result.text = json.dumps({"target": "alerts", "filters": {"severity": "critical"}})
+    mock_answer_result = MagicMock()
+    mock_answer_result.text = "No critical alerts found in that window."
+
+    with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", side_effect=[mock_intent_result, mock_answer_result]):
+        with patch("app.ai.home_search._query_alerts", return_value=(0, {"severity_breakdown": {}})):
+            result = home_search.run_search("critical alerts", actor="analyst1")
+
+    assert result["link"] == "/ui/alerts.html?severity=critical"
+    assert result["link_label"] == "View 0 alerts"
+
+
+def test_run_search_null_target_skips_querying_and_returns_no_link():
+    from app.ai import home_search
+    _configure_ai()
+
+    mock_intent_result = MagicMock()
+    mock_intent_result.text = json.dumps({"target": None, "filters": {}})
+    mock_answer_result = MagicMock()
+    mock_answer_result.text = "TinySIEM is a tiny SIEM for learning and small deployments."
+
+    with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", side_effect=[mock_intent_result, mock_answer_result]):
+        with patch("app.ai.home_search._query_events") as mock_qe, \
+             patch("app.ai.home_search._query_alerts") as mock_qa, \
+             patch("app.ai.home_search._query_cases") as mock_qc:
+            result = home_search.run_search("what is TinySIEM?", actor="analyst1")
+            mock_qe.assert_not_called()
+            mock_qa.assert_not_called()
+            mock_qc.assert_not_called()
+
+    assert result["link"] is None
+    assert result["link_label"] is None
+    assert result["answer"] == "TinySIEM is a tiny SIEM for learning and small deployments."
+
+
+def test_run_search_raises_when_ai_unconfigured():
+    from app.ai import home_search
+    with pytest.raises(RuntimeError, match="AI features require configuration"):
+        home_search.run_search("show me alerts", actor="analyst1")

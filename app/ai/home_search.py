@@ -61,3 +61,130 @@ def extract_search_intent(question: str) -> dict:
         if k in allowed_keys and v not in (None, "")
     }
     return {"target": target, "filters": filters}
+
+
+from collections import Counter
+
+
+def _parse_iso_datetime(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+    except (ValueError, TypeError):
+        return None
+
+
+def _query_events(filters: dict) -> tuple:
+    from app.storage import duckdb_store
+    kwargs = dict(filters)
+    for key in ("status_code", "status_min", "status_max"):
+        if key in kwargs:
+            try:
+                kwargs[key] = int(kwargs[key])
+            except (TypeError, ValueError):
+                del kwargs[key]
+    for key in ("start", "end"):
+        if key in kwargs:
+            kwargs[key] = _parse_iso_datetime(kwargs[key])
+    result = duckdb_store.query_events(limit=50, **kwargs)
+    status_counts = Counter(
+        e.get("status_code") for e in result["events"] if e.get("status_code") is not None
+    )
+    summary = {"status_code_breakdown": dict(status_counts.most_common(5))}
+    return result["total"], summary
+
+
+def _query_alerts(filters: dict) -> tuple:
+    from app.alerts.router import read_all_alerts, apply_alert_filters
+    alerts = read_all_alerts()
+    alerts = apply_alert_filters(
+        alerts,
+        severity=filters.get("severity"),
+        rule_name=filters.get("rule_name"),
+        source_ip=filters.get("source_ip"),
+        status=None,
+        q=filters.get("q"),
+        start=_parse_iso_datetime(filters.get("start")),
+        end=_parse_iso_datetime(filters.get("end")),
+    )
+    severity_counts = Counter(a.get("severity") for a in alerts if a.get("severity"))
+    summary = {"severity_breakdown": dict(severity_counts.most_common(5))}
+    return len(alerts), summary
+
+
+def _query_cases(filters: dict) -> tuple:
+    from app.cases import store as case_store
+    kwargs = dict(filters)
+    for key in ("start", "end"):
+        if key in kwargs:
+            kwargs[key] = _parse_iso_datetime(kwargs[key])
+    result = case_store.query_cases(limit=50, **kwargs)
+    status_counts = Counter(c.get("status") for c in result["cases"] if c.get("status"))
+    summary = {"status_breakdown": dict(status_counts.most_common(5))}
+    return result["total"], summary
+
+
+_TARGET_PAGES = {
+    "events": "/ui/events.html",
+    "alerts": "/ui/alerts.html",
+    "cases": "/ui/cases.html",
+}
+
+
+def _build_link(target: str, filters: dict) -> str:
+    from urllib.parse import urlencode
+    qs = urlencode(filters)
+    base = _TARGET_PAGES[target]
+    return f"{base}?{qs}" if qs else base
+
+
+def _summary_system_prompt() -> str:
+    return (
+        "You are a security analyst assistant for TinySIEM. Given a question and the real "
+        "results of a search against the SIEM's data, write a concise 2-4 sentence answer. "
+        "Be specific: cite the actual counts and notable patterns from the results provided. "
+        "Do not invent data beyond what's given. Plain text only — no markdown, no bullet points."
+    )
+
+
+def _general_system_prompt() -> str:
+    return (
+        "You are a helpful assistant embedded in TinySIEM, a security information and event "
+        "management tool. Answer the question concisely and practically. Plain text only — "
+        "no markdown, no bullet points."
+    )
+
+
+def run_search(question: str, actor: str) -> dict:
+    from app.ai.claude import _log_ai_call
+    from app.ai.provider_factory import get_active_provider
+
+    provider = get_active_provider()
+    intent = extract_search_intent(question)
+    target = intent["target"]
+    filters = intent["filters"]
+
+    start_time = datetime.now(timezone.utc)
+    if target is None:
+        result = provider.chat(system=_general_system_prompt(), user=question, max_tokens=400)
+        duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+        _log_ai_call("home_search", actor, question, result.text, duration_ms, success=True, model=provider.model)
+        return {"answer": result.text, "link": None, "link_label": None}
+
+    # Dispatch through the module namespace (not the pre-bound _TARGET_QUERY_FNS
+    # values) so that tests patching app.ai.home_search._query_events/_alerts/_cases
+    # take effect — a dict of function objects captured at import time would keep
+    # pointing at the originals after unittest.mock.patch swaps the module attribute.
+    query_fn = globals()[f"_query_{target}"]
+    count, summary = query_fn(filters)
+    context = f"Question: {question}\n\nReal results: {count} {target} matched.\nSummary: {summary}"
+    result = provider.chat(system=_summary_system_prompt(), user=context, max_tokens=400)
+    duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+    _log_ai_call("home_search", actor, question, result.text, duration_ms, success=True, model=provider.model)
+
+    return {
+        "answer": result.text,
+        "link": _build_link(target, filters),
+        "link_label": f"View {count} {target}",
+    }
