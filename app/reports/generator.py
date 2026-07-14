@@ -20,11 +20,11 @@ def _parse_dt(ts):
 
 
 def generate_report(period: str = "daily") -> dict:
-    from app.alerts.router import _read_all_alerts
+    from app.alerts.router import read_all_alerts
     now = datetime.utcnow()
     window_start = now - timedelta(days=7 if period == "weekly" else 1)
 
-    alerts = _read_all_alerts()
+    alerts = read_all_alerts()
     window_alerts = [a for a in alerts if _parse_dt(a.get("triggered_at")) >= window_start]
 
     sev_counts: dict = Counter((a.get("severity") or "unknown").lower() for a in window_alerts)

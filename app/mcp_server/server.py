@@ -24,7 +24,7 @@ class _JWTMiddleware(BaseHTTPMiddleware):
 def build_mcp_app():
     from mcp.server.fastmcp import FastMCP
     from app.storage import duckdb_store
-    from app.alerts.router import _read_all_alerts
+    from app.alerts.router import read_all_alerts
     from app.decoder import engine as decoder_engine
     from app.rules import engine as rule_engine
     from app.config import settings
@@ -54,7 +54,7 @@ def build_mcp_app():
         limit: int = 50,
     ) -> dict:
         """Search alerts. Returns list of matching alerts."""
-        alerts = _read_all_alerts()
+        alerts = read_all_alerts()
         if severity:
             alerts = [a for a in alerts if (a.get("severity") or "").lower() == severity.lower()]
         if rule_name:
@@ -91,7 +91,7 @@ def build_mcp_app():
     def get_health() -> dict:
         """Return instance health and summary stats."""
         event_data = duckdb_store.query_events(limit=1)
-        alert_count = len(_read_all_alerts())
+        alert_count = len(read_all_alerts())
         return {
             "status": "ok",
             "version": settings.tinysiem_version,

@@ -10,14 +10,14 @@ router = APIRouter(prefix="/entities", tags=["entities"])
 
 @router.get("/ip/{value}")
 def get_ip_entity(value: str, _: AuthUser = Depends(require_analyst)):
-    from app.alerts.router import _read_all_alerts  # noqa: PLC2701 — intentional internal access
+    from app.alerts.router import read_all_alerts
     from app.cases import store as case_store
 
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=7)
     summary = duckdb_store.get_ip_summary(value, start, end)
 
-    all_alerts = _read_all_alerts()
+    all_alerts = read_all_alerts()
     related_alerts = [a for a in all_alerts if a.get("source_ip") == value]
     related_alerts.sort(key=lambda a: a.get("triggered_at", ""), reverse=True)
 

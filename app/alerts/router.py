@@ -25,7 +25,7 @@ def _parse_dt(ts: Optional[str]) -> datetime:
         return datetime.min
 
 
-def _read_all_alerts() -> list[dict]:
+def read_all_alerts() -> list[dict]:
     from app.storage.duckdb_store import get_triage_map
     path = Path(settings.tinysiem_alerts_path)
     if not path.exists():
@@ -52,7 +52,7 @@ def _read_all_alerts() -> list[dict]:
     return alerts
 
 
-def _apply_filters(
+def apply_alert_filters(
     alerts: list[dict],
     severity: Optional[str],
     rule_name: Optional[str],
@@ -99,7 +99,7 @@ class TriagePatch(BaseModel):
 
 @router.get("/triage-summary")
 def triage_summary(_: AuthUser = Depends(require_analyst)):
-    alerts = _read_all_alerts()
+    alerts = read_all_alerts()
     counts = Counter(a.get("status", "open") for a in alerts)
     return {
         "open": counts.get("open", 0),
@@ -122,8 +122,8 @@ def list_alerts(
     format: Optional[str] = None,
     _: AuthUser = Depends(require_analyst),
 ):
-    alerts = _read_all_alerts()
-    alerts = _apply_filters(alerts, severity, rule_name, source_ip, status, q, start, end)
+    alerts = read_all_alerts()
+    alerts = apply_alert_filters(alerts, severity, rule_name, source_ip, status, q, start, end)
     alerts.sort(key=lambda a: a.get("triggered_at", ""), reverse=True)
     if format == "csv":
         csv_text = rows_to_csv(alerts[:_CSV_EXPORT_CAP], _ALERT_CSV_COLUMNS)
@@ -138,7 +138,7 @@ def list_alerts(
 
 @router.get("/facets")
 def alert_facets(_: AuthUser = Depends(require_analyst)):
-    alerts = _read_all_alerts()
+    alerts = read_all_alerts()
     sev_counts = Counter(a.get("severity") or "unknown" for a in alerts)
     rule_counts = Counter(a.get("rule_name") or "unknown" for a in alerts)
     status_counts = Counter(a.get("status", "open") for a in alerts)
@@ -160,7 +160,7 @@ def alert_facets(_: AuthUser = Depends(require_analyst)):
 
 @router.get("/{alert_id}")
 def get_alert(alert_id: str, _: AuthUser = Depends(require_analyst)):
-    alerts = _read_all_alerts()
+    alerts = read_all_alerts()
     for a in alerts:
         if a.get("alert_id") == alert_id:
             return a
@@ -182,7 +182,7 @@ def patch_alert(
     from app.storage.duckdb_store import upsert_triage
     if body.status is not None and body.status not in _VALID_STATUSES:
         raise HTTPException(status_code=422, detail=f"status must be one of {sorted(_VALID_STATUSES)}")
-    alerts = _read_all_alerts()
+    alerts = read_all_alerts()
     existing = next((a for a in alerts if a.get("alert_id") == alert_id), None)
     if not existing:
         raise HTTPException(status_code=404, detail="Alert not found")
