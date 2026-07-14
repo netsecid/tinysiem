@@ -73,8 +73,20 @@ async def test_audit_list_requires_auth(client):
     assert resp.status_code == 401
 
 
-async def test_audit_list_returns_entries(client, admin_headers):
+async def test_audit_list_forbidden_for_admin(client, admin_headers):
+    """Audit Log is superadmin-only as of the UI navigation redesign — a
+    plain admin (allowed through v1.4's require_admin) must now be blocked."""
     resp = await client.get("/audit", headers=admin_headers)
+    assert resp.status_code == 403
+
+
+async def test_audit_facets_forbidden_for_admin(client, admin_headers):
+    resp = await client.get("/audit/facets", headers=admin_headers)
+    assert resp.status_code == 403
+
+
+async def test_audit_list_returns_entries(client, superadmin_headers):
+    resp = await client.get("/audit", headers=superadmin_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert "total" in data
@@ -82,27 +94,27 @@ async def test_audit_list_returns_entries(client, admin_headers):
     assert isinstance(data["items"], list)
 
 
-async def test_audit_list_filters_by_event_type(client, admin_headers):
+async def test_audit_list_filters_by_event_type(client, superadmin_headers):
     uid = str(uuid.uuid4())
     audit.log_event("custom.test", "action", actor=f"u-{uid}")
-    resp = await client.get(f"/audit?event_type=custom.test&actor=u-{uid}", headers=admin_headers)
+    resp = await client.get(f"/audit?event_type=custom.test&actor=u-{uid}", headers=superadmin_headers)
     data = resp.json()
     assert data["total"] == 1
     assert data["items"][0]["event_type"] == "custom.test"
 
 
-async def test_audit_list_filters_by_status(client, admin_headers):
+async def test_audit_list_filters_by_status(client, superadmin_headers):
     uid = str(uuid.uuid4())
     audit.log_event("x.test", "a", "success", actor=f"s-{uid}")
     audit.log_event("x.test", "a", "failure", actor=f"s-{uid}")
-    resp = await client.get(f"/audit?status=failure&actor=s-{uid}", headers=admin_headers)
+    resp = await client.get(f"/audit?status=failure&actor=s-{uid}", headers=superadmin_headers)
     data = resp.json()
     assert data["total"] == 1
     assert data["items"][0]["status"] == "failure"
 
 
-async def test_audit_facets_structure(client, admin_headers):
-    resp = await client.get("/audit/facets", headers=admin_headers)
+async def test_audit_facets_structure(client, superadmin_headers):
+    resp = await client.get("/audit/facets", headers=superadmin_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert "event_type" in data
