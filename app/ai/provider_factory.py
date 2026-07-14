@@ -3,10 +3,10 @@ from app.ai.providers.base import AIProvider
 from app.ai.providers.openai_compatible_provider import OpenAICompatibleProvider
 
 PROVIDER_PRESETS = {
-    "anthropic": {"base_url": None, "models": ["claude-sonnet-4-6", "claude-opus-4-8"]},
-    "openai":    {"base_url": "https://api.openai.com/v1", "models": ["gpt-4o", "gpt-4o-mini"]},
-    "deepseek":  {"base_url": "https://api.deepseek.com/v1", "models": ["deepseek-chat", "deepseek-reasoner"]},
-    "custom":    {"base_url": None, "models": None},
+    "anthropic": {"base_url": None},
+    "openai":    {"base_url": "https://api.openai.com/v1"},
+    "deepseek":  {"base_url": "https://api.deepseek.com/v1"},
+    "custom":    {"base_url": None},
 }
 
 

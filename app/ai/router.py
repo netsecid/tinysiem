@@ -68,16 +68,14 @@ def save_ai_config_endpoint(req: SaveAIConfigRequest, actor: AuthUser = Depends(
 
     if req.provider not in PROVIDER_PRESETS:
         raise HTTPException(status_code=422, detail=f"Unknown provider: {req.provider}")
-    preset = PROVIDER_PRESETS[req.provider]
+
+    if not req.model:
+        raise HTTPException(status_code=422, detail="model is required")
 
     if req.provider == "custom":
         if not req.base_url:
             raise HTTPException(status_code=422, detail="base_url is required for the custom provider")
-        if not req.model:
-            raise HTTPException(status_code=422, detail="model is required for the custom provider")
     else:
-        if req.model not in preset["models"]:
-            raise HTTPException(status_code=422, detail=f"Unknown model for {req.provider}: {req.model}")
         if not req.api_key:
             # A stored key only counts as "already there" for THIS save if it belongs to the
             # same provider — config_store.save_ai_config() only carries a key forward across

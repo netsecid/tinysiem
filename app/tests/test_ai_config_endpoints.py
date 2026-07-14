@@ -51,10 +51,22 @@ async def test_put_ai_config_unknown_provider_rejected(client, admin_headers):
     assert r.status_code == 422
 
 
-async def test_put_ai_config_unknown_model_rejected(client, admin_headers):
+async def test_put_ai_config_arbitrary_model_name_accepted(client, admin_headers):
+    """Model names are free text, not validated against a fixed list — providers add
+    new models faster than we could keep a hardcoded list current."""
     r = await client.put(
         "/ai/config",
-        json={"provider": "anthropic", "model": "not-a-real-model", "api_key": "sk-ant-test"},
+        json={"provider": "anthropic", "model": "claude-opus-5-1-not-yet-released", "api_key": "sk-ant-test"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 200
+    assert r.json()["model"] == "claude-opus-5-1-not-yet-released"
+
+
+async def test_put_ai_config_empty_model_rejected(client, admin_headers):
+    r = await client.put(
+        "/ai/config",
+        json={"provider": "anthropic", "model": "", "api_key": "sk-ant-test"},
         headers=admin_headers,
     )
     assert r.status_code == 422
