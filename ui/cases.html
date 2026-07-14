@@ -739,7 +739,7 @@ async function refinePlaybook(caseId,ruleName){
     });
     const data=await resp.json();
     if(resp.status===503){
-      resultEl.textContent='AI unavailable — set TINYSIEM_CLAUDE_API_KEY to enable AI Refinement.';
+      resultEl.textContent='AI unavailable: '+(data.detail||'set up a provider in Settings → AI Config.');
     }else if(!resp.ok){
       resultEl.textContent=`Error: ${data.detail||resp.statusText}`;
     }else{

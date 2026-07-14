@@ -280,7 +280,7 @@ async function generatePlaybook(){
       const err=await r.json().catch(()=>({}));
       statusEl.className='msg msg-err';
       statusEl.style.display='block';
-      if(r.status===503){statusEl.textContent='AI unavailable — set TINYSIEM_CLAUDE_API_KEY to use this feature.';}
+      if(r.status===503){statusEl.textContent='AI unavailable: '+(err.detail||'set up a provider in Settings → AI Config.');}
       else{statusEl.textContent='Error: '+(err.detail||r.statusText);}
       return;
     }
