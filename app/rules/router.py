@@ -8,7 +8,9 @@ from pydantic import BaseModel
 
 from app.audit import store as audit
 from app.auth import AuthUser, require_admin, require_analyst
+from app.rules import backtest as backtest_module
 from app.rules import engine as rule_engine
+from app.rules import exceptions_store
 
 router = APIRouter(prefix="/rules", tags=["rules"])
 
@@ -25,6 +27,12 @@ def _check_name(name: str) -> None:
             status_code=422,
             detail="Name must be lowercase alphanumeric, hyphens or underscores only",
         )
+
+
+def _validate_days(days: int) -> int:
+    if days < 1 or days > 30:
+        raise HTTPException(status_code=422, detail="days must be between 1 and 30")
+    return days
 
 
 def _list_rule_files() -> list[tuple[Path, bool]]:
@@ -94,9 +102,24 @@ class RuleRequest(BaseModel):
     yaml_text: str
 
 
+class ExceptionRequest(BaseModel):
+    field: str
+    value: str
+    reason: str
+
+
 class GenerateRuleRequest(BaseModel):
     description: str
     source: str
+
+
+class BacktestRequest(BaseModel):
+    days: int = 7
+
+
+class InlineBacktestRequest(BaseModel):
+    yaml_text: str
+    days: int = 7
 
 
 @router.get("")
@@ -162,6 +185,38 @@ def generate_rule_endpoint(req: GenerateRuleRequest, actor: AuthUser = Depends(r
     return {"yaml_text": yaml_text, "preview": True}
 
 
+@router.post("/backtest")
+def backtest_inline(req: InlineBacktestRequest, actor: AuthUser = Depends(require_admin)):
+    _validate_days(req.days)
+    data = _validate_rule_yaml(req.yaml_text)
+    result = backtest_module.run_backtest(data, req.days)
+    audit.log_event(
+        "rule.backtest", "backtest", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule",
+        detail={"days": req.days, "inline": True, "rule_name": data.get("name")},
+    )
+    return result
+
+
+@router.post("/{name}/backtest")
+def backtest_named(name: str, req: BacktestRequest, actor: AuthUser = Depends(require_admin)):
+    _check_name(name)
+    _validate_days(req.days)
+    path, _ = _get_rule_file(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    data = yaml.safe_load(path.read_text())
+    result = backtest_module.run_backtest(data, req.days)
+    audit.log_event(
+        "rule.backtest", "backtest", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule", resource_id=name,
+        detail={"days": req.days},
+    )
+    return result
+
+
 @router.post("/{name}/playbook/generate")
 def generate_playbook_endpoint(name: str, actor: AuthUser = Depends(require_admin)):
     rule_path, _ = _get_rule_file(name)
@@ -184,6 +239,12 @@ def generate_playbook_endpoint(name: str, actor: AuthUser = Depends(require_admi
         resource_type="rule", resource_id=name,
     )
     return result
+
+
+@router.get("/mitre-coverage")
+def mitre_coverage(_: AuthUser = Depends(require_analyst)):
+    from app.rules.mitre import compute_coverage
+    return compute_coverage(_list_rule_files())
 
 
 @router.get("/{name}")
@@ -248,6 +309,47 @@ def delete_rule(name: str, actor: AuthUser = Depends(require_admin)):
         "rule.delete", "deleted", "success",
         actor=actor.username, actor_role=actor.role,
         resource_type="rule", resource_id=name,
+        detail={"rule_name": name},
+    )
+    return Response(status_code=204)
+
+
+@router.get("/{name}/exceptions")
+def list_rule_exceptions(name: str, _: AuthUser = Depends(require_admin)):
+    _check_name(name)
+    return {"exceptions": exceptions_store.list_exceptions(name)}
+
+
+@router.post("/{name}/exceptions", status_code=201)
+def add_rule_exception(name: str, req: ExceptionRequest, actor: AuthUser = Depends(require_admin)):
+    _check_name(name)
+    if not req.reason.strip():
+        raise HTTPException(status_code=422, detail="reason is required")
+    try:
+        exc = exceptions_store.add_exception(name, req.field, req.value, req.reason, actor.username)
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err))
+    rule_engine.load_exceptions()
+    audit.log_event(
+        "rule.exception.add", "created", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule_exception", resource_id=exc["id"],
+        detail={"rule_name": name, "field": req.field, "value": req.value, "reason": req.reason},
+    )
+    return exc
+
+
+@router.delete("/{name}/exceptions/{exception_id}", status_code=204)
+def delete_rule_exception(name: str, exception_id: str, actor: AuthUser = Depends(require_admin)):
+    _check_name(name)
+    ok = exceptions_store.delete_exception(name, exception_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Exception not found")
+    rule_engine.load_exceptions()
+    audit.log_event(
+        "rule.exception.delete", "deleted", "success",
+        actor=actor.username, actor_role=actor.role,
+        resource_type="rule_exception", resource_id=exception_id,
         detail={"rule_name": name},
     )
     return Response(status_code=204)

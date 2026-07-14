@@ -157,6 +157,7 @@ Query stored events. Requires `analyst` role.
 | `start` / `end` | ISO 8601 | Time window on `ingested_at` |
 | `limit` | int | Max results (default 100, max 1000) |
 | `offset` | int | Pagination offset |
+| `format` | string | Set to `csv` to stream a CSV instead of JSON — honors every filter above, capped at 10,000 rows, with `Content-Disposition: attachment` |
 
 Note: `source_ip`, `uri`, and `q` use `LIKE`/`ILIKE` matching. SQL metacharacters (`%`, `_`) in filter values are escaped and treated literally.
 
@@ -226,6 +227,7 @@ Query alerts. Requires `analyst` role.
 | `q` | string | Full-text on rule name and summary |
 | `start` / `end` | ISO 8601 | Window on `triggered_at` |
 | `limit` / `offset` | int | Pagination |
+| `format` | string | Set to `csv` to stream a CSV instead of JSON — honors every filter above, capped at 10,000 rows, with `Content-Disposition: attachment` |
 
 **Response:**
 ```json
@@ -329,6 +331,61 @@ Update status, severity, notes, or assigned user. Requires `analyst` role.
 
 ### `DELETE /cases/{case_id}`
 Delete a case. Requires `admin` role.
+
+---
+
+## Entities
+
+### `GET /entities/ip/{value}`
+Analyst+. Read-only composition of existing data for one IP: `first_seen`, `last_seen`,
+`total_events`, `top_sources`/`top_methods`/`top_uris`/`top_status_codes` (facet-style),
+`histogram` (hourly buckets over the last 7 days), `related_alerts` (up to 50, newest
+first), `related_cases`. No new storage — this is a query composition endpoint.
+
+---
+
+## Watchlists
+
+IOC watchlists match events against known-bad indicators at ingest time. A hit emits an
+alert with `rule_name = "watchlist:<list_name>"`.
+
+### `GET /watchlists`
+Analyst+. Optional `?list_name=` filter. Returns `{entries: [...]}`.
+
+### `POST /watchlists`
+Admin+. Body: `{list_name, indicator_type, value, severity, note}`. `indicator_type` is
+one of `ip`, `cidr`, `user_agent_substring`, `uri_substring`. Entry cap: 50,000.
+
+### `PATCH /watchlists/{entry_id}?active=true|false`
+Admin+. Toggles an entry active/inactive without deleting it.
+
+### `DELETE /watchlists/{entry_id}`
+Admin+.
+
+### `POST /watchlists/bulk`
+Admin+. Body: `{list_name, entries: [{indicator_type, value, severity, note}, ...]}`.
+Returns `{created: [...], errors: [...]}` — partial success is not an error.
+
+### `POST /watchlists/import`
+Admin+. Multipart form upload (`file`) plus `?list_name=` query param. CSV columns:
+`type,value,severity,note`. Returns `{created: [...], errors: [...]}`.
+
+---
+
+## Saved Searches
+
+Owner-scoped — a user can only see and delete their own saved searches.
+
+### `GET /searches?page=events|alerts`
+Analyst+.
+
+### `POST /searches`
+Analyst+. Body: `{name, page, query_string}` where `query_string` is the exact
+querystring produced by the Events/Alerts page's own filter-serialization (e.g.
+`status_code=404&start=...&end=...`).
+
+### `DELETE /searches/{search_id}`
+Analyst+. 404 if the search isn't owned by the caller.
 
 ---
 
@@ -581,16 +638,22 @@ Returns `503` if no AI provider is configured (see Settings → AI Config).
 
 ## Rules
 
-All rule endpoints require `admin` role.
+`GET /rules`, `GET /rules/{name}`, and `GET /rules/mitre-coverage` require `analyst` role; every other endpoint requires `admin` role.
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/rules` | List all rules (built-in + custom) |
-| `POST` | `/rules` | Create a rule from YAML |
-| `GET` | `/rules/{name}` | Get rule YAML by name |
-| `PUT` | `/rules/{name}` | Update rule YAML |
-| `DELETE` | `/rules/{name}` | Delete custom rule |
-| `POST` | `/rules/generate` | AI-generate rule YAML from a natural-language description |
+| Method | Path | Role | Description |
+|---|---|---|---|
+| `GET` | `/rules` | analyst | List all rules (built-in + custom) |
+| `POST` | `/rules` | admin | Create a rule from YAML |
+| `GET` | `/rules/{name}` | analyst | Get rule YAML by name |
+| `PUT` | `/rules/{name}` | admin | Update rule YAML |
+| `DELETE` | `/rules/{name}` | admin | Delete custom rule |
+| `POST` | `/rules/generate` | admin | AI-generate rule YAML from a natural-language description |
+| `POST` | `/rules/{name}/backtest` | admin | Backtest a saved rule against historical events (v1.5) |
+| `POST` | `/rules/backtest` | admin | Backtest an unsaved (inline) rule (v1.5) |
+| `GET` | `/rules/{name}/exceptions` | admin | List exceptions for a rule (v1.5) |
+| `POST` | `/rules/{name}/exceptions` | admin | Add an exception (v1.5) |
+| `DELETE` | `/rules/{name}/exceptions/{id}` | admin | Remove an exception (v1.5) |
+| `GET` | `/rules/mitre-coverage` | analyst | MITRE ATT&CK tactic/technique coverage (v1.5) |
 
 **Generate request:**
 ```json
@@ -598,6 +661,28 @@ All rule endpoints require `admin` role.
 ```
 
 Returns `503` if no AI provider is configured (see Settings → AI Config).
+
+### `POST /rules/{name}/backtest`
+Admin+. Body: `{"days": 7}` (1–30). Runs the named rule's condition against historical
+events. `field_match` → exact count + samples; `threshold` → fixed consecutive
+windows of `window_seconds` (an approximation of the live sliding window, not an exact
+replay); `correlation` → `{"supported": false}`.
+
+### `POST /rules/backtest`
+Admin+. Same as above but for an unsaved rule: body `{"yaml_text": "...", "days": 7}`.
+Pairs with the AI rule generator: generate → backtest → deploy.
+
+### `GET /rules/{name}/exceptions` / `POST` / `DELETE /rules/{name}/exceptions/{id}`
+Admin+. `POST` body: `{field, value, reason}` — `field` limited to the same allowlist as
+threshold-rule fields (`source`, `source_ip`, `method`, `uri`, `status_code`,
+`response_size`, `user_agent`, `referer`); `reason` is mandatory. An excepted event is
+skipped for that rule entirely (including threshold counting) but is still ingested and
+searchable normally.
+
+### `GET /rules/mitre-coverage`
+Analyst+. Returns all 14 MITRE Enterprise tactics with technique/rule-count breakdowns
+computed from currently-loaded rules (built-in + custom). Tactics with no matching rules
+are included with an empty `techniques` list.
 
 ---
 

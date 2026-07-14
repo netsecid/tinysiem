@@ -20,6 +20,7 @@ from app.admin.router import router as admin_router
 from app.ai.router import router as ai_router
 from app.alerts.router import router as alerts_router
 from app.dashboard.router import router as dashboard_router
+from app.entities.router import router as entities_router
 from app.integrations.router import router as integrations_router
 from app.audit.router import router as audit_router
 from app.auth_router import router as auth_router
@@ -32,6 +33,8 @@ from app.rules.router import router as rules_crud_router
 from app.sbom.router import router as sbom_router
 from app.sources.router import router as sources_router
 from app.users.router import router as users_router
+from app.watchlists.router import router as watchlists_router
+from app.searches.router import router as searches_router
 from app.password import hash_password
 from app.rules import engine as rule_engine
 from app.storage import duckdb_store
@@ -56,8 +59,14 @@ async def lifespan(app: FastAPI):
     duckdb_store.init_dashboard_tables()
     duckdb_store.init_playbook_table()
     duckdb_store.init_ai_config_table()
+    duckdb_store.init_watchlist_table()
+    duckdb_store.init_saved_searches_table()
+    duckdb_store.init_rule_exceptions_table()
+    from app.watchlists import matcher as watchlist_matcher
+    watchlist_matcher.reload_cache()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
+    rule_engine.load_exceptions()
     duckdb_store.ensure_superadmin(hash_password(settings.tinysiem_superadmin_password))
     warn_if_default_superadmin_password()
     warn_if_integrations_missing_master_key()
@@ -175,7 +184,10 @@ app.include_router(audit_router)
 app.include_router(integrations_router)
 app.include_router(dashboard_router)
 app.include_router(sbom_router)
+app.include_router(watchlists_router)
+app.include_router(searches_router)
 app.include_router(admin_router)
+app.include_router(entities_router)
 
 app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
 

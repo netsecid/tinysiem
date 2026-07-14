@@ -2,28 +2,29 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current State: v1.4
+## Current State: v1.5
 
-All v1.4 "Hardened Tiny" features shipped and tested:
-- All v1.3 features +
-- **Track A (mandatory security):** login brute-force lockout (A1); forced password change + 12-char min policy (A2); token revocation via `token_epoch` + `/auth/logout` (A3); global API key scoped to `/ingest/*` only — **breaking** (A4); syslog CIDR allowlist + size cap (A5); CSP header + self-hosted fonts (A6); CORS same-origin default — **breaking** (A7); built-in TLS env vars (A8); startup guardrails on weak secrets (A9); static `/sbom` (A10)
-- **Track B (SOC QoL):** per-rule alert suppression window (B1); self-monitoring via `tinysiem_internal` source + built-in brute-force rule (B2); backup endpoint + documented restore (B3)
-- **Track C (footprint):** chromadb removed entirely (C1)
+All v1.4 "Hardened Tiny" features shipped and tested (see git history for A1–A10, B1–B3, C1).
+
+v1.5 "Analyst Experience" shipped and tested:
+- **E1** entity pivot view — `GET /entities/ip/{value}` + `ui/entity.html`; every rendered IP in Events/Alerts/Cases links to it
+- **E2** IOC watchlists — `watchlist_entries` table, CRUD + CSV import under `/watchlists`, ingest-time matching emits `watchlist:<list_name>` alerts
+- **E3** rule backtesting — `POST /rules/{name}/backtest` and `POST /rules/backtest` (inline), UI in the rule detail panel
+- **E4** saved searches + deep links — `saved_searches` table, owner-scoped `/searches` API, Events/Alerts serialize filter state to the URL and hydrate on load
+- **E5** per-rule exceptions — `rule_exceptions` table, `/rules/{name}/exceptions` API, enforced in the rule engine (skips evaluation and excludes from threshold counting)
+- **E6** CSV export — `format=csv` on `GET /events`/`GET /alerts`, honoring all filters, 10,000-row cap
+- **E7** MITRE ATT&CK coverage matrix — `GET /rules/mitre-coverage` + UI section on the Rules page
+
+**Next version: v1.6.** Deferred from v1.4/v1.5: TOTP/2FA, dependency extras split, audit-log hash chaining, GeoIP enrichment, username/actor entities.
+
+**After v1.6 ships:** update this section to "Current State: v1.6" and set next to v1.7.
 
 **Known DuckDB constraints:**
-- DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, cases tables, `integrations`, `integration_runs`, `case_playbook_steps`, and `users`. Dashboard uses DELETE+INSERT pattern (no UNIQUE on `owner`) to avoid this.
+- DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, cases tables, `integrations`, `integration_runs`, `case_playbook_steps`, `users`, and `watchlist_entries` (v1.5 — the `active` toggle is a plain `UPDATE`, so this table never gets a secondary index either). Dashboard uses DELETE+INSERT pattern (no UNIQUE on `owner`) to avoid this. `saved_searches` and `rule_exceptions` (also v1.5) are insert/delete-only, so this constraint doesn't apply to them at all.
 - DuckDB 1.1.3 also rejects `ALTER TABLE ... ADD COLUMN ... NOT NULL` ("Adding columns with constraints not yet supported"). Only plain `ADD COLUMN ... DEFAULT <value>` (no `NOT NULL`) works — discovered adding `token_epoch`/`must_change_password` to `users` in v1.4; future schema migrations must drop `NOT NULL` from `ALTER TABLE` statements (it's fine on `CREATE TABLE`).
 
 **Environment variables added in v1.2:**
 - `TINYSIEM_MASTER_KEY` — Fernet key for credential encryption. Optional (503 if integrations are used without it). Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
-
-**Next version: v1.5 — "Analyst Experience"** — see the approved design `docs/superpowers/specs/2026-07-08-v1.5-analyst-experience-design.md`.
-
-### What to build next (v1.5)
-
-Entity pivot view, IOC watchlists, rule backtesting, saved searches + deep links, per-rule exceptions, CSV export, MITRE coverage matrix. Deferred to v1.6+: TOTP/2FA, deps extras split, audit hash chaining, GeoIP, actor entities.
-
-**After v1.5 ships:** update this section to "Current State: v1.5" and set next to v1.6.
 
 ---
 

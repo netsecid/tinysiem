@@ -170,19 +170,27 @@ def insert_event(event: dict) -> None:
         )
 
 
-def count_events_in_window(field: str, value, window_seconds: int, source: Optional[str] = None) -> int:
+def count_events_in_window(
+    field: str, value, window_seconds: int, source: Optional[str] = None,
+    exclude: Optional[list[tuple[str, str]]] = None,
+) -> int:
     if field not in _ALLOWED_FIELDS:
         raise ValueError(f"Field '{field}' not permitted in threshold queries")
     conn = _get_conn()
     since_ts = datetime.utcnow().timestamp() - window_seconds
     params = [value, since_ts]
-    source_clause = ""
+    clauses = ""
     if source:
-        source_clause = "AND source = ?"
+        clauses += " AND source = ?"
         params.append(source)
+    for exc_field, exc_value in (exclude or []):
+        if exc_field not in _ALLOWED_FIELDS:
+            continue
+        clauses += f" AND ({exc_field} IS DISTINCT FROM ?)"
+        params.append(exc_value)
     with _lock:
         result = conn.execute(
-            f"SELECT COUNT(*) FROM events WHERE {field} = ? AND epoch(ingested_at) >= ? {source_clause}",
+            f"SELECT COUNT(*) FROM events WHERE {field} = ? AND epoch(ingested_at) >= ? {clauses}",
             params,
         ).fetchone()
     return result[0] if result else 0
@@ -314,6 +322,195 @@ def get_event_histogram(start: datetime, end: datetime, buckets: int = 60) -> li
         ).fetchall()
 
     return [{"ts": int(r[0]) * 1000, "count": r[1]} for r in rows]
+
+
+def get_ip_summary(ip: str, start: datetime, end: datetime) -> dict:
+    conn = _get_conn()
+    s = start.replace(tzinfo=None) if start.tzinfo else start
+    e = end.replace(tzinfo=None) if end.tzinfo else end
+    with _lock:
+        bounds = conn.execute(
+            "SELECT MIN(ingested_at), MAX(ingested_at), COUNT(*) FROM events WHERE source_ip = ?",
+            [ip],
+        ).fetchone()
+        method_rows = conn.execute(
+            "SELECT method, COUNT(*) FROM events WHERE source_ip = ? AND method IS NOT NULL "
+            "GROUP BY method ORDER BY COUNT(*) DESC LIMIT 10", [ip],
+        ).fetchall()
+        uri_rows = conn.execute(
+            "SELECT uri, COUNT(*) FROM events WHERE source_ip = ? AND uri IS NOT NULL "
+            "GROUP BY uri ORDER BY COUNT(*) DESC LIMIT 10", [ip],
+        ).fetchall()
+        status_rows = conn.execute(
+            "SELECT status_code, COUNT(*) FROM events WHERE source_ip = ? AND status_code IS NOT NULL "
+            "GROUP BY status_code ORDER BY COUNT(*) DESC LIMIT 10", [ip],
+        ).fetchall()
+        source_rows = conn.execute(
+            "SELECT source, COUNT(*) FROM events WHERE source_ip = ? AND source IS NOT NULL "
+            "GROUP BY source ORDER BY COUNT(*) DESC LIMIT 10", [ip],
+        ).fetchall()
+        hist_rows = conn.execute(
+            """SELECT CAST(epoch(ingested_at) / ? AS BIGINT) * ? AS ts, COUNT(*) AS cnt
+               FROM events WHERE source_ip = ? AND ingested_at >= ? AND ingested_at <= ?
+               GROUP BY ts ORDER BY ts""",
+            [3600, 3600, ip, s, e],
+        ).fetchall()
+    return {
+        "first_seen": bounds[0].isoformat() if bounds[0] else None,
+        "last_seen": bounds[1].isoformat() if bounds[1] else None,
+        "total_events": bounds[2] or 0,
+        "top_sources": [{"value": r[0], "count": r[1]} for r in source_rows],
+        "top_methods": [{"value": r[0], "count": r[1]} for r in method_rows],
+        "top_uris": [{"value": r[0], "count": r[1]} for r in uri_rows],
+        "top_status_codes": [{"value": r[0], "count": r[1]} for r in status_rows],
+        "histogram": [{"ts": int(r[0]) * 1000, "count": r[1]} for r in hist_rows],
+    }
+
+
+_BACKTEST_OP_SQL = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+
+# Operators that perform a numeric comparison. The rule engine's _check_operator
+# casts both sides with float(...) and returns False (never matches) if either side
+# isn't a valid float — so these operators are only meaningful against genuinely
+# numeric columns. VARCHAR columns (source, source_ip, method, uri, user_agent,
+# referer) would otherwise silently fall back to SQL's lexicographic string
+# comparison, producing a backtest count that could never occur live.
+_NUMERIC_COMPARISON_OPERATORS = {"gt", "gte", "lt", "lte"}
+_NUMERIC_FIELDS = {"status_code", "response_size"}
+
+_EVENT_COLUMNS = [
+    "id", "source", "ingested_at", "event_time", "source_ip", "method",
+    "uri", "status_code", "response_size", "user_agent", "referer", "raw", "extra",
+]
+
+
+def _backtest_condition_clause(field: str, operator: str, value) -> tuple[str, list]:
+    if field not in _ALLOWED_FIELDS:
+        raise ValueError(f"Field '{field}' not permitted in backtest queries")
+    if operator in _NUMERIC_COMPARISON_OPERATORS and field not in _NUMERIC_FIELDS:
+        raise ValueError(
+            f"Operator '{operator}' is only supported for numeric fields "
+            f"(status_code, response_size), not '{field}'"
+        )
+    op_sql = _BACKTEST_OP_SQL.get(operator)
+    if op_sql:
+        return f"{field} {op_sql} ?", [value]
+    if operator == "contains":
+        # Case-sensitive substring match, mirroring the live rule engine's
+        # `str(rule_value) in str(event_value)` (Python `in` is case-sensitive).
+        # DuckDB's LIKE (unlike ILIKE) is case-sensitive by default.
+        return f"{field} LIKE ? ESCAPE '\\'", [f"%{_escape_like(str(value))}%"]
+    raise ValueError(f"Unknown operator '{operator}'")
+
+
+def _rows_to_events(rows: list[tuple]) -> list[dict]:
+    events = []
+    for row in rows:
+        ev = dict(zip(_EVENT_COLUMNS, row))
+        for f in ("ingested_at", "event_time"):
+            if ev[f] is not None:
+                ev[f] = ev[f].isoformat()
+        events.append(ev)
+    return events
+
+
+def query_events_matching(
+    field: str, operator: str, value, source: Optional[str],
+    start: datetime, end: datetime, limit: int = 20,
+    exclude: Optional[list[tuple[str, str]]] = None,
+) -> dict:
+    """Used by rule backtesting (E3) for `field_match` conditions."""
+    cond, params = _backtest_condition_clause(field, operator, value)
+    conditions = [cond]
+    if source and source != "*":
+        conditions.append("source = ?")
+        params.append(source)
+    s = start.replace(tzinfo=None) if start.tzinfo else start
+    e = end.replace(tzinfo=None) if end.tzinfo else end
+    conditions.append("ingested_at >= ?")
+    params.append(s)
+    conditions.append("ingested_at <= ?")
+    params.append(e)
+    for exc_field, exc_value in (exclude or []):
+        if exc_field not in _ALLOWED_FIELDS:
+            continue
+        conditions.append(f"({exc_field} IS DISTINCT FROM ?)")
+        params.append(exc_value)
+    where = "WHERE " + " AND ".join(conditions)
+
+    conn = _get_conn()
+    with _lock:
+        total = conn.execute(f"SELECT COUNT(*) FROM events {where}", params).fetchone()[0]
+        day_rows = conn.execute(
+            f"SELECT CAST(ingested_at AS DATE) AS d, COUNT(*) FROM events {where} GROUP BY d ORDER BY d",
+            params,
+        ).fetchall()
+        sample_rows = conn.execute(
+            f"""SELECT {','.join(_EVENT_COLUMNS)} FROM events {where}
+                ORDER BY ingested_at DESC LIMIT ?""",
+            params + [limit],
+        ).fetchall()
+
+    return {
+        "total": total,
+        "per_day": [{"date": str(r[0]), "count": r[1]} for r in day_rows],
+        "samples": _rows_to_events(sample_rows),
+    }
+
+
+def query_events_windowed_counts(
+    field: str, operator: str, value, source: Optional[str],
+    start: datetime, end: datetime, window_seconds: int, threshold_count: int,
+    limit: int = 20,
+    exclude: Optional[list[tuple[str, str]]] = None,
+) -> dict:
+    """Used by rule backtesting (E3) for `threshold` conditions. Splits [start, end]
+    into fixed consecutive windows of `window_seconds` and counts matching events per
+    window — an approximation of the rule engine's live sliding window (documented as
+    such; good enough for tuning, not an exact replay)."""
+    cond, where_params = _backtest_condition_clause(field, operator, value)
+    conditions = [cond]
+    if source and source != "*":
+        conditions.append("source = ?")
+        where_params.append(source)
+    s = start.replace(tzinfo=None) if start.tzinfo else start
+    e = end.replace(tzinfo=None) if end.tzinfo else end
+    conditions.append("ingested_at >= ?")
+    where_params.append(s)
+    conditions.append("ingested_at <= ?")
+    where_params.append(e)
+    for exc_field, exc_value in (exclude or []):
+        if exc_field not in _ALLOWED_FIELDS:
+            continue
+        conditions.append(f"({exc_field} IS DISTINCT FROM ?)")
+        where_params.append(exc_value)
+    where = "WHERE " + " AND ".join(conditions)
+
+    conn = _get_conn()
+    with _lock:
+        bucket_rows = conn.execute(
+            f"""SELECT CAST(epoch(ingested_at) / ? AS BIGINT) AS bucket, COUNT(*) AS cnt
+                FROM events {where}
+                GROUP BY bucket ORDER BY bucket""",
+            [window_seconds] + where_params,
+        ).fetchall()
+        sample_rows = conn.execute(
+            f"""SELECT {','.join(_EVENT_COLUMNS)} FROM events {where}
+                ORDER BY ingested_at DESC LIMIT ?""",
+            where_params + [limit],
+        ).fetchall()
+
+    firing_buckets = [r for r in bucket_rows if r[1] >= threshold_count]
+    per_day: dict[str, int] = {}
+    for bucket_ts, cnt in bucket_rows:
+        day = datetime.utcfromtimestamp(bucket_ts * window_seconds).date().isoformat()
+        per_day[day] = per_day.get(day, 0) + cnt
+
+    return {
+        "would_fire_count": len(firing_buckets),
+        "per_day": [{"date": d, "count": c} for d, c in sorted(per_day.items())],
+        "samples": _rows_to_events(sample_rows),
+    }
 
 
 # ── Alert triage store ────────────────────────────────────────────────────────
@@ -719,6 +916,50 @@ def init_cases_tables() -> None:
             is_system   BOOLEAN NOT NULL DEFAULT FALSE
         )""")
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_case ON case_comments(case_id)")
+
+
+def init_watchlist_table() -> None:
+    with _lock:
+        _conn.execute("""CREATE TABLE IF NOT EXISTS watchlist_entries (
+            id             VARCHAR PRIMARY KEY,
+            list_name      VARCHAR NOT NULL,
+            indicator_type VARCHAR NOT NULL,
+            value          VARCHAR NOT NULL,
+            severity       VARCHAR NOT NULL,
+            note           VARCHAR,
+            added_by       VARCHAR NOT NULL,
+            added_at       TIMESTAMP NOT NULL,
+            active         BOOLEAN NOT NULL DEFAULT TRUE
+        )""")
+        # Rows get UPDATEd (the `active` toggle) — no secondary index, per the
+        # DuckDB 1.1.3 PRIMARY KEY + secondary-index UPDATE bug (see CLAUDE.md).
+
+
+def init_saved_searches_table() -> None:
+    with _lock:
+        _conn.execute("""CREATE TABLE IF NOT EXISTS saved_searches (
+            id           VARCHAR PRIMARY KEY,
+            owner        VARCHAR NOT NULL,
+            name         VARCHAR NOT NULL,
+            page         VARCHAR NOT NULL,
+            query_string VARCHAR NOT NULL,
+            created_at   TIMESTAMP NOT NULL
+        )""")
+        # Insert/delete only — no UPDATE, so no secondary-index concern.
+
+
+def init_rule_exceptions_table() -> None:
+    with _lock:
+        _conn.execute("""CREATE TABLE IF NOT EXISTS rule_exceptions (
+            id         VARCHAR PRIMARY KEY,
+            rule_name  VARCHAR NOT NULL,
+            field      VARCHAR NOT NULL,
+            value      VARCHAR NOT NULL,
+            reason     VARCHAR NOT NULL,
+            added_by   VARCHAR NOT NULL,
+            added_at   TIMESTAMP NOT NULL
+        )""")
+        # Insert/delete only — no UPDATE, so no secondary-index concern.
 
 
 # ── Log Sources ────────────────────────────────────────────────────────────────

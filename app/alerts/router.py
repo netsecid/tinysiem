@@ -5,11 +5,13 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.auth import AuthUser, require_analyst
 from app.config import settings
 from app.cases import store as case_store
+from app.storage.csv_export import rows_to_csv
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -82,6 +84,12 @@ def _apply_filters(
 
 _VALID_STATUSES = {"open", "investigating", "resolved"}
 
+_CSV_EXPORT_CAP = 10_000
+_ALERT_CSV_COLUMNS = [
+    "alert_id", "triggered_at", "rule_name", "severity", "source_ip",
+    "mitre_tactic", "mitre_technique", "status", "summary",
+]
+
 
 class TriagePatch(BaseModel):
     status: Optional[str] = None
@@ -111,11 +119,19 @@ def list_alerts(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    format: Optional[str] = None,
     _: AuthUser = Depends(require_analyst),
 ):
     alerts = _read_all_alerts()
     alerts = _apply_filters(alerts, severity, rule_name, source_ip, status, q, start, end)
     alerts.sort(key=lambda a: a.get("triggered_at", ""), reverse=True)
+    if format == "csv":
+        csv_text = rows_to_csv(alerts[:_CSV_EXPORT_CAP], _ALERT_CSV_COLUMNS)
+        return StreamingResponse(
+            iter([csv_text]),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="alerts.csv"'},
+        )
     total = len(alerts)
     return {"total": total, "alerts": alerts[offset: offset + limit]}
 

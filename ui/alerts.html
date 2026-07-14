@@ -277,10 +277,23 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
         <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M4.6 0a4.6 4.6 0 100 9.2A4.6 4.6 0 004.6 0zm3.5 7.7l2.1 2.1-.8.8-2.1-2.1.8-.8z"/></svg>
         Refresh
       </button>
-      <button class="ctrl-btn" onclick="exportCSV()">
+      <button class="ctrl-btn" onclick="exportCSV(event)">
         <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M5.5 7.5L2.5 4.5H4.5V1h2v3.5h2L5.5 7.5zM1 9.5v1h9v-1H1z"/></svg>
         Export CSV
       </button>
+      <span style="position:relative">
+        <button class="ctrl-btn" onclick="toggleSavedSearchDD()">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M5.5 0l1.3 3.6H11L7.7 5.8l1.2 3.6-3.4-2.3L2 9.4l1.2-3.6L0 3.6h4.2z"/></svg>
+          Saved Searches
+        </button>
+        <div id="savedSearchDD" style="display:none;position:absolute;top:30px;left:0;z-index:50;background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:8px;width:240px;box-shadow:0 4px 16px rgba(0,0,0,.4)">
+          <div style="display:flex;gap:5px;margin-bottom:8px">
+            <input id="ssName" placeholder="Name this search" style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11.5px;padding:4px 6px;outline:none">
+            <button class="ctrl-btn" onclick="saveCurrentSearch()">Save</button>
+          </div>
+          <div id="savedSearchList" style="max-height:200px;overflow-y:auto"></div>
+        </div>
+      </span>
       <div class="ctrl-space"></div>
       <span class="result-info" id="resultInfo">—</span>
       <div class="pager">
@@ -359,6 +372,7 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
       <div id="alertEscalateButtons" style="display:flex;gap:.5rem;align-items:center">
         <button id="btnNewCase" class="rm-btn" onclick="showNewCaseForm()">New Case</button>
         <button id="btnAddToCase" class="rm-btn" onclick="toggleAddToCaseDropdown()">Add to Case</button>
+        <button id="btnAddException" class="rm-btn" onclick="showAddExceptionForm()">Add Exception</button>
       </div>
       <!-- Inline new case form (hidden by default) -->
       <div id="newCaseForm" style="display:none;width:100%;padding:.75rem;border-top:1px solid var(--border);margin-top:.25rem">
@@ -373,6 +387,30 @@ tr.expand-row td{padding:0;background:var(--surface2);border-bottom:2px solid va
             </select>
             <button class="rm-btn" onclick="createCaseFromAlert()" style="color:var(--green);border-color:var(--green)">Create</button>
             <button class="rm-btn" onclick="document.getElementById('newCaseForm').style.display='none'">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <!-- Inline add exception form (hidden by default) -->
+      <div id="addExceptionForm" style="display:none;width:100%;padding:.75rem;border-top:1px solid var(--border);margin-top:.25rem">
+        <div style="display:flex;flex-direction:column;gap:.5rem">
+          <div style="font-size:.78rem;color:var(--text-muted)">Except this rule for a field/value — the rule engine will skip matching events entirely.</div>
+          <div style="display:flex;gap:.5rem">
+            <select id="excModalField" style="background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:3px 7px;height:26px">
+              <option value="source_ip">source_ip</option>
+              <option value="source">source</option>
+              <option value="method">method</option>
+              <option value="uri">uri</option>
+              <option value="status_code">status_code</option>
+              <option value="response_size">response_size</option>
+              <option value="user_agent">user_agent</option>
+              <option value="referer">referer</option>
+            </select>
+            <input id="excModalValue" style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12.5px;padding:5px 8px;outline:none" placeholder="Value">
+          </div>
+          <input id="excModalReason" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12.5px;padding:5px 8px;outline:none" placeholder="Reason (required)">
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <button class="rm-btn" onclick="submitAddException()" style="color:var(--green);border-color:var(--green)">Add</button>
+            <button class="rm-btn" onclick="document.getElementById('addExceptionForm').style.display='none'">Cancel</button>
           </div>
         </div>
       </div>
@@ -411,6 +449,7 @@ function applyTheme(t){
   if(!S.jwt){window.location.href='/ui/login.html';return}
   const _p=parseJwt(S.jwt);
   if(!_p||_p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  hydrateFromURL();
   fetchFacets();
   fetchAlerts();
   document.getElementById('activeFilters').addEventListener('click',e=>{
@@ -445,6 +484,22 @@ function buildQS(){
   if(S.af.rule_name) p.set('rule_name',S.af.rule_name);
   return p.toString();
 }
+function hydrateFromURL(){
+  const params=new URLSearchParams(window.location.search);
+  if(![...params.keys()].length)return false;
+  if(params.has('q')){S.q=params.get('q');document.getElementById('searchInput').value=S.q;}
+  if(params.has('severity'))S.af.severity=params.get('severity');
+  if(params.has('rule_name'))S.af.rule_name=params.get('rule_name');
+  if(params.has('limit')){S.limit=parseInt(params.get('limit'),10)||S.limit;document.getElementById('limitSel').value=String(S.limit);}
+  if(params.has('offset'))S.offset=parseInt(params.get('offset'),10)||0;
+  S.page=Math.floor(S.offset/S.limit)+1;
+  renderChips();
+  return true;
+}
+function serializeCurrentURL(){
+  const qs=buildQS();
+  history.replaceState(null,'',window.location.pathname+'?'+qs);
+}
 
 // ── API ────────────────────────────────────────────────────────────────
 async function api(path){
@@ -458,6 +513,7 @@ async function api(path){
 async function fetchAlerts(){
   const tbody=document.getElementById('tbody');
   tbody.innerHTML='<tr class="empty-row"><td colspan="9"><span class="spinner"></span>Loading…</td></tr>';
+  serializeCurrentURL();
   try{
     const d=await api(`/alerts?${buildQS()}`);
     if(!d) return;
@@ -589,7 +645,7 @@ function renderTable(alerts){
       <td><span style="font-family:var(--mono);font-size:11.5px">${t}</span></td>
       <td style="font-family:var(--mono);font-size:12px">${esc(al.rule_name||'—')}</td>
       <td>${sevBadge(al.severity)}</td>
-      <td><span style="font-family:var(--mono);font-size:12px">${esc(al.source_ip||'—')}</span></td>
+      <td>${ipLink(al.source_ip)}</td>
       <td><span style="font-size:12px">${esc(al.mitre_tactic||'—')}</span></td>
       <td>${al.mitre_technique?`<span class="mbadge">${esc(al.mitre_technique)}</span>`:'<span style="color:var(--text-muted)">—</span>'}</td>
       <td style="color:var(--text-dim);font-size:12px">${esc((al.summary||'').slice(0,100))}</td>`;
@@ -618,7 +674,7 @@ function toggleExpand(tr,al,i){
   const fieldRows=showFields.map(k=>`
     <div class="ef">
       <span class="ef-k">${k}</span>
-      <span class="ef-v">${esc(al[k]||'—')}</span>
+      <span class="ef-v">${k==='source_ip'?ipLink(al[k]):esc(al[k]||'—')}</span>
     </div>`).join('');
   const curStatus=al.status||'open';
   const optOpen=curStatus==='open'?'selected':'';
@@ -676,10 +732,11 @@ function openDetail(i){
     .filter(([k])=>!skip.includes(k))
     .map(([k,v])=>`<div class="dm-field">
       <span class="df-k">${esc(k)}</span>
-      <span class="df-v">${esc(v!=null?String(v):'—')}</span>
+      <span class="df-v">${k==='source_ip'&&v?ipLink(v):esc(v!=null?String(v):'—')}</span>
     </div>`).join('');
   document.getElementById('addToCaseDropdown').style.display='none';
   document.getElementById('newCaseForm').style.display='none';
+  document.getElementById('addExceptionForm').style.display='none';
   switchAlertTab('alert',document.querySelector('.modal-tab-btn[data-tab="alert"]'));
   loadAlertCaseLinkage(al.alert_id);
   document.getElementById('detailModal').classList.add('show');
@@ -688,6 +745,7 @@ function closeDetail(){
   document.getElementById('detailModal').classList.remove('show');
   document.getElementById('addToCaseDropdown').style.display='none';
   document.getElementById('newCaseForm').style.display='none';
+  document.getElementById('addExceptionForm').style.display='none';
 }
 function onDetailBg(e){if(e.target.id==='detailModal') closeDetail()}
 function copyDetailJSON(){
@@ -764,20 +822,97 @@ function onLimit(){
 }
 
 // ── EXPORT CSV ─────────────────────────────────────────────────────────
-function exportCSV(){
-  if(!S.alerts.length) return;
-  const cols=['alert_id','triggered_at','rule_name','severity','source_ip','mitre_tactic','mitre_technique','summary'];
-  const rows=[cols.join(','),...S.alerts.map(a=>cols.map(c=>JSON.stringify(a[c]??'')).join(','))];
-  const blob=new Blob([rows.join('\n')],{type:'text/csv'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='tinysiem_alerts.csv'; a.click();
-  URL.revokeObjectURL(url);
+async function exportCSV(evt){
+  const btn=evt?.currentTarget;
+  const orig=btn?btn.innerHTML:null;
+  const qs=buildQS();
+  try{
+    const r=await fetch(`${S.ep}/alerts?${qs}&format=csv`,{headers:{Authorization:`Bearer ${S.jwt}`}});
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='tinysiem_alerts.csv';a.click();
+    URL.revokeObjectURL(url);
+  }catch(e){
+    console.error('CSV export failed:',e);
+    if(btn){btn.innerHTML='Export failed';setTimeout(()=>{btn.innerHTML=orig},2000);}
+  }
 }
+
+// ── SAVED SEARCHES ─────────────────────────────────────────────────────
+let _savedSearches=[];
+function toggleSavedSearchDD(){
+  const dd=document.getElementById('savedSearchDD');
+  if(dd.style.display!=='none'){dd.style.display='none';return}
+  dd.style.display='block';
+  loadSavedSearches();
+}
+async function loadSavedSearches(){
+  const listEl=document.getElementById('savedSearchList');
+  listEl.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:4px">Loading…</div>';
+  try{
+    const d=await api('/searches?page=alerts');
+    if(!d)return;
+    _savedSearches=d.searches||[];
+    renderSavedSearchList();
+  }catch(e){
+    listEl.innerHTML=`<div style="color:var(--red);font-size:11px;padding:4px">${esc(e.message)}</div>`;
+  }
+}
+function renderSavedSearchList(){
+  const listEl=document.getElementById('savedSearchList');
+  if(!_savedSearches.length){
+    listEl.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:4px">No saved searches</div>';
+    return;
+  }
+  listEl.innerHTML=_savedSearches.map(s=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 2px">
+      <span class="ss-run" data-id="${esc(s.id)}" style="flex:1;font-size:12px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.query_string)}">${esc(s.name)}</span>
+      <button class="chip-rm ss-del" data-id="${esc(s.id)}" title="Delete">✕</button>
+    </div>`).join('');
+}
+function runSavedSearch(id){
+  const s=_savedSearches.find(x=>x.id===id);
+  if(!s)return;
+  window.location.href='/ui/alerts.html?'+s.query_string;
+}
+async function deleteSavedSearch(id){
+  try{
+    await apiFetch(`/searches/${id}`,{method:'DELETE'});
+    _savedSearches=_savedSearches.filter(s=>s.id!==id);
+    renderSavedSearchList();
+  }catch(e){/* best-effort */}
+}
+async function saveCurrentSearch(){
+  const nameInput=document.getElementById('ssName');
+  const name=nameInput.value.trim();
+  if(!name)return;
+  const qs=buildQS();
+  try{
+    const r=await apiFetch('/searches',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,page:'alerts',query_string:qs}),
+    });
+    if(r&&r.ok){nameInput.value='';loadSavedSearches();}
+  }catch(e){/* best-effort */}
+}
+// ── SAVED SEARCH LIST EVENT DELEGATION ─────────────────────────────────
+document.getElementById('savedSearchList').addEventListener('click',function(e){
+  const run=e.target.closest('.ss-run');
+  if(run){runSavedSearch(run.dataset.id);return}
+  const del=e.target.closest('.ss-del');
+  if(del){deleteSavedSearch(del.dataset.id);return}
+});
 
 // ── UTILS ──────────────────────────────────────────────────────────────
 function esc(s){
   if(s==null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function ipLink(ip){
+  if(!ip)return '—';
+  return `<a href="/ui/entity.html?ip=${encodeURIComponent(ip)}" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-family:var(--mono)" title="View entity">${esc(ip)}</a>`;
 }
 function fmtTime(ts){
   if(!ts) return '—';
@@ -1012,6 +1147,39 @@ function showNewCaseForm(){
   if(_modalAlert&&form.style.display!=='none'){
     document.getElementById('newCaseTitle').value='Alert: '+(_modalAlert.rule_name||'')+' from '+(_modalAlert.source_ip||'unknown');
     document.getElementById('newCaseSeverity').value=_modalAlert.severity||'medium';
+  }
+}
+
+function showAddExceptionForm(){
+  const form=document.getElementById('addExceptionForm');
+  form.style.display=form.style.display==='none'?'':'none';
+  if(_modalAlert&&form.style.display!=='none'){
+    document.getElementById('excModalField').value='source_ip';
+    document.getElementById('excModalValue').value=_modalAlert.source_ip||'';
+    document.getElementById('excModalReason').value='';
+  }
+}
+async function submitAddException(){
+  if(!_modalAlert||!_modalAlert.rule_name){showToast('This alert has no associated rule','error');return}
+  const field=document.getElementById('excModalField').value;
+  const value=document.getElementById('excModalValue').value.trim();
+  const reason=document.getElementById('excModalReason').value.trim();
+  if(!value||!reason){showToast('Value and reason are required','error');return}
+  try{
+    const r=await apiFetch('/rules/'+encodeURIComponent(_modalAlert.rule_name)+'/exceptions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({field,value,reason}),
+    });
+    if(!r||!r.ok){
+      const err=r?await r.json().catch(()=>({})):{};
+      showToast('Failed to add exception: '+(err.detail||'error'),'error');
+      return;
+    }
+    document.getElementById('addExceptionForm').style.display='none';
+    showToast('Exception added for '+esc(_modalAlert.rule_name));
+  }catch(e){
+    showToast('Error: '+esc(e.message),'error');
   }
 }
 

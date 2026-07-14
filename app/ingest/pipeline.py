@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from app.decoder import engine as decoder_engine
 from app.rules import engine as rule_engine
 from app.storage import duckdb_store
+from app.watchlists import matcher as watchlist_matcher
 
 logger = logging.getLogger(__name__)
 
@@ -30,4 +31,5 @@ def process_line(source: str, raw: str, strict: bool = True) -> str:
 
     duckdb_store.insert_event(event)
     rule_engine.evaluate(event)
+    watchlist_matcher.check_event(event)
     return event["id"]

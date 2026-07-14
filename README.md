@@ -93,6 +93,15 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - Self-monitoring — security-relevant events (failed logins, lockouts, user/integration changes) feed the detection pipeline as their own source, with a built-in rule that alerts on brute-force attempts against TinySIEM itself
 - One-shot backup endpoint — DuckDB export (Parquet) + alerts + custom rules/decoders as a downloadable tar.gz; see [Backup & Restore](docs/backup.md)
 
+**Analyst Experience**
+- Entity pivot view — click any IP in Events, Alerts, or Cases to see first/last seen, event volume histogram, top methods/URIs/status codes, and every related alert and case
+- IOC watchlists — match ingested events against IP/CIDR/user-agent-substring/URI-substring indicator lists; a hit fires a `watchlist:<list_name>` alert; CSV import for bulk loading from any threat-intel export
+- Rule backtesting — "what would this rule have fired on in the last N days?" for both saved and not-yet-saved rules, with sample matches
+- Saved searches + shareable deep links — Events and Alerts serialize their current filters into the URL; paste it to a teammate or save it as a named search
+- Per-rule exceptions — except a known-noisy field/value from a specific rule (with a mandatory reason) instead of disabling the whole rule
+- CSV export — server-side, honors every active filter, proper quoting, 10,000-row cap
+- MITRE ATT&CK coverage matrix — see which of the 14 Enterprise tactics your loaded rules actually cover
+
 **MCP Server (optional)**
 - Model Context Protocol server mountable at `/mcp` for Claude Desktop integration
 - 5 tools: `list_events`, `get_alerts`, `list_parsers`, `list_rules`, `get_health`

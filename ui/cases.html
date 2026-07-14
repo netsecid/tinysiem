@@ -425,7 +425,7 @@ function renderPanel(c){
       return `<div class="alert-chip">
         <span class="badge sev-${detail.severity||'low'}">${(detail.severity||'').toUpperCase()||'?'}</span>
         <span class="ac-name">${esc(detail.rule_name||la.alert_id)}</span>
-        <span style="color:var(--text-muted);font-size:11px">${esc(detail.source_ip||'')}</span>
+        <span style="color:var(--text-muted);font-size:11px">${detail.source_ip?ipLink(detail.source_ip):''}</span>
         <button class="ac-unlink" data-alert-id="${esc(la.alert_id)}" title="Unlink">✕</button>
       </div>`;
     }).join('');
@@ -752,6 +752,10 @@ async function refinePlaybook(caseId,ruleName){
 
 // ── Helpers ──
 function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function ipLink(ip){
+  if(!ip)return '—';
+  return `<a href="/ui/entity.html?ip=${encodeURIComponent(ip)}" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-family:var(--mono)" title="View entity">${esc(ip)}</a>`;
+}
 function fmtStatus(s){return({open:'Open',investigating:'Investigating',resolved:'Resolved'})[s]||s}
 function relTime(iso){
   if(!iso)return '—';
