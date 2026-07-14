@@ -6,6 +6,7 @@
 <title>TinySIEM — Parsers</title>
 <link href="fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="/ui/shared.css">
+<script src="nav.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -53,32 +54,7 @@ tr.selected td,.list-panel tr:hover td{background:var(--accent-dim)}
 </head>
 <body>
 <div class="layout">
-  <nav class="sidenav" id="sidenav">
-    <div class="sidenav-header">
-      <a href="/ui/dashboard.html" class="sidenav-logo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span class="sidenav-logo-text">TinySIEM</span>
-      </a>
-      <button class="sidenav-collapse-btn" onclick="toggleNav()" title="Toggle sidebar">
-        <svg id="collapseIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
-    </div>
-    <ul class="sidenav-items">
-      <li><a href="/ui/dashboard.html" class="nav-link" title="Home"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span class="nav-link-label">Home</span></a></li>
-      <li><a href="/ui/events.html" class="nav-link" title="Events"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span class="nav-link-label">Events</span></a></li>
-      <li><a href="/ui/alerts.html" class="nav-link" title="Alerts"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="nav-link-label">Alerts</span></a></li>
-      <li><a href="/ui/cases.html" class="nav-link" title="Cases"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span class="nav-link-label">Cases</span></a></li>
-      <li><a href="/ui/rules.html" class="nav-link" title="Rules"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span class="nav-link-label">Rules</span></a></li>
-      <li><a href="/ui/parsers.html" class="nav-link active" title="Parsers"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span class="nav-link-label">Parsers</span></a></li>
-      <li><a href="/ui/audit.html" class="nav-link" title="Audit Log"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg><span class="nav-link-label">Audit Log</span></a></li>
-      <li><a href="/ui/configuration.html" class="nav-link" title="Configuration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg><span class="nav-link-label">Configuration</span></a></li>
-    </ul>
-    <div class="sidenav-footer">
-      <button class="nav-btn" onclick="toggleTheme()" title="Toggle theme">&#9681;</button>
-      <span class="sidenav-user" id="navUser"></span>
-      <button class="nav-btn" onclick="logout()" title="Sign out" style="margin-left:auto">&#9167;</button>
-    </div>
-  </nav>
+  <div id="nav-root"></div>
   <div class="main-wrap">
     <div class="topbar">
       <span class="topbar-title">Parsers</span>
@@ -102,15 +78,8 @@ tr.selected td,.list-panel tr:hover td{background:var(--accent-dim)}
 </div>
 <script>
 const TH=document.documentElement;
-const S={navCollapsed:false,theme:'dark',jwt:'',ep:'',role:'',selected:null};
+const S={theme:'dark',jwt:'',ep:'',role:'',selected:null};
 
-function parseJwt(t){try{const b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(b))}catch{return null}}
-function clearAuth(){localStorage.removeItem('ts_jwt');localStorage.removeItem('ts_username');localStorage.removeItem('ts_role');localStorage.removeItem('ts_key')}
-async function logout(){try{await fetch(S.ep+'/auth/logout',{method:'POST',headers:{Authorization:`Bearer ${S.jwt}`}})}catch(e){}clearAuth();window.location.href='/ui/login.html'}
-function updateNavUser(){const el=document.getElementById('navUser');const name=localStorage.getItem('ts_username')||'';const role=localStorage.getItem('ts_role')||'';if(el)el.textContent=name+(role?' \xb7 '+role:'')}
-function toggleNav(){S.navCollapsed=!S.navCollapsed;localStorage.setItem('ts_nav_collapsed',String(S.navCollapsed));applyNav()}
-function applyNav(){const nav=document.getElementById('sidenav');const icon=document.getElementById('collapseIcon');if(S.navCollapsed){nav.classList.add('collapsed');icon.innerHTML='<polyline points="9 18 15 12 9 6"/>';}else{nav.classList.remove('collapsed');icon.innerHTML='<polyline points="15 18 9 12 15 6"/>';}}
-function toggleTheme(){S.theme=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',S.theme);localStorage.setItem('ts_theme',S.theme)}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 
 async function api(path,opts={}){
@@ -295,17 +264,13 @@ function useGenerated(){
 
 function load(){
   S.theme=localStorage.getItem('ts_theme')||'dark';
-  S.navCollapsed=localStorage.getItem('ts_nav_collapsed')==='true';
-  if(window.innerWidth<768)S.navCollapsed=true;
   TH.setAttribute('data-theme',S.theme);
-  applyNav();
   S.jwt=localStorage.getItem('ts_jwt')||'';
   S.ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
   if(!S.jwt){window.location.href='/ui/login.html';return}
   const p=parseJwt(S.jwt);
   if(!p||p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
   S.role=p.role||'';
-  updateNavUser();
   if(S.role==='admin'||S.role==='superadmin')document.getElementById('newBtn').style.display='inline-flex';
   document.getElementById('parserList').addEventListener('click',e=>{
     const tr=e.target.closest('tr[data-name]');

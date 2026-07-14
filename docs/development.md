@@ -174,7 +174,7 @@ tinysiem/
 │   ├── parsers.html
 │   ├── audit.html
 │   ├── users.html
-│   └── configuration.html      — settings + integrations + users
+│   └── settings.html           — settings + integrations + users
 ├── scripts/
 │   ├── gen_nginx_logs.py       — generate nginx log lines to stdout
 │   └── ingest_test_logs.py     — generate + POST to TinySIEM (stdlib only)

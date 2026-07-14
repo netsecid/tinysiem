@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from app.auth import AuthUser, require_admin
+from app.auth import AuthUser, require_superadmin
 from app.storage import duckdb_store
 
 router = APIRouter(prefix="/audit", tags=["audit"])
@@ -21,7 +21,7 @@ def list_audit(
     end: Optional[datetime] = None,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    _: AuthUser = Depends(require_admin),
+    _: AuthUser = Depends(require_superadmin),
 ):
     return duckdb_store.query_audit(
         event_type=event_type,
@@ -41,6 +41,6 @@ def list_audit(
 def audit_facets(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
-    _: AuthUser = Depends(require_admin),
+    _: AuthUser = Depends(require_superadmin),
 ):
     return duckdb_store.get_audit_facets(start=start, end=end)

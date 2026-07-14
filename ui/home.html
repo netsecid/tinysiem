@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TinySIEM — Home</title>
+<link href="fonts.css" rel="stylesheet">
+<link rel="stylesheet" href="/ui/shared.css">
+<script src="nav.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0e17;--surface:#12131f;--surface2:#191a2d;--surface3:#1f2138;
+  --border:#252840;--border2:#323560;--text:#cdd0eb;--text-dim:#7b7fa8;
+  --text-muted:#454870;--accent:#4d9fff;--accent-dim:#0d2a50;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+[data-theme="light"]{
+  --bg:#f0f2f8;--surface:#ffffff;--surface2:#f5f7fc;--surface3:#eaecf5;
+  --border:#dde0f0;--border2:#c0c6e0;--text:#1a1c2e;--text-dim:#4a4f6a;
+  --text-muted:#9096b8;--accent:#2979ff;--accent-dim:#e3ecff;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
+.nav-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
+.nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
+.home-body{flex:1;overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.home-inner{max-width:640px;width:100%;text-align:center}
+.home-icon{width:64px;height:64px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;color:#fff}
+.home-title{font-size:32px;font-weight:700;margin-bottom:12px}
+.home-subtitle{font-size:14px;color:var(--text-dim);margin-bottom:32px;line-height:1.6}
+.search-box{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px 18px;margin-bottom:24px}
+.search-box input{flex:1;background:none;border:none;outline:none;color:var(--text-muted);font-family:var(--sans);font-size:14px;cursor:not-allowed}
+.search-box .send-btn{width:32px;height:32px;border-radius:6px;background:var(--surface3);border:none;color:var(--text-muted);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.coming-soon{font-size:12px;color:var(--text-muted);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="layout">
+  <div id="nav-root"></div>
+  <div class="main-wrap">
+    <div class="home-body">
+      <div class="home-inner">
+        <div class="home-icon">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="home-title">TinySIEM</div>
+        <div class="home-subtitle">Ask anything about your logs, alerts, or environment —<br>TinySIEM's AI will search, correlate, and summarize it for you.</div>
+        <div class="search-box">
+          <input type="text" placeholder="Ask TinySIEM… e.g. show me critical alerts from the last 24 hours" disabled>
+          <button class="send-btn" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </div>
+        <div class="coming-soon">AI-powered search is coming soon.</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const TH=document.documentElement;
+(function init(){
+  TH.setAttribute('data-theme', localStorage.getItem('ts_theme')||'dark');
+  const jwt=localStorage.getItem('ts_jwt')||'';
+  if(!jwt){window.location.href='/ui/login.html';return}
+  const p=parseJwt(jwt);
+  if(!p||p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+})();
+</script>
+</body>
+</html>
