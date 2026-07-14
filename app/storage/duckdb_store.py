@@ -901,6 +901,23 @@ def init_playbook_table() -> None:
         """)
 
 
+def init_ai_config_table() -> None:
+    with _lock:
+        # Single-row table, always written via DELETE+INSERT (see app/ai/config_store.py) —
+        # never UPDATE, so no DuckDB 1.1.3 index/UPDATE risk regardless of indexing.
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS ai_config (
+                id                VARCHAR PRIMARY KEY,
+                provider          VARCHAR NOT NULL,
+                model             VARCHAR NOT NULL,
+                base_url          VARCHAR,
+                api_key_encrypted VARCHAR,
+                updated_at        TIMESTAMP NOT NULL,
+                updated_by        VARCHAR NOT NULL
+            )
+        """)
+
+
 def get_event_full(event_id: str) -> Optional[dict]:
     with _lock:
         row = _get_conn().execute(

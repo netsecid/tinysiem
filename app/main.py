@@ -55,6 +55,7 @@ async def lifespan(app: FastAPI):
     duckdb_store.init_integrations_tables()
     duckdb_store.init_dashboard_tables()
     duckdb_store.init_playbook_table()
+    duckdb_store.init_ai_config_table()
     decoder_engine.load_decoders()
     rule_engine.load_rules()
     duckdb_store.ensure_superadmin(hash_password(settings.tinysiem_superadmin_password))
