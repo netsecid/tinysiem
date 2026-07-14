@@ -391,5 +391,5 @@ def refine_case_playbook(
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
     except Exception as exc:
-        raise HTTPException(502, f"Claude API error: {exc}")
+        raise HTTPException(502, f"AI provider error: {exc}")
     return result

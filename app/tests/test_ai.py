@@ -2,14 +2,14 @@
 
 
 async def test_explain_alert_no_key(client, analyst_headers):
-    """Returns 503 when TINYSIEM_CLAUDE_API_KEY is not set (default in test env)."""
+    """Returns 503 when no ai_config row exists (default in test env)."""
     r = await client.post(
         "/ai/explain-alert",
         json={"alert_id": "nonexistent-id"},
         headers=analyst_headers,
     )
     assert r.status_code == 503
-    assert "TINYSIEM_CLAUDE_API_KEY" in r.json()["detail"]
+    assert "AI features require configuration" in r.json()["detail"]
 
 
 async def test_explain_alert_requires_auth(client):

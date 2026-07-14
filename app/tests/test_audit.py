@@ -157,13 +157,17 @@ async def test_rule_create_creates_audit(client, admin_headers):
 # ── AI call audit ─────────────────────────────────────────────────────────────
 
 async def test_ai_call_logged_on_generate_parser(client, admin_headers):
+    from app.ai.providers.base import ChatResult
+
     mock_yaml = (
         "name: mock-parser\nsource: mock\ntype: regex\n"
         "pattern: '^(?P<msg>.+)$'\nfields:\n  message: msg\n"
     )
-    with patch("app.ai.claude._get_client") as mock_client:
-        mock_resp = mock_client.return_value.messages.create.return_value
-        mock_resp.content = [type("C", (), {"text": mock_yaml})()]
+    mock_provider = type("MockProvider", (), {"model": "claude-sonnet-4-6"})()
+    mock_provider.chat = lambda system, user, max_tokens: ChatResult(
+        text=mock_yaml, model="claude-sonnet-4-6", prompt_tokens=10, completion_tokens=20,
+    )
+    with patch("app.ai.provider_factory.get_active_provider", return_value=mock_provider):
         resp = await client.post(
             "/parsers/generate",
             json={"log_sample": "sample log line for testing"},

@@ -184,7 +184,7 @@ async def test_generate_parser_no_api_key(client, admin_headers):
         headers=admin_headers,
     )
     assert r.status_code == 503
-    assert "TINYSIEM_CLAUDE_API_KEY" in r.json()["detail"]
+    assert "AI features require configuration" in r.json()["detail"]
 
 
 async def test_generate_parser_analyst_forbidden(client, analyst_headers):

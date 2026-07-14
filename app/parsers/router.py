@@ -159,7 +159,7 @@ def generate_parser_endpoint(req: GenerateParserRequest, actor: AuthUser = Depen
             detail={"log_sample_length": len(req.log_sample), "log_sample_preview": req.log_sample[:200]},
             error_msg=str(exc),
         )
-        raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
+        raise HTTPException(status_code=502, detail=f"AI provider error: {exc}")
     try:
         data = _validate_parser_yaml(yaml_text)
     except HTTPException:

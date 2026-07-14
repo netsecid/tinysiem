@@ -82,8 +82,12 @@ def _get_rule_yaml(rule_name: str) -> Optional[str]:
 
 
 def explain_alert(alert_id: str, actor: str) -> dict:
-    from app.ai.claude import _get_client, _log_ai_call
+    from app.ai.claude import _log_ai_call
+    from app.ai.provider_factory import get_active_provider
     from app.storage import duckdb_store
+
+    # Eagerly resolve the provider so callers get 503 before any DB work
+    provider = get_active_provider()
 
     alert = _read_alert_by_id(alert_id)
     if not alert:
@@ -115,28 +119,21 @@ def explain_alert(alert_id: str, actor: str) -> dict:
         "Be concise and practical. No markdown headers. Plain paragraphs."
     )
 
-    client = _get_client()
     start = time.time()
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=system_prompt,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        explanation = response.content[0].text.strip()
+        result = provider.chat(system=system_prompt, user=prompt, max_tokens=1024)
         duration_ms = int((time.time() - start) * 1000)
-        _log_ai_call("explain_alert", actor, prompt, explanation, duration_ms, success=True)
+        _log_ai_call("explain_alert", actor, prompt, result.text, duration_ms, success=True, model=provider.model)
         return {
-            "explanation": explanation,
-            "model": "claude-sonnet-4-6",
-            "prompt_tokens": response.usage.input_tokens,
-            "completion_tokens": response.usage.output_tokens,
+            "explanation": result.text,
+            "model": provider.model,
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
             "duration_ms": duration_ms,
         }
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)
-        _log_ai_call("explain_alert", actor, prompt, "", duration_ms, success=False, error=str(exc))
+        _log_ai_call("explain_alert", actor, prompt, "", duration_ms, success=False, model=provider.model, error=str(exc))
         raise
 
 
@@ -183,11 +180,12 @@ def _get_rule_resolution_stats(rule_name: str, days: int = 90) -> dict:
 
 
 def generate_playbook(rule: dict, actor: str) -> dict:
-    from app.ai.claude import _get_client, _log_ai_call
+    from app.ai.claude import _log_ai_call
+    from app.ai.provider_factory import get_active_provider
     from app.storage import duckdb_store
 
-    # Eagerly check for API key so callers get 503 before any DB work
-    client = _get_client()
+    # Eagerly resolve the provider so callers get 503 before any DB work
+    provider = get_active_provider()
 
     sources = duckdb_store.get_event_sources()
     rule_name = rule.get("name", "")
@@ -229,35 +227,30 @@ def generate_playbook(rule: dict, actor: str) -> dict:
 
     start = time.time()
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=system_prompt,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = response.content[0].text.strip()
+        result = provider.chat(system=system_prompt, user=prompt, max_tokens=1024)
         duration_ms = int((time.time() - start) * 1000)
-        playbook = json.loads(raw)
-        _log_ai_call("generate_playbook", actor, prompt, raw, duration_ms, success=True)
+        playbook = json.loads(result.text)
+        _log_ai_call("generate_playbook", actor, prompt, result.text, duration_ms, success=True, model=provider.model)
         return {
             "playbook": playbook,
-            "model": "claude-sonnet-4-6",
-            "prompt_tokens": response.usage.input_tokens,
-            "completion_tokens": response.usage.output_tokens,
+            "model": provider.model,
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
         }
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)
-        _log_ai_call("generate_playbook", actor, prompt, "", duration_ms, success=False, error=str(exc))
+        _log_ai_call("generate_playbook", actor, prompt, "", duration_ms, success=False, model=provider.model, error=str(exc))
         raise
 
 
 def refine_playbook(case_id: str, alert_id: str, actor: str) -> dict:
-    from app.ai.claude import _get_client, _log_ai_call
+    from app.ai.claude import _log_ai_call
+    from app.ai.provider_factory import get_active_provider
     from app.storage import duckdb_store
     from app.cases import store as case_store
 
-    # Eagerly check for API key so callers get 503 before any DB work
-    client = _get_client()
+    # Eagerly resolve the provider so callers get 503 before any DB work
+    provider = get_active_provider()
 
     alert = _read_alert_by_id(alert_id)
     if not alert:
@@ -293,30 +286,28 @@ def refine_playbook(case_id: str, alert_id: str, actor: str) -> dict:
 
     start = time.time()
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=512,
-            system=system_prompt,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        refinement = response.content[0].text.strip()
+        result = provider.chat(system=system_prompt, user=prompt, max_tokens=512)
         duration_ms = int((time.time() - start) * 1000)
-        _log_ai_call("playbook.refine", actor, prompt, refinement, duration_ms, success=True)
+        _log_ai_call("playbook.refine", actor, prompt, result.text, duration_ms, success=True, model=provider.model)
         return {
-            "refinement": refinement,
-            "model": "claude-sonnet-4-6",
-            "prompt_tokens": response.usage.input_tokens,
-            "completion_tokens": response.usage.output_tokens,
+            "refinement": result.text,
+            "model": provider.model,
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
         }
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)
-        _log_ai_call("playbook.refine", actor, prompt, "", duration_ms, success=False, error=str(exc))
+        _log_ai_call("playbook.refine", actor, prompt, "", duration_ms, success=False, model=provider.model, error=str(exc))
         raise
 
 
 def analyze_events(event_ids: list[str], question: str, actor: str) -> dict:
-    from app.ai.claude import _get_client, _log_ai_call
+    from app.ai.claude import _log_ai_call
+    from app.ai.provider_factory import get_active_provider
     from app.storage import duckdb_store
+
+    # Eagerly resolve the provider so callers get 503 before any DB work
+    provider = get_active_provider()
 
     events = duckdb_store.get_events_by_ids(event_ids)
     if not events:
@@ -341,26 +332,19 @@ def analyze_events(event_ids: list[str], question: str, actor: str) -> dict:
         "Be concise and practical."
     )
 
-    client = _get_client()
     start = time.time()
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1500,
-            system=system_prompt,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        analysis = response.content[0].text.strip()
+        result = provider.chat(system=system_prompt, user=prompt, max_tokens=1500)
         duration_ms = int((time.time() - start) * 1000)
-        _log_ai_call("analyze_events", actor, prompt, analysis, duration_ms, success=True)
+        _log_ai_call("analyze_events", actor, prompt, result.text, duration_ms, success=True, model=provider.model)
         return {
-            "analysis": analysis,
-            "model": "claude-sonnet-4-6",
-            "prompt_tokens": response.usage.input_tokens,
-            "completion_tokens": response.usage.output_tokens,
+            "analysis": result.text,
+            "model": provider.model,
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
             "duration_ms": duration_ms,
         }
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)
-        _log_ai_call("analyze_events", actor, prompt, "", duration_ms, success=False, error=str(exc))
+        _log_ai_call("analyze_events", actor, prompt, "", duration_ms, success=False, model=provider.model, error=str(exc))
         raise

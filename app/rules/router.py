@@ -140,7 +140,7 @@ def generate_rule_endpoint(req: GenerateRuleRequest, actor: AuthUser = Depends(r
             detail={"description_preview": req.description[:200], "source": req.source},
             error_msg=str(exc),
         )
-        raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
+        raise HTTPException(status_code=502, detail=f"AI provider error: {exc}")
     try:
         data = _validate_rule_yaml(yaml_text)
     except HTTPException:
@@ -177,7 +177,7 @@ def generate_playbook_endpoint(name: str, actor: AuthUser = Depends(require_admi
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
+        raise HTTPException(status_code=502, detail=f"AI provider error: {exc}")
     audit.log_event(
         "rule.playbook.generate", "generated", "success",
         actor=actor.username, actor_role=actor.role,
