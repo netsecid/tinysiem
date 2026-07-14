@@ -171,7 +171,7 @@ condition:
 
 ## AI-Assisted Generation
 
-On the Rules page, click **Generate with AI**, describe the detection scenario in plain English, and TinySIEM will produce a working rule YAML. Requires `TINYSIEM_CLAUDE_API_KEY` to be set.
+On the Rules page, click **Generate with AI**, describe the detection scenario in plain English, and TinySIEM will produce a working rule YAML. Requires a provider to be configured under Settings → AI Config.
 
 Example prompt: *"Alert when the same IP makes more than 20 POST requests to /login in 30 seconds"*
 

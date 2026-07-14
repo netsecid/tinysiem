@@ -392,26 +392,22 @@ This is by design — state is ephemeral. If you restart the container during an
 ### `503` on parser or rule generate
 
 ```json
-{ "detail": "TINYSIEM_CLAUDE_API_KEY not set" }
+{ "detail": "AI features require configuration in Settings → AI Config" }
 ```
 
-**Fix:** Add your Anthropic API key to `.env`:
-```dotenv
-TINYSIEM_CLAUDE_API_KEY=sk-ant-...
-```
-
-Then rebuild: `docker-compose up --build`
+**Fix:** Log in with an admin (or higher) account, go to **Settings → AI Config**, choose a provider (Anthropic, OpenAI, DeepSeek, or a custom OpenAI-compatible endpoint), enter a model and API key (not required for a keyless local Ollama server), and click **Save**. Use **Test Connection** to confirm it works before relying on it.
 
 ---
 
-### `502 Claude API error`
+### `502 AI provider error`
 
-**Cause:** The Anthropic API returned an error (rate limit, invalid key, network issue).
+**Cause:** The configured provider's API returned an error (rate limit, invalid key, network issue, unreachable host).
 
-**Fix:** Check the audit log (`/ui/audit.html`) for the `ai.call` entry with `status=error` — the `error_msg` field contains the raw API error. Common causes:
-- Invalid API key — verify at console.anthropic.com
+**Fix:** Check the audit log (`/ui/audit.html`) for the `ai.call` entry with `status=error` — the `error_msg` field contains the raw provider error. Common causes:
+- Invalid API key — re-check it under Settings → AI Config, or verify at the provider's own console
 - Rate limit — wait and retry
-- Model unavailable — the default model is `claude-sonnet-4-6`
+- Model unavailable — confirm the selected model is still offered by the provider (or, for Ollama, that it's been pulled locally)
+- Unreachable base URL — for a custom/local provider, confirm the host is reachable from inside the container (not just from your own machine)
 
 ---
 

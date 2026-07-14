@@ -302,15 +302,14 @@ async def test_complete_and_uncheck_step_via_api(client, analyst_headers):
     assert step2["completed"] is False
 
 
-async def test_generate_playbook_no_claude_key(client, admin_headers):
-    """Returns 503 when TINYSIEM_CLAUDE_API_KEY is empty."""
-    # conftest sets TINYSIEM_CLAUDE_API_KEY="" so no real call is made
+async def test_generate_playbook_no_ai_config(client, admin_headers):
+    """Returns 503 when no ai_config row exists (default in test env)."""
     resp = await client.post("/rules/nginx-http-404-spike/playbook/generate", headers=admin_headers)
     assert resp.status_code == 503
 
 
-async def test_refine_playbook_no_claude_key(client, analyst_headers):
-    """Returns 503 when TINYSIEM_CLAUDE_API_KEY is empty."""
+async def test_refine_playbook_no_ai_config(client, analyst_headers):
+    """Returns 503 when no ai_config row exists (default in test env)."""
     cr = await client.post("/cases", json={"title": "Refine Test"}, headers=analyst_headers)
     case_id = cr.json()["case_id"]
     resp = await client.post(

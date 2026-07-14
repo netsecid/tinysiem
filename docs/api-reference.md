@@ -575,7 +575,7 @@ All parser endpoints require `admin` role.
 { "sample": "192.168.1.1 - - [01/Jul/2026:10:00:00 +0000] \"GET /api HTTP/1.1\" 200 512", "description": "nginx access log" }
 ```
 
-Returns `503` if `TINYSIEM_CLAUDE_API_KEY` is not set.
+Returns `503` if no AI provider is configured (see Settings → AI Config).
 
 ---
 
@@ -597,7 +597,7 @@ All rule endpoints require `admin` role.
 { "description": "Alert when the same IP fails login more than 5 times in 60 seconds" }
 ```
 
-Returns `503` if `TINYSIEM_CLAUDE_API_KEY` is not set.
+Returns `503` if no AI provider is configured (see Settings → AI Config).
 
 ---
 

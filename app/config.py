@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     tinysiem_jwt_secret: str
     tinysiem_jwt_expiry_hours: int = 24
     tinysiem_superadmin_password: str = "admin"
-    tinysiem_claude_api_key: str = ""
     tinysiem_mcp_enabled: bool = False
 
     # Notifications

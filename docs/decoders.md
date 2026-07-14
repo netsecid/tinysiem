@@ -159,7 +159,7 @@ type: json
 
 ## AI-Assisted Generation
 
-On the Parsers page, click **Generate with AI**, paste a log sample, and TinySIEM will produce a working decoder YAML using the Claude API. Requires `TINYSIEM_CLAUDE_API_KEY` to be set.
+On the Parsers page, click **Generate with AI**, paste a log sample, and TinySIEM will produce a working decoder YAML using the configured AI provider. Requires a provider to be configured under Settings → AI Config.
 
 ---
 

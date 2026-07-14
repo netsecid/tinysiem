@@ -115,9 +115,7 @@ The key must be exactly 32 URL-safe base64-encoded bytes (44 characters includin
 
 ## AI (Claude API)
 
-| Variable | Default | Description |
-|---|---|---|
-| `TINYSIEM_CLAUDE_API_KEY` | `` | Anthropic API key. Leave empty to disable AI features. Parser/rule generation and Alert Explain return `503` when not set. |
+AI features (parser/rule generation, alert explain, event analysis, playbook generation) are configured separately via **Settings → AI Config** in the UI (admin role required), not an environment variable — see `docs/api-reference.md`'s AI section for the endpoints involved.
 
 ---
 
