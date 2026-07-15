@@ -240,7 +240,7 @@ The Home page (`/`) is the AI natural-language search landing page, not a dashbo
 
 ## Security Model
 
-Role-based access control with three tiers — `analyst` < `admin` < `superadmin` — enforced per-endpoint via FastAPI dependencies (`require_analyst`, `require_admin`, `require_superadmin`). Two credential types exist for two different callers: a single global **API key** scoped only to `/ingest/*` (for log shippers that shouldn't need a human login), and per-user **JWTs** (HS256) for everything else, obtained via `POST /auth/login`. Session invalidation doesn't require a token blocklist — every user carries a `token_epoch` that's bumped on password change, logout, or an admin-driven update, instantly rejecting any previously-issued token for that user on its next request. See [Configuration → Security Checklist](configuration.md) for the full hardening surface (lockout, CSP, TLS, startup guardrails, etc.).
+Role-based access control with three tiers — `analyst` < `admin` < `superadmin` — enforced per-endpoint via FastAPI dependencies (`require_analyst`, `require_admin`, `require_superadmin`). Two credential types exist for two different callers: a single global **API key** scoped only to `/ingest/*` (for log shippers that shouldn't need a human login), and per-user **JWTs** (HS256) for everything else, obtained via `POST /auth/login`. Session invalidation doesn't require a token blocklist — every user carries a `token_epoch` that's bumped on password change, logout, or an admin-driven update, instantly rejecting any previously-issued token for that user on its next request. See [Configuration → Security Checklist](configuration.md#security-checklist) for the full hardening surface (lockout, CSP, TLS, startup guardrails, etc.).
 
 ---
 

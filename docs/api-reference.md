@@ -363,7 +363,7 @@ Both the Events and Alerts UI pages expose "New Case" / "Add to Case" buttons on
 - `GET /cases/{case_id}/playbook` — completed steps for this case, cross-referenced against the rule's embedded `playbook:` YAML (analyst)
 - `POST /cases/{case_id}/playbook/steps` `{ "rule_name", "step_id", "note" }` — mark a playbook step complete, with an optional note (analyst)
 - `DELETE /cases/{case_id}/playbook/steps/{step_id}` — unmark a step (analyst)
-- `POST /cases/{case_id}/playbook/refine` `{ "alert_id" }` — ask the configured AI provider to refine the rule's playbook using this specific alert's context (admin; 503 if no AI provider is configured)
+- `POST /cases/{case_id}/playbook/refine` `{ "alert_id" }` — ask the configured AI provider to refine the rule's playbook using this specific alert's context (analyst; 503 if no AI provider is configured)
 
 ---
 
@@ -716,6 +716,12 @@ searchable normally.
 Analyst+. Returns all 14 MITRE Enterprise tactics with technique/rule-count breakdowns
 computed from currently-loaded rules (built-in + custom). Tactics with no matching rules
 are included with an empty `techniques` list.
+
+### `POST /rules/{name}/playbook/generate`
+Admin+. Asks the configured AI provider to generate a structured `playbook:` block (response
+steps) for the rule, based on its condition and MITRE tags. Returns the generated YAML for
+review — nothing is saved until the caller writes it back via `PUT /rules/{name}`. `503` if
+no AI provider is configured.
 
 ---
 
