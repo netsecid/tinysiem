@@ -163,9 +163,43 @@ condition:
 
 ## Writing a Custom Rule
 
-1. Create `app/rules/rules/custom/<name>.yaml`
-2. Set a unique `name` that matches no existing rule
+1. Create `app/rules/rules/custom/<name>.yaml` (or use the Rules page's create form, which does this over the API)
+2. Set a unique `name` that matches no existing rule — **the YAML's `name:` field must exactly match the rule identity you create/update it under.** The server rejects a mismatch with a `422`, and rule lookups are keyed by this name, so a mismatched pair (e.g. a file whose internal `name:` doesn't match its filename) would otherwise be invisible to `GET /rules/{name}` even though the rule is loaded and active.
 3. The rule is active on next ingested event — no rebuild needed
+
+---
+
+## Backtesting
+
+Before trusting a threshold value or a new correlation window, click **Run Backtest** on the Rules page (or `POST /rules/{name}/backtest`, or `POST /rules/backtest` for a not-yet-saved draft) to answer "what would this rule, exactly as written, have fired on in the last N days?" against real historical events — without touching the live rule set or writing any alerts.
+
+- `field_match` rules get an exact match count and sample events.
+- `threshold` rules get fixed consecutive-window counts — an approximation of the live sliding window, close enough to sanity-check a threshold before deploying it, but not a byte-for-byte replay.
+- `correlation` rules aren't backtestable yet (`{"supported": false}`) — the multi-step sequence logic isn't reproducible against a static historical window the same way.
+
+The natural loop is: **generate (AI or by hand) → backtest → adjust the threshold → deploy.**
+
+---
+
+## Rule Exceptions
+
+Instead of disabling a noisy rule entirely, add a per-rule exception for the specific field/value that's causing false positives — e.g. a monitoring probe that legitimately triggers a 404-spike rule. Exceptions require a `reason` (mandatory, for auditability) and apply to one of the same fields threshold rules can key on: `source`, `source_ip`, `method`, `uri`, `status_code`, `response_size`, `user_agent`, `referer`.
+
+An excepted event is skipped for that rule entirely — including threshold counting — but is still ingested and searchable normally elsewhere. Manage exceptions from a rule's detail view on the Rules page, or via `GET`/`POST /rules/{name}/exceptions` and `DELETE /rules/{name}/exceptions/{id}`.
+
+---
+
+## MITRE ATT&CK Coverage
+
+The Rules page's **MITRE ATT&CK Coverage** tab (`GET /rules/mitre-coverage`) shows all 14 MITRE Enterprise tactics with a technique/rule-count breakdown computed from your currently-loaded rules (built-in + custom) — a quick way to see which tactics you actually have detection coverage for versus which are still gaps, without manually cross-referencing every rule's `mitre_tactic`/`mitre_technique` tags yourself.
+
+---
+
+## Playbooks
+
+A rule's YAML can carry an optional `playbook:` block — a structured list of response steps an analyst should work through when this rule fires (e.g. "check source IP reputation", "review affected account's recent activity", "escalate if X"). Playbooks can be hand-written directly in the rule YAML, or AI-generated (`POST /rules/{name}/playbook/generate`) from the rule's condition and MITRE tags.
+
+When an alert fires and gets escalated into a case, the case's **Playbook** tab shows the rule's steps and lets the analyst check them off (`POST /cases/{case_id}/playbook/steps`) with an optional note per step — turning a static YAML checklist into a per-incident, per-analyst record of what was actually done. A playbook can also be **refined** for one specific case (`POST /cases/{case_id}/playbook/refine`) — the AI provider adjusts the generic steps using that alert's actual context (source IP, affected user, etc.) rather than leaving them generic.
 
 ---
 

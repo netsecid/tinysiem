@@ -113,9 +113,26 @@ The key must be exactly 32 URL-safe base64-encoded bytes (44 characters includin
 
 ---
 
-## AI (Claude API)
+## AI Provider
 
-AI features (parser/rule generation, alert explain, event analysis, playbook generation) are configured separately via **Settings → AI Config** in the UI (admin role required), not an environment variable — see `docs/api-reference.md`'s AI section for the endpoints involved.
+AI features are entirely optional, off by default, and configured through the UI rather than an environment variable — there is no `TINYSIEM_*` variable for an API key or model name.
+
+Go to **Settings → AI Config** (admin role required) and pick one of:
+
+| Provider | `base_url` needed? | Notes |
+|---|---|---|
+| `anthropic` | No | Uses the Anthropic Messages API directly. |
+| `openai` | No | Defaults to `https://api.openai.com/v1`. |
+| `deepseek` | No | Defaults to `https://api.deepseek.com/v1`. |
+| `custom` | **Yes** | Any OpenAI-compatible endpoint — a self-hosted model gateway, Ollama, LM Studio, etc. |
+
+The **Model** field is free text — providers ship new models faster than this doc (or any dropdown) could track, so check your provider's own documentation for the exact model name/ID to enter. Click **Test Connection** after saving to confirm the key and endpoint actually work before relying on them.
+
+The API key is encrypted at rest the same way integration credentials are — see [`TINYSIEM_MASTER_KEY`](#api-integrations) above; without it set, AI Config save requests will still work (the key is stored, just less safely — set the master key before storing anything sensitive in production).
+
+Every feature — parser generation, rule generation, alert explain, event analysis, playbook generation/refinement, and the Home page's natural-language search — calls whichever provider is configured through the same interface, so switching providers doesn't require reconfiguring each feature separately. See [Architecture → AI Layer](architecture.md#ai-layer-optional) for how this abstraction works, and [API Reference → AI](api-reference.md#ai) for the endpoints.
+
+If no provider is configured, AI-powered UI elements degrade gracefully — the Home page falls back to a plain message with manual links to Events/Alerts/Cases, and buttons like "Explain with AI" surface a clear "not configured" error instead of failing silently.
 
 ---
 

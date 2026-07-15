@@ -274,7 +274,10 @@ Returns `{ open: N, investigating: N, resolved: N }`.
 
 ## Cases
 
-Case management for multi-alert incidents. Requires `analyst` role for read/update; `admin` for create/delete.
+Case management for multi-alert (and multi-event) incidents. `analyst` role can create, read, update, comment, and link/unlink alerts or events; `DELETE /cases/{case_id}` requires `admin`.
+
+### `GET /cases/facets`
+Facet counts (status, severity, assignee, resolution) for building filter UIs. Requires `analyst` role.
 
 ### `GET /cases`
 
@@ -282,8 +285,9 @@ Case management for multi-alert incidents. Requires `analyst` role for read/upda
 |---|---|---|
 | `status` | string | `open`, `investigating`, `resolved` |
 | `severity` | string | `low`, `medium`, `high`, `critical` |
-| `assigned_to` | string | Username filter |
+| `assignee` | string | Username filter |
 | `q` | string | Full-text on title and description |
+| `start` / `end` | ISO datetime | Filter by `created_at` |
 | `limit` / `offset` | int | Pagination |
 
 **Response:**
@@ -297,40 +301,69 @@ Case management for multi-alert incidents. Requires `analyst` role for read/upda
       "description": "15 failed logins over 2 minutes",
       "severity": "high",
       "status": "investigating",
-      "assigned_to": "alice",
+      "resolution": null,
+      "assignee": "alice",
+      "created_by": "admin",
       "created_at": "2026-07-01T10:00:00Z",
       "updated_at": "2026-07-01T10:05:00Z",
-      "alert_ids": ["uuid1", "uuid2"]
+      "closed_at": null,
+      "mitre_tactic": "Credential Access",
+      "mitre_technique": "T1110",
+      "tags": ["brute-force"]
     }
   ]
 }
 ```
 
 ### `POST /cases`
-Create a case. Requires `admin` role.
+Create a case. Requires `analyst` role. `alert_ids` is optional — pass initial alert IDs to link on creation (there's no equivalent `event_ids` param on create; link events afterward via `POST /cases/{case_id}/events`).
 
 ```json
 {
   "title": "Suspicious exfiltration",
   "description": "Large outbound transfers to unknown IP",
   "severity": "critical",
-  "assigned_to": "alice",
+  "assignee": "alice",
+  "mitre_tactic": "Exfiltration",
+  "mitre_technique": "T1041",
+  "tags": ["exfil"],
   "alert_ids": ["uuid1"]
 }
 ```
 
 ### `GET /cases/{case_id}`
-Get a single case with full alert list. Requires `analyst` role.
+Get a single case, hydrated with its full linked-alert and linked-event details (`alerts`, `linked_alert_ids`, `linked_event_ids`) and its comment/timeline history (`comments`). Requires `analyst` role.
 
 ### `PATCH /cases/{case_id}`
-Update status, severity, notes, or assigned user. Requires `analyst` role.
+Update title, description, severity, status, assignee, MITRE tags, or tags. Requires `analyst` role. Closing a case (`status: "resolved"`) requires a `resolution` — one of `true_positive`, `false_positive`, `benign`, `undetermined`.
 
 ```json
-{ "status": "resolved", "description": "False positive — scheduled backup job" }
+{ "status": "resolved", "resolution": "false_positive" }
 ```
 
 ### `DELETE /cases/{case_id}`
-Delete a case. Requires `admin` role.
+Delete a case (and its links/comments/playbook steps). Requires `admin` role.
+
+### Comments
+- `POST /cases/{case_id}/comments` `{ "body": "..." }` — add a comment (analyst)
+- `PUT /cases/{case_id}/comments/{comment_id}` `{ "body": "..." }` — edit your own comment (or any comment as admin+); system comments can't be edited
+- `DELETE /cases/{case_id}/comments/{comment_id}` — same ownership rule as edit
+
+System comments (e.g. "Alert X linked by admin") are inserted automatically on case creation and every link/unlink/status-change action, giving each case a readable audit timeline alongside the analyst's own notes.
+
+### Linking alerts and events
+- `POST /cases/{case_id}/alerts` `{ "alert_ids": ["uuid1", "uuid2"] }` → `{ "linked": [...] }` (analyst)
+- `DELETE /cases/{case_id}/alerts/{alert_id}` (analyst)
+- `POST /cases/{case_id}/events` `{ "event_ids": ["uuid1"] }` → `{ "linked": [...] }` (analyst)
+- `DELETE /cases/{case_id}/events/{event_id}` (analyst)
+
+Both the Events and Alerts UI pages expose "New Case" / "Add to Case" buttons on each row that call these endpoints directly — an analyst can escalate straight from a raw event or a fired alert without a separate case-creation step.
+
+### Playbook
+- `GET /cases/{case_id}/playbook` — completed steps for this case, cross-referenced against the rule's embedded `playbook:` YAML (analyst)
+- `POST /cases/{case_id}/playbook/steps` `{ "rule_name", "step_id", "note" }` — mark a playbook step complete, with an optional note (analyst)
+- `DELETE /cases/{case_id}/playbook/steps/{step_id}` — unmark a step (analyst)
+- `POST /cases/{case_id}/playbook/refine` `{ "alert_id" }` — ask the configured AI provider to refine the rule's playbook using this specific alert's context (admin; 503 if no AI provider is configured)
 
 ---
 
@@ -683,6 +716,50 @@ searchable normally.
 Analyst+. Returns all 14 MITRE Enterprise tactics with technique/rule-count breakdowns
 computed from currently-loaded rules (built-in + custom). Tactics with no matching rules
 are included with an empty `techniques` list.
+
+---
+
+## AI
+
+All AI features route through one configured provider (Settings → AI Config) — see
+[Architecture → AI Layer](architecture.md#ai-layer-optional) for how the provider
+abstraction works. Every endpoint below returns `503` if no provider is configured, and
+`502` if the configured provider's API call itself fails.
+
+### `GET /ai/config`
+Admin+. Returns the current configuration with the API key redacted:
+```json
+{ "configured": true, "provider": "anthropic", "model": "claude-sonnet-4-6", "base_url": null, "has_api_key": true }
+```
+
+### `PUT /ai/config`
+Admin+. Set the active provider.
+```json
+{ "provider": "anthropic", "model": "claude-sonnet-4-6", "base_url": null, "api_key": "sk-..." }
+```
+`provider` is one of `anthropic`, `openai`, `deepseek`, `custom`. `model` is a free-text field — the provider's model catalog changes faster than this doc could track, so check your provider's own documentation for the exact model name/ID to use. `base_url` is required for `custom` (any OpenAI-compatible endpoint, e.g. a local Ollama server); omit `api_key` to leave the currently-stored key unchanged.
+
+### `POST /ai/config/test`
+Admin+. Sends a trivial prompt to the configured provider and returns `{"success": true/false, "detail": "..."}` — use this after saving config to confirm the key/endpoint actually works before relying on it.
+
+### `POST /ai/explain-alert`
+Analyst+. `{ "alert_id": "uuid" }` → a plain-language explanation of why the alert fired and what to check next, using the alert's own fields and rule condition as context.
+
+### `POST /ai/analyze-events`
+Analyst+. `{ "event_ids": ["uuid1", "uuid2"], "question": "..." }` → answers a free-form question about a specific set of selected events (used by the Events page's multi-select "Explain with AI" flow).
+
+### `POST /ai/search`
+Analyst+. `{ "question": "show me critical alerts from the last 24 hours" }` → the Home page's natural-language search. Internally: one AI call extracts a structured `{target, filters}` intent, a real query runs against Events/Alerts/Cases, and a second AI call summarizes the real results — see [Architecture](architecture.md#ai-layer-optional) for the full sequence diagram.
+```json
+{ "answer": "3 critical alerts fired in the last 24 hours, all from rule tinysiem-internal-brute-force...", "link": "/ui/alerts.html?severity=critical&start=...", "link_label": "View 3 alerts" }
+```
+If the question isn't a search (a greeting, a general question), `link`/`link_label` are `null` and `answer` is a plain conversational reply.
+
+### `POST /parsers/generate` and `POST /rules/generate`
+Covered under [Parsers](#parsers) and [Rules](#rules) above — both are AI-powered but scoped to their own resource, so they stay documented there rather than here.
+
+### `POST /rules/{name}/playbook/generate` and `POST /cases/{case_id}/playbook/refine`
+Covered under [Rules](#rules) and [Cases](#cases) above, for the same reason.
 
 ---
 

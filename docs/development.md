@@ -1,5 +1,7 @@
 # Development
 
+For a conceptual, diagram-first overview of how the system fits together, see [Architecture](architecture.md). This document covers the practical side: running tests, the file-by-file project layout, and implementation gotchas that don't fit a diagram.
+
 ## Running Tests
 
 Tests must run inside the Docker container — DuckDB is installed in the image, not on the host:
@@ -18,7 +20,9 @@ docker-compose exec -w /app tinysiem pytest tests/test_audit.py::test_login_succ
 docker-compose exec -w /app tinysiem pytest tests/ -q
 ```
 
-Test coverage: **313 tests** across ingest, events, alerts, parsers, rules, users, auth, correlation, syslog, Beats, retention, reports, notifications, audit, AI, baselines, cases, integrations, dashboard, playbooks, alert enrichment, and v1.4 hardening (lockout, forced password change, token revocation, API key scoping, syslog guardrails, CORS, TLS, startup guardrails, SBOM, suppression, self-monitoring, backup, footprint).
+Test coverage: **445 tests** across ingest, events, alerts, parsers, rules (incl. exceptions, backtest, MITRE coverage, name/filename invariant), users, auth, correlation, syslog, Beats, retention, reports, notifications, audit, AI (provider abstraction, home search), baselines, cases (incl. alert and event linkage, playbooks), entities, watchlists, saved searches, integrations, dashboard, alert enrichment, and hardening (lockout, forced password change, token revocation, API key scoping, syslog guardrails, CORS, TLS, startup guardrails, SBOM, suppression, self-monitoring, backup, footprint).
+
+One known, pre-existing flaky test: `tests/test_csv_export_sanitization.py` occasionally fails only when run as part of the full suite (never in isolation) due to test-order-dependent DB state — not a regression signal on its own.
 
 ---
 
@@ -38,7 +42,8 @@ tinysiem/
 │   ├── generate_sbom.py        — pip-freeze → JSON, baked into the image as /app/sbom.json at build time
 │   ├── startup_checks.py       — validate_jwt_secret() (fatal); warn_if_default_superadmin_password(), warn_if_integrations_missing_master_key() (advisory)
 │   ├── main.py                 — FastAPI entry; lifespan; routers; security headers + CSP middleware
-│   ├── config.py               — pydantic-settings for TINYSIEM_* env vars; parse_cors_origins()
+│   ├── config.py               — pydantic-settings for TINYSIEM_* env vars; parse_cors_origins() (no AI env vars — AI config is DB-backed, see app/ai/)
+│   ├── crypto.py               — Fernet encrypt()/decrypt() helpers, keyed by TINYSIEM_MASTER_KEY; used by integrations and AI Config
 │   ├── auth.py                 — JWT creation/validation (epoch claim); Bearer dependency; role checks incl. ingest-only API key scoping; live user/epoch/password-gate lookup; secrets.compare_digest
 │   ├── auth_router.py          — POST /auth/login (timing-safe, lockout-gated); GET /auth/me; POST /auth/logout; POST /auth/change-password
 │   ├── auth_lockout.py         — in-memory brute-force lockout tracker, exponential backoff, time-based eviction
@@ -53,29 +58,37 @@ tinysiem/
 │   │   └── router.py           — GET /audit, GET /audit/facets
 │   ├── ingest/
 │   │   ├── router.py           — POST /ingest/raw, /ingest/file, /ingest/beats
-│   │   └── pipeline.py         — shared process_line() used by HTTP routes + syslog
+│   │   └── pipeline.py         — shared process_line() used by HTTP routes + syslog; runs the watchlist matcher on every stored event
 │   ├── events/
-│   │   └── router.py           — GET /events, /events/facets, /events/histogram
+│   │   └── router.py           — GET /events, /events/facets, /events/histogram, GET /events/{id}, GET /events/{id}/cases
 │   ├── alerts/
-│   │   ├── router.py           — GET /alerts, /alerts/facets, PATCH /alerts/{id}
-│   │   └── file_writer.py      — JSONL append + rotation + flock
+│   │   ├── router.py           — GET /alerts, /alerts/facets, /alerts/triage-summary, GET/PATCH /alerts/{id}, GET /alerts/{id}/cases
+│   │   └── file_writer.py      — JSONL append + rotation + flock; the one place anything (rule hits or watchlist hits) appends to alerts.log
 │   ├── cases/
-│   │   ├── router.py           — GET/POST /cases, GET/PATCH/DELETE /cases/{id}
-│   │   └── store.py            — DuckDB CRUD for cases table
+│   │   ├── router.py           — case CRUD, comments, playbook steps, and alert/event linkage (POST/DELETE /cases/{id}/alerts and /events)
+│   │   └── store.py            — DuckDB CRUD for cases, case_alerts, case_events, case_comments, case_playbook_steps
+│   ├── entities/
+│   │   └── router.py           — GET /entities/ip/{value} — read-only aggregation (first/last seen, histogram, related alerts + cases) over existing data; no dedicated storage
+│   ├── watchlists/
+│   │   ├── router.py           — CRUD + /bulk + /import (CSV) for IOC watchlist entries; API-only, no dedicated UI page yet
+│   │   ├── store.py            — DuckDB CRUD for watchlist_entries
+│   │   └── matcher.py          — in-memory cache (exact IPs, CIDRs, UA/URI substrings), reload_cache() on startup + every mutation; check_event() called by the ingest pipeline
+│   ├── searches/
+│   │   └── router.py           — GET/POST/DELETE /searches — saved filter queries for the Events and Alerts pages
 │   ├── baselines/
-│   │   ├── router.py           — GET /baselines, GET/PATCH /baselines/violations
+│   │   ├── router.py           — GET /baselines, GET/PATCH /baselines/violations, DELETE /baselines/{source}
 │   │   ├── store.py            — DuckDB CRUD; z-score calculation
-│   │   └── learner.py          — background bucket update job
+│   │   └── learner.py          — background bucket update job (Welford's online algorithm)
 │   ├── integrations/
-│   │   ├── router.py           — GET/POST /integrations, PATCH/DELETE/{id}, /trigger, /runs
-│   │   ├── store.py            — DuckDB CRUD; Fernet encrypt/decrypt; credential masking
+│   │   ├── router.py           — GET/POST /integrations, PATCH/DELETE/{id}, /run, /runs
+│   │   ├── store.py            — DuckDB CRUD; Fernet encrypt/decrypt (via app/crypto.py); credential masking
 │   │   ├── runner.py           — run_integration(); run_due() scheduler
 │   │   └── drivers/
 │   │       ├── __init__.py     — DRIVERS registry
 │   │       ├── aws_cloudtrail.py
 │   │       └── google_workspace.py
 │   ├── dashboard/
-│   │   ├── router.py           — GET/PUT /dashboard, POST /dashboard/export/html
+│   │   ├── router.py           — GET/PUT/DELETE /dashboard, POST /dashboard/export/html
 │   │   ├── renderer.py         — HTML export; html.escape() throughout
 │   │   └── widgets.py          — widget data fetchers for all 7 types
 │   ├── sources/
@@ -93,18 +106,29 @@ tinysiem/
 │   │       └── custom/         — drop custom decoders here (hot-reloaded)
 │   ├── rules/
 │   │   ├── engine.py           — load_rules(), evaluate(); threshold (source-scoped) + correlation + suppression state
-│   │   ├── router.py           — GET/POST/PUT/DELETE /rules, POST /rules/generate
+│   │   ├── router.py           — GET/POST/PUT/DELETE /rules, /rules/generate, /rules/{name}/backtest, /rules/mitre-coverage, /rules/{name}/exceptions, /rules/{name}/playbook/generate
+│   │   ├── backtest.py         — "what would this rule have fired on in the last N days" against real historical events
+│   │   ├── exceptions_store.py — DuckDB CRUD for rule_exceptions
 │   │   └── rules/
-│   │       ├── tinysiem-brute-force-self.yaml  — built-in self-monitoring rule
+│   │       ├── tinysiem-internal-brute-force.yaml  — built-in self-monitoring rule (filename must match its internal name: field — enforced on create/update)
 │   │       └── custom/         — drop custom rules here (hot-reloaded)
 │   ├── parsers/
 │   │   └── router.py           — GET/POST/PUT/DELETE /parsers, /parsers/generate, /parsers/{name}/test
 │   ├── users/
 │   │   └── router.py           — GET/POST/PUT/DELETE /users
 │   ├── mcp_server/
-│   │   └── server.py           — FastMCP app; _JWTMiddleware with role check; 5 tools
+│   │   └── server.py           — FastMCP app; _JWTMiddleware with role check; 5 tools (list_events, get_alerts, list_parsers, list_rules, get_health); mounted at /mcp only if TINYSIEM_MCP_ENABLED
 │   ├── ai/
-│   │   └── claude.py           — generate_parser(), generate_rule(); AI call audit
+│   │   ├── router.py           — POST /ai/explain-alert, /ai/analyze-events, /ai/search, GET/PUT /ai/config, POST /ai/config/test
+│   │   ├── provider_factory.py — get_active_provider(); PROVIDER_PRESETS (anthropic / openai / deepseek / custom base_url)
+│   │   ├── config_store.py     — CRUD for the single-row ai_config table; API key encrypted via app/crypto.py
+│   │   ├── claude.py           — generate_parser(), generate_rule(); _log_ai_call() shared by every AI feature
+│   │   ├── enrichment.py       — explain_alert(), analyze_events(), generate_playbook(), refine_playbook()
+│   │   ├── home_search.py      — run_search() — the 3-call extract→query→summarize flow behind the Home page search box
+│   │   └── providers/
+│   │       ├── base.py                        — AIProvider protocol + ChatResult dataclass
+│   │       ├── anthropic_provider.py           — wraps the Anthropic SDK
+│   │       └── openai_compatible_provider.py   — wraps the OpenAI SDK with a configurable base_url (covers OpenAI, DeepSeek, and any OpenAI-compatible endpoint)
 │   ├── notifications/
 │   │   ├── router.py           — POST /notifications/test, GET /notifications/config
 │   │   └── sender.py           — email (SMTP) + webhook dispatch
@@ -115,66 +139,28 @@ tinysiem/
 │   │   ├── router.py           — GET /reports/generate, /reports/download, POST /reports/send
 │   │   └── generator.py        — aggregate report data; HTML render
 │   ├── storage/
-│   │   └── duckdb_store.py     — all DuckDB ops; single _conn + threading.Lock; _escape_like(); count_events_in_window(source-scoped)
+│   │   └── duckdb_store.py     — all DuckDB table definitions + ops; single _conn + threading.Lock; _escape_like(); count_events_in_window(source-scoped)
 │   ├── listeners/
 │   │   └── syslog.py           — asyncio UDP + TCP syslog listeners; RFC auto-detect; CIDR allowlist + size cap; drop counters
-│   └── tests/
-│       ├── conftest.py         — env vars + fixtures (JWT-backed role fixtures, ingest-only API key fixture)
-│       ├── test_ingest.py
-│       ├── test_decoder.py
-│       ├── test_builtin_decoders.py
-│       ├── test_beats_ingest.py
-│       ├── test_syslog_listener.py
-│       ├── test_syslog_guardrails.py   — CIDR allowlist, size cap, drop counters
-│       ├── test_parsers.py
-│       ├── test_rules.py
-│       ├── test_rules_crud.py
-│       ├── test_correlation_rules.py
-│       ├── test_threshold_source_scope.py  — threshold counting scoped to the rule's own source
-│       ├── test_alert_suppression.py   — suppression window + suppressed_count
-│       ├── test_alert_triage.py
-│       ├── test_alert_enrichment.py
-│       ├── test_auth.py                — login, JWT, epoch revocation, forced password change
-│       ├── test_auth_lockout.py        — brute-force lockout, backoff, eviction
-│       ├── test_users_api.py
-│       ├── test_users_schema_migration.py  — legacy-DB migration for token_epoch/must_change_password
-│       ├── test_startup_checks.py      — weak-JWT-secret refusal, advisory warnings
-│       ├── test_cors.py
-│       ├── test_csp.py
-│       ├── test_ui_fonts.py            — self-hosted fonts, no external references
-│       ├── test_ui_vendor_chartjs.py   — vendored Chart.js, no external references
-│       ├── test_sbom.py
-│       ├── test_generate_sbom.py       — pip-freeze parsing
-│       ├── test_security_feed.py       — tinysiem_internal feed, allowlist, no recursion
-│       ├── test_backup.py
-│       ├── test_footprint.py           — chromadb fully removed
-│       ├── test_audit.py
-│       ├── test_playbook.py
-│       ├── test_cases.py
-│       ├── test_retention.py
-│       ├── test_reports.py
-│       ├── test_notifications.py
-│       ├── test_baselines.py
-│       ├── test_integrations.py
-│       ├── test_dashboard.py
-│       └── test_ai.py
+│   └── tests/                  — 60 files, 445 tests. conftest.py sets env vars + JWT-backed role fixtures (analyst_headers/admin_headers/superadmin_headers) and an ingest-only API key fixture before any app.* module is imported. Organized roughly one file per router/feature module (test_ingest.py, test_events.py, test_alerts.py, test_cases.py, test_case_event_linkage.py, test_rules_crud.py, test_correlation_rules.py, test_watchlist_matching.py, test_home_search.py, test_ai_search_endpoint.py, test_auth.py, test_auth_lockout.py, test_baselines.py, test_integrations.py, test_dashboard.py, test_backup.py, etc.) — see the directory for the authoritative, current list rather than relying on this doc.
 ├── ui/
-│   ├── shared.css              — nav component, tokens, badge styles
+│   ├── nav.js                  — shared top nav bar (Dashboard · Events · Alerts · Cases · Rules · Parsers) + profile dropdown (Settings, Audit Log for superadmin); active-item highlight from location.pathname
+│   ├── shared.css               — nav styling, design tokens, badge styles
 │   ├── fonts.css                — @font-face rules for self-hosted IBM Plex Sans/Mono
 │   ├── fonts/                   — vendored IBM Plex TTF files (Sans 400/500/600, Mono 400/500)
 │   ├── vendor/
 │   │   └── chart.umd.min.js    — vendored Chart.js (same version previously loaded from a CDN)
 │   ├── login.html               — includes forced password-change panel
+│   ├── home.html                — AI natural-language search landing page; redirect target of `/` and the nav logo
 │   ├── dashboard.html          — custom widgets, edit mode, auto-refresh
-│   ├── events.html
-│   ├── alerts.html
-│   ├── cases.html
-│   ├── baselines.html
-│   ├── rules.html
-│   ├── parsers.html
-│   ├── audit.html
-│   ├── users.html
-│   └── settings.html           — settings + integrations + users
+│   ├── events.html             — includes New Case / Add to Case buttons on each expand-row
+│   ├── alerts.html              — includes triage panel, New Case / Add to Case, and the tabbed Alert/Logs/Rule detail modal
+│   ├── cases.html               — case detail panel supports a `?case_id=` deep link
+│   ├── entity.html              — IP entity pivot/summary page
+│   ├── rules.html               — includes its own MITRE ATT&CK coverage tab and a resizable rule-list column
+│   ├── parsers.html            — resizable parser-list column
+│   ├── audit.html               — superadmin-only, reachable via the profile dropdown (not the top nav)
+│   └── settings.html           — 10 tabs: Instance, Users & Access, Notifications, Retention, Ingestion, Baselines, Integrations, Sources, Reports, AI Config
 ├── scripts/
 │   ├── gen_nginx_logs.py       — generate nginx log lines to stdout
 │   └── ingest_test_logs.py     — generate + POST to TinySIEM (stdlib only)
@@ -188,7 +174,7 @@ tinysiem/
 ### DuckDB thread safety
 A single global `_conn` is protected by `threading.Lock()`. All queries must hold this lock. Python's `threading.Lock` is not re-entrant — never call a DuckDB function from within an already-locked block unless the called function acquires its own separate lock or you've guaranteed no re-entry.
 
-**Known DuckDB 1.1.x constraint:** `UPDATE` on a table that has a `PRIMARY KEY` **and** any secondary `CREATE INDEX` raises an internal error. Workaround: never add `CREATE INDEX` to tables that receive `UPDATE` statements. Affected tables use a DELETE + INSERT pattern instead of UPDATE. This applies to `baselines`, `baseline_violations`, `cases`, `integrations`, and `integration_runs`.
+**Known DuckDB 1.1.x constraint:** `UPDATE` on a table that has a `PRIMARY KEY` **and** any secondary `CREATE INDEX` raises an internal error. Workaround: never add `CREATE INDEX` to tables that receive `UPDATE` statements. Affected tables use a DELETE + INSERT pattern instead of UPDATE. This applies to `baselines`, `baseline_violations`, `cases`, `integrations`, `integration_runs`, `watchlist_entries`, `ai_config`, and `case_playbook_steps`. Purely insert/delete tables (`case_alerts`, `case_events`, `saved_searches`, `rule_exceptions`) never hit this constraint since they have no `UPDATE` path at all.
 
 ### LIKE wildcard escaping
 `_build_where()` in `duckdb_store.py` calls `_escape_like(val)` before embedding user input in `LIKE`/`ILIKE` patterns. This escapes `%`, `_`, and `\` so user-supplied strings are treated literally, preventing filter-bypass via SQL metacharacters.
@@ -243,12 +229,14 @@ Shared by all ingest paths (HTTP routes + syslog listeners). `strict=False` stor
 
 ## UI Pages
 
-All pages are single self-contained HTML files — no build step, no framework. Vanilla JS + CSS. IBM Plex Sans + IBM Plex Mono are self-hosted (`ui/fonts.css` + `ui/fonts/`, as of v1.4) — the UI makes zero external network requests at runtime, including Chart.js, which is vendored at `ui/vendor/chart.umd.min.js`.
+All pages are single self-contained HTML files — no build step, no framework. Vanilla JS + CSS. IBM Plex Sans + IBM Plex Mono are self-hosted (`ui/fonts.css` + `ui/fonts/`) — the UI makes zero external network requests at runtime, including Chart.js, which is vendored at `ui/vendor/chart.umd.min.js`.
+
+A shared `ui/nav.js` renders the identical top nav bar and profile dropdown on every page and highlights the active link from `location.pathname` — pages no longer each carry their own copy of the sidenav.
 
 Page-level conventions:
 - Module-level `S` object holds all page state
 - `TH = document.documentElement` — theme applied as `data-theme` attribute on `<html>`
-- `ts_jwt`, `ts_ep`, `ts_theme`, `ts_nav_collapsed` persisted in `localStorage`
+- `ts_jwt`, `ts_ep`, `ts_theme`, `ts_username`, `ts_role`, `ts_key` persisted in `localStorage`
 - JWT decoded client-side via `parseJwt()` for role checks and expiry
 - `api(path)` helper handles auth headers and 401 → redirect to login
 - `esc(s)` for all user-controlled strings inserted into HTML — escapes `&`, `<`, `>`, `"`, `'`

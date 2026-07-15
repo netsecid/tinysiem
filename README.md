@@ -16,7 +16,7 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 **Parsing**
 - YAML decoder engine — regex, JSON, and key-value formats
 - Built-in decoders: nginx access, syslog RFC 3164/5424, Windows Event Log, AWS CloudTrail, iptables
-- AI-assisted parser generation via Claude API
+- AI-assisted parser generation (Anthropic, OpenAI, DeepSeek, or any OpenAI-compatible endpoint)
 - Hot-reload: add a YAML file, no rebuild required
 
 **Detection**
@@ -29,7 +29,7 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - Append-only JSONL alert log with automatic rotation
 - Per-alert triage workflow: open → investigating → resolved
 - Email (SMTP) and webhook notifications
-- AI Explain — one-click Claude analysis of any alert
+- AI Explain — one-click AI analysis of any alert
 
 **Smart Baselines**
 - Statistical baseline learning per source and hour-of-day bucket
@@ -37,9 +37,9 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - Violation tracking with acknowledgement workflow
 
 **Incident Cases**
-- Full case management: create, link alerts, update status, close
-- Status lifecycle: open → investigating → resolved
-- Notes, severity, and assigned-to tracking per case
+- Full case management: create from scratch, from an alert, or directly from a raw event
+- Link/unlink alerts and events, comment timeline, per-rule playbook step tracking
+- Status lifecycle: open → investigating → resolved (with a required true/false-positive classification on close)
 
 **API Integrations**
 - Pull-based log polling for AWS CloudTrail and Google Workspace
@@ -55,17 +55,16 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - Auto-refresh every 60 s per widget
 
 **UI**
-- Events — search, sidebar facets, time histogram, expandable rows, live-tail mode
-- Alerts — severity/rule facets, triage panel, AI Explain
+- Home — AI natural-language search landing page; falls back to manual search links if no provider is configured
+- Events — search, sidebar facets, time histogram, expandable rows, live-tail mode, New Case / Add to Case
+- Alerts — severity/rule facets, triage panel, AI Explain, New Case / Add to Case
 - Dashboard — fully configurable, per-user widget layout
-- Cases — incident management, linked alert list
-- Smart Baselines — health summary, violation table with acknowledge
-- Integrations — AWS/Google Workspace, encrypted credentials, run history
-- Sources — per-source event counts and last-seen timestamps
+- Cases — incident management, linked alert and event list, comments, playbook
+- Entity pivot — click any IP anywhere to see its history and every related alert/case
+- Rules — CRUD + AI generator + backtest + MITRE coverage tab
 - Parsers — CRUD + AI generator + live test panel
-- Rules — CRUD + AI generator
-- Audit Log — append-only record of every user action and API error
-- Configuration — settings, user management (superadmin)
+- Settings — one tabbed page: Instance, Users & Access, Notifications, Retention, Ingestion, Baselines, Integrations, Sources, Reports, AI Config (admin/superadmin)
+- Audit Log — append-only record of every user action and API error (superadmin)
 - Dark / light theme
 
 **Security & Hardening**
@@ -150,26 +149,9 @@ python scripts/ingest_test_logs.py 500
 
 ## How It Works
 
-```
-Log source (nginx / syslog / Beats / curl / integration poller)
-  → POST /ingest/raw  |  POST /ingest/beats  |  UDP/TCP :5140/:5141
-      → auth check (Bearer token)
-      → decoder engine   — YAML regex/json/kv → normalized event + UUID
-      → DuckDB           — structured storage (events + audit + cases + baselines + ...)
-      → rule engine      — field_match / threshold / correlation, source-scoped counting
-      → alert writer     — JSONL append (suppression-aware) → email/webhook notifications
-```
+A log line is ingested (REST, syslog, or Beats), decoded by a YAML parser into a normalized event, stored in DuckDB, checked against the IOC watchlist, and evaluated by the rule engine — a match writes an alert, which can trigger an email/webhook and feed into a case. Everything runs through one shared pipeline regardless of entry point, including security-relevant events about TinySIEM itself (failed logins, lockouts), so the same rule engine can detect attacks against the tool.
 
-Security-relevant audit events (failed logins, lockouts, user/integration changes) are
-additionally mirrored into the same pipeline as source `tinysiem_internal`, so the rule
-engine can alert on attacks against TinySIEM itself.
-
-Background jobs:
-```
-Scheduler (asyncio, every 60 s)
-  → integration runner  — pull events from AWS CloudTrail / Google Workspace
-  → baseline learner    — update per-source hourly buckets
-```
+→ See [Architecture](docs/architecture.md) for the full diagram-first walkthrough — system overview, the ingest-to-alert sequence, the AI provider abstraction, and background jobs.
 
 ---
 
@@ -178,11 +160,11 @@ Scheduler (asyncio, every 60 s)
 | Component | Technology |
 |---|---|
 | API | FastAPI (Python 3.12) |
-| Storage | DuckDB — events, alerts triage, cases, baselines, integrations, dashboard, audit, users |
+| Storage | DuckDB — events, cases (+ alert/event links), users, baselines, watchlists, saved searches, integrations, dashboard, audit |
 | Alert log | JSONL (append-only, rotated at configurable size, suppression-aware) |
 | UI | Vanilla HTML/CSS/JS — no build step; self-hosted fonts + scripts (zero external requests) |
 | Container | Docker Compose, non-root `appuser`; optional built-in TLS via env vars |
-| AI | Claude API (optional — parser/rule generation, alert explain) |
+| AI | Optional, provider-agnostic — Anthropic, OpenAI, DeepSeek, or any OpenAI-compatible endpoint, configured in-app (no env var) |
 | Credentials | `cryptography` (Fernet AES-128-CBC + HMAC-SHA256) |
 
 ---
@@ -191,14 +173,15 @@ Scheduler (asyncio, every 60 s)
 
 | Doc | Contents |
 |---|---|
+| [Architecture](docs/architecture.md) | Diagram-first high-level overview — system design, data flow, AI layer, background jobs |
 | [Quick Start](docs/quickstart.md) | Installation, first run, seeding data, Filebeat/syslog setup |
 | [API Reference](docs/api-reference.md) | All endpoints, parameters, request/response examples |
 | [Integrations](docs/integrations.md) | AWS CloudTrail and Google Workspace setup guides |
 | [Decoders](docs/decoders.md) | YAML format, built-in decoders, writing custom parsers |
 | [Rules](docs/rules.md) | YAML format, condition types, MITRE tagging, correlation rules |
-| [Configuration](docs/configuration.md) | All environment variables, TLS setup, security checklist |
+| [Configuration](docs/configuration.md) | All environment variables, AI provider setup, TLS setup, security checklist |
 | [Backup & Restore](docs/backup.md) | Triggering a backup, manual restore procedure |
-| [Development](docs/development.md) | Running tests, architecture details, project structure |
+| [Development](docs/development.md) | Running tests, project structure, implementation notes |
 | [Troubleshooting](docs/troubleshooting.md) | Common errors and fixes for startup, auth, ingest, rules, UI |
 
 ---
