@@ -5,8 +5,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./logs:/var/log/nginx
     ports:
-      # Worktree-local remap (v1.0-ui-polish) — do not merge this line change.
-      - "8086:80"
+      - "8080:80"
 
   tinysiem:
     build: ./app
@@ -18,10 +17,9 @@ services:
       - ./ui:/app/ui:ro
       - tinysiem_data:/app/data
     ports:
-      # Worktree-local remap (v1.0-ui-polish) — do not merge this line change.
-      - "8006:8000"
-      - "5160:5140/udp"
-      - "5161:5141"
+      - "8000:8000"
+      - "5140:5140/udp"
+      - "5141:5141"
     depends_on:
       - nginx
 
