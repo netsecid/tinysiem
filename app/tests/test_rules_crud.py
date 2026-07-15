@@ -128,6 +128,32 @@ async def test_invalid_rule_name_rejected(client, admin_headers):
     assert r.status_code == 422
 
 
+async def test_create_rule_name_mismatch_rejected(client, admin_headers):
+    mismatched_yaml = VALID_RULE_YAML.replace("name: test-custom-rule", "name: some-other-name")
+    r = await client.post(
+        "/rules",
+        json={"name": "test-custom-rule", "yaml_text": mismatched_yaml},
+        headers=admin_headers,
+    )
+    assert r.status_code == 422
+    assert not (CUSTOM_DIR / "test-custom-rule.yaml").exists()
+
+
+async def test_update_rule_name_mismatch_rejected(client, admin_headers):
+    await client.post(
+        "/rules",
+        json={"name": "test-custom-rule", "yaml_text": VALID_RULE_YAML},
+        headers=admin_headers,
+    )
+    mismatched_yaml = VALID_RULE_YAML.replace("name: test-custom-rule", "name: renamed-rule")
+    r = await client.put(
+        "/rules/test-custom-rule",
+        json={"name": "test-custom-rule", "yaml_text": mismatched_yaml},
+        headers=admin_headers,
+    )
+    assert r.status_code == 422
+
+
 async def test_generate_rule_no_api_key(client, admin_headers):
     r = await client.post(
         "/rules/generate",

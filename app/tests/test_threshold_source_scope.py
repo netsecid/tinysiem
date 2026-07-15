@@ -104,7 +104,7 @@ def test_internal_brute_force_rule_ignores_other_source_401s(tmp_path):
     """Reproduce the original bug scenario: 5 nginx 401s + 2 tinysiem_internal 401s
     must NOT fire the rule; only 5+ (new) tinysiem_internal 401s should.
 
-    Loads the real tinysiem-brute-force-self.yaml rule content (field/value/source
+    Loads the real tinysiem-internal-brute-force.yaml rule content (field/value/source
     unchanged) under a fresh unique name. The session-wide DuckDB may already hold
     some tinysiem_internal 401 events from other tests exercising auth failures
     within the same 300s window (e.g. test_security_feed.py), so threshold_count
@@ -114,7 +114,7 @@ def test_internal_brute_force_rule_ignores_other_source_401s(tmp_path):
     field=status_code/value=401/source=tinysiem_internal config of the real rule.
     """
     rules_dir = Path(__file__).parent.parent / "rules" / "rules"
-    real_rule_path = rules_dir / "tinysiem-brute-force-self.yaml"
+    real_rule_path = rules_dir / "tinysiem-internal-brute-force.yaml"
     rule = yaml.safe_load(real_rule_path.read_text())
     assert rule["source"] == "tinysiem_internal"
     assert rule["condition"]["field"] == "status_code"

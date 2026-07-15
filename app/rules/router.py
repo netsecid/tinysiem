@@ -260,6 +260,11 @@ def get_rule(name: str, _: AuthUser = Depends(require_analyst)):
 def create_rule(req: RuleRequest, actor: AuthUser = Depends(require_admin)):
     _check_name(req.name)
     data = _validate_rule_yaml(req.yaml_text)
+    if data.get("name") != req.name:
+        raise HTTPException(
+            status_code=422,
+            detail=f"YAML 'name' field ({data.get('name')!r}) must match the rule name ({req.name!r})",
+        )
     dest = _CUSTOM_DIR / f"{req.name}.yaml"
     if dest.exists():
         raise HTTPException(status_code=409, detail="Rule already exists")
@@ -284,6 +289,11 @@ def update_rule(name: str, req: RuleRequest, actor: AuthUser = Depends(require_a
     if not is_custom:
         raise HTTPException(status_code=403, detail="Cannot modify built-in rules")
     data = _validate_rule_yaml(req.yaml_text)
+    if data.get("name") != name:
+        raise HTTPException(
+            status_code=422,
+            detail=f"YAML 'name' field ({data.get('name')!r}) must match the rule name ({name!r})",
+        )
     path.write_text(req.yaml_text)
     rule_engine.load_rules()
     audit.log_event(
