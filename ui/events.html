@@ -835,18 +835,18 @@ function showNewCaseFromEvent(eventId){
   if(isOpen)return;
   panel.innerHTML=`
     <div style="display:flex;flex-direction:column;gap:8px">
-      <input id="newCaseTitle_${eventId}" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12.5px;padding:5px 8px;outline:none" value="Case from event ${eventId}">
+      <input id="newCaseTitle_${esc(eventId)}" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12.5px;padding:5px 8px;outline:none" value="Case from event ${esc(eventId)}">
       <div style="display:flex;gap:8px;align-items:center">
-        <select id="newCaseSeverity_${eventId}" style="background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:3px 7px;height:26px">
+        <select id="newCaseSeverity_${esc(eventId)}" style="background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:3px 7px;height:26px">
           <option value="low">Low</option>
           <option value="medium" selected>Medium</option>
           <option value="high">High</option>
           <option value="critical">Critical</option>
         </select>
-        <button class="cbtn" onclick="event.stopPropagation();createCaseFromEvent('${eventId}')">Create</button>
-        <button class="cbtn" onclick="event.stopPropagation();_caseLinkPanel('${eventId}').style.display='none'">Cancel</button>
+        <button class="cbtn" onclick="event.stopPropagation();createCaseFromEvent('${esc(eventId)}')">Create</button>
+        <button class="cbtn" onclick="event.stopPropagation();_caseLinkPanel('${esc(eventId)}').style.display='none'">Cancel</button>
       </div>
-      <div id="caseLinkMsg_${eventId}" style="font-size:11.5px"></div>
+      <div id="caseLinkMsg_${esc(eventId)}" style="font-size:11.5px"></div>
     </div>`;
 }
 
@@ -886,9 +886,9 @@ async function showAddToCaseFromEvent(eventId){
   panel.dataset.mode='add';
   if(isOpen)return;
   panel.innerHTML=`
-    <input id="caseSearch_${eventId}" oninput="filterCaseListForEvent('${eventId}')" style="width:100%;margin-bottom:8px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:5px 8px;outline:none" placeholder="Search open cases…">
-    <div id="caseListForEvent_${eventId}" style="max-height:160px;overflow-y:auto;font-size:12px">Loading…</div>
-    <div id="caseLinkMsg_${eventId}" style="font-size:11.5px;margin-top:6px"></div>`;
+    <input id="caseSearch_${esc(eventId)}" oninput="filterCaseListForEvent('${esc(eventId)}')" style="width:100%;margin-bottom:8px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:5px 8px;outline:none" placeholder="Search open cases…">
+    <div id="caseListForEvent_${esc(eventId)}" style="max-height:160px;overflow-y:auto;font-size:12px">Loading…</div>
+    <div id="caseLinkMsg_${esc(eventId)}" style="font-size:11.5px;margin-top:6px"></div>`;
   try{
     const r=await fetch(`${S.ep}/cases?status=open&limit=20`,{headers:hdrs()});
     if(!r.ok)throw new Error('Failed to load cases');
@@ -912,7 +912,7 @@ function renderCaseListForEvent(eventId,cases){
   if(!el)return;
   if(!cases.length){el.innerHTML='<div style="color:var(--text-muted)">No open cases found</div>';return}
   el.innerHTML=cases.map(c=>
-    `<div data-case-id="${esc(c.case_id)}" data-case-title="${esc(c.title)}" onclick="linkEventToCase('${eventId}',this.dataset.caseId,this.dataset.caseTitle)" style="padding:4px 6px;cursor:pointer;border-radius:4px" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${esc(c.title)}</div>`
+    `<div data-case-id="${esc(c.case_id)}" data-case-title="${esc(c.title)}" onclick="linkEventToCase('${esc(eventId)}',this.dataset.caseId,this.dataset.caseTitle)" style="padding:4px 6px;cursor:pointer;border-radius:4px" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${esc(c.title)}</div>`
   ).join('');
 }
 
