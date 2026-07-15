@@ -803,7 +803,10 @@ function toggleRow(row,encoded){
       <span class="exp-eid">${esc(e.id)}</span>
       <button class="cbtn" onclick="copyT('${esc(e.id)}')">Copy ID</button>
       <button class="cbtn" onclick="openRaw(event,'${enc(e)}')">Full Raw View</button>
+      <button class="cbtn" onclick="event.stopPropagation();showNewCaseFromEvent('${esc(e.id)}')">New Case</button>
+      <button class="cbtn" onclick="event.stopPropagation();showAddToCaseFromEvent('${esc(e.id)}')">Add to Case</button>
     </div>
+    <div id="caseLinkPanel_${esc(e.id)}" style="display:none;margin-top:8px;padding:10px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px"></div>
     <div class="exp-fields">${fields.map(([k,v])=>`
       <div class="ef">
         <span class="ef-k">${esc(String(k))}</span>
@@ -820,6 +823,112 @@ function toggleRow(row,encoded){
     if(span) quickFilter(span.dataset.fk,span.dataset.fv);
   });
   row.after(tr);
+}
+function _caseLinkPanel(eventId){return document.getElementById('caseLinkPanel_'+eventId)}
+
+function showNewCaseFromEvent(eventId){
+  const panel=_caseLinkPanel(eventId);
+  if(!panel)return;
+  const isOpen=panel.style.display!=='none'&&panel.dataset.mode==='new';
+  panel.style.display=isOpen?'none':'block';
+  panel.dataset.mode='new';
+  if(isOpen)return;
+  panel.innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <input id="newCaseTitle_${eventId}" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12.5px;padding:5px 8px;outline:none" value="Case from event ${eventId}">
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="newCaseSeverity_${eventId}" style="background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:3px 7px;height:26px">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="critical">Critical</option>
+        </select>
+        <button class="cbtn" onclick="event.stopPropagation();createCaseFromEvent('${eventId}')">Create</button>
+        <button class="cbtn" onclick="event.stopPropagation();_caseLinkPanel('${eventId}').style.display='none'">Cancel</button>
+      </div>
+      <div id="caseLinkMsg_${eventId}" style="font-size:11.5px"></div>
+    </div>`;
+}
+
+async function createCaseFromEvent(eventId){
+  const title=document.getElementById('newCaseTitle_'+eventId).value.trim();
+  const severity=document.getElementById('newCaseSeverity_'+eventId).value;
+  const msgEl=document.getElementById('caseLinkMsg_'+eventId);
+  if(!title){msgEl.innerHTML='<span style="color:var(--red)">Title is required</span>';return}
+  try{
+    const cr=await fetch(`${S.ep}/cases`,{
+      method:'POST',
+      headers:{...hdrs(),'Content-Type':'application/json'},
+      body:JSON.stringify({title,severity}),
+    });
+    if(!cr.ok){msgEl.innerHTML='<span style="color:var(--red)">Failed to create case</span>';return}
+    const newCase=await cr.json();
+    const linkResp=await fetch(`${S.ep}/cases/${newCase.case_id}/events`,{
+      method:'POST',
+      headers:{...hdrs(),'Content-Type':'application/json'},
+      body:JSON.stringify({event_ids:[eventId]}),
+    });
+    if(!linkResp.ok){
+      msgEl.innerHTML='<span style="color:var(--red)">Case created but event could not be linked</span>';
+      return;
+    }
+    msgEl.innerHTML=`<span style="color:var(--ok, #22c55e)">Case created — <a href="/ui/cases.html?case_id=${esc(newCase.case_id)}" style="color:var(--accent)">View Case</a></span>`;
+  }catch(e){
+    msgEl.innerHTML=`<span style="color:var(--red)">Error: ${esc(e.message)}</span>`;
+  }
+}
+
+async function showAddToCaseFromEvent(eventId){
+  const panel=_caseLinkPanel(eventId);
+  if(!panel)return;
+  const isOpen=panel.style.display!=='none'&&panel.dataset.mode==='add';
+  panel.style.display=isOpen?'none':'block';
+  panel.dataset.mode='add';
+  if(isOpen)return;
+  panel.innerHTML=`
+    <input id="caseSearch_${eventId}" oninput="filterCaseListForEvent('${eventId}')" style="width:100%;margin-bottom:8px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;padding:5px 8px;outline:none" placeholder="Search open cases…">
+    <div id="caseListForEvent_${eventId}" style="max-height:160px;overflow-y:auto;font-size:12px">Loading…</div>
+    <div id="caseLinkMsg_${eventId}" style="font-size:11.5px;margin-top:6px"></div>`;
+  try{
+    const r=await fetch(`${S.ep}/cases?status=open&limit=20`,{headers:hdrs()});
+    if(!r.ok)throw new Error('Failed to load cases');
+    const data=await r.json();
+    panel.dataset.cases=JSON.stringify(data.cases||[]);
+    renderCaseListForEvent(eventId,data.cases||[]);
+  }catch(e){
+    document.getElementById('caseListForEvent_'+eventId).innerHTML=`<span style="color:var(--red)">${esc(e.message)}</span>`;
+  }
+}
+
+function filterCaseListForEvent(eventId){
+  const panel=_caseLinkPanel(eventId);
+  const cases=JSON.parse(panel.dataset.cases||'[]');
+  const q=document.getElementById('caseSearch_'+eventId).value.toLowerCase();
+  renderCaseListForEvent(eventId,cases.filter(c=>c.title.toLowerCase().includes(q)));
+}
+
+function renderCaseListForEvent(eventId,cases){
+  const el=document.getElementById('caseListForEvent_'+eventId);
+  if(!el)return;
+  if(!cases.length){el.innerHTML='<div style="color:var(--text-muted)">No open cases found</div>';return}
+  el.innerHTML=cases.map(c=>
+    `<div data-case-id="${esc(c.case_id)}" data-case-title="${esc(c.title)}" onclick="linkEventToCase('${eventId}',this.dataset.caseId,this.dataset.caseTitle)" style="padding:4px 6px;cursor:pointer;border-radius:4px" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${esc(c.title)}</div>`
+  ).join('');
+}
+
+async function linkEventToCase(eventId,caseId,caseTitle){
+  const msgEl=document.getElementById('caseLinkMsg_'+eventId);
+  try{
+    const r=await fetch(`${S.ep}/cases/${caseId}/events`,{
+      method:'POST',
+      headers:{...hdrs(),'Content-Type':'application/json'},
+      body:JSON.stringify({event_ids:[eventId]}),
+    });
+    if(!r.ok){msgEl.innerHTML='<span style="color:var(--red)">Failed to link event</span>';return}
+    msgEl.innerHTML=`<span style="color:var(--ok, #22c55e)">Linked to ${esc(caseTitle)}</span>`;
+  }catch(e){
+    msgEl.innerHTML=`<span style="color:var(--red)">Error: ${esc(e.message)}</span>`;
+  }
 }
 function quickFilter(k,v){
   const inp=document.getElementById('searchInput');
