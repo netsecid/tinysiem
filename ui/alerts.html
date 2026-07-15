@@ -685,6 +685,8 @@ function toggleExpand(tr,al,i){
     <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
       <button class="ctrl-btn" onclick="openDetail(${i})">View Full Detail</button>
       <button class="ctrl-btn" id="aiBtn_${i}" onclick="event.stopPropagation();explainAlert('${esc(al.alert_id)}',${i})">✦ Explain with AI</button>
+      <button class="ctrl-btn" onclick="event.stopPropagation();openDetail(${i});showNewCaseForm()">New Case</button>
+      <button class="ctrl-btn" onclick="event.stopPropagation();openDetail(${i});toggleAddToCaseDropdown()">Add to Case</button>
     </div>
     <div id="aiResult_${i}" style="display:none;margin-top:10px;padding:10px 14px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;font-size:12.5px;line-height:1.65;color:var(--text)"></div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
@@ -697,10 +699,6 @@ function toggleExpand(tr,al,i){
             <option value="investigating" ${optInv}>Investigating</option>
             <option value="resolved" ${optRes}>Resolved</option>
           </select>
-        </div>
-        <div style="flex:1;min-width:200px">
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Notes</div>
-          <textarea id="trNotes_${i}" style="width:100%;height:52px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11.5px;padding:5px 8px;resize:vertical;outline:none" placeholder="Investigation notes…">${esc(al.notes||'')}</textarea>
         </div>
         <div style="min-width:130px">
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Assigned to</div>
@@ -771,7 +769,6 @@ function statusBadge(st){
 // ── SAVE TRIAGE ─────────────────────────────────────────────────────────
 async function saveTriage(alertId,i){
   const statusEl=document.getElementById('trStatus_'+i);
-  const notesEl=document.getElementById('trNotes_'+i);
   const assignedEl=document.getElementById('trAssigned_'+i);
   const btn=document.getElementById('trSaveBtn_'+i);
   if(!statusEl||!btn) return;
@@ -780,7 +777,7 @@ async function saveTriage(alertId,i){
     const res=await fetch(S.ep+'/alerts/'+alertId,{
       method:'PATCH',
       headers:{Authorization:'Bearer '+S.jwt,'Content-Type':'application/json'},
-      body:JSON.stringify({status:statusEl.value,notes:notesEl.value,assigned_to:assignedEl.value}),
+      body:JSON.stringify({status:statusEl.value,assigned_to:assignedEl.value}),
     });
     if(res.ok){
       const updated=await res.json();

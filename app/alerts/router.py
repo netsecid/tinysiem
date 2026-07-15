@@ -45,7 +45,6 @@ def read_all_alerts() -> list[dict]:
         aid = a.get("alert_id", "")
         t = triage.get(aid, {})
         a["status"] = t.get("status", "open")
-        a["notes"] = t.get("notes", "")
         a["assigned_to"] = t.get("assigned_to", "")
         a["triage_updated_at"] = t.get("updated_at")
         a["triage_updated_by"] = t.get("updated_by", "")
@@ -93,7 +92,6 @@ _ALERT_CSV_COLUMNS = [
 
 class TriagePatch(BaseModel):
     status: Optional[str] = None
-    notes: Optional[str] = None
     assigned_to: Optional[str] = None
 
 
@@ -187,11 +185,9 @@ def patch_alert(
     if not existing:
         raise HTTPException(status_code=404, detail="Alert not found")
     new_status = body.status if body.status is not None else existing.get("status", "open")
-    new_notes = body.notes if body.notes is not None else existing.get("notes", "")
     new_assigned = body.assigned_to if body.assigned_to is not None else existing.get("assigned_to", "")
-    upsert_triage(alert_id, new_status, new_notes, new_assigned, current_user.username)
+    upsert_triage(alert_id, new_status, new_assigned, current_user.username)
     existing["status"] = new_status
-    existing["notes"] = new_notes
     existing["assigned_to"] = new_assigned
     from app.audit import store as audit
     audit.log_event(
@@ -202,7 +198,6 @@ def patch_alert(
             "alert_id": alert_id,
             "new_status": new_status,
             "assigned_to": new_assigned,
-            "notes_updated": body.notes is not None,
         },
     )
     return existing

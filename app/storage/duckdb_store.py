@@ -521,43 +521,41 @@ def init_alert_triage_table() -> None:
             CREATE TABLE IF NOT EXISTS alert_triage (
                 alert_id    VARCHAR PRIMARY KEY,
                 status      VARCHAR NOT NULL DEFAULT 'open',
-                notes       TEXT    NOT NULL DEFAULT '',
                 assigned_to VARCHAR NOT NULL DEFAULT '',
                 updated_at  TIMESTAMP,
                 updated_by  VARCHAR NOT NULL DEFAULT ''
             )
         """)
+        _conn.execute("ALTER TABLE alert_triage DROP COLUMN IF EXISTS notes")
 
 
 def get_triage_map() -> dict:
     with _lock:
         rows = _conn.execute(
-            "SELECT alert_id, status, notes, assigned_to, updated_at, updated_by FROM alert_triage"
+            "SELECT alert_id, status, assigned_to, updated_at, updated_by FROM alert_triage"
         ).fetchall()
     return {
         row[0]: {
             "status": row[1],
-            "notes": row[2],
-            "assigned_to": row[3],
-            "updated_at": row[4].isoformat() if row[4] else None,
-            "updated_by": row[5],
+            "assigned_to": row[2],
+            "updated_at": row[3].isoformat() if row[3] else None,
+            "updated_by": row[4],
         }
         for row in rows
     }
 
 
-def upsert_triage(alert_id: str, status: str, notes: str, assigned_to: str, updated_by: str) -> None:
+def upsert_triage(alert_id: str, status: str, assigned_to: str, updated_by: str) -> None:
     with _lock:
         _conn.execute("""
-            INSERT INTO alert_triage (alert_id, status, notes, assigned_to, updated_at, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO alert_triage (alert_id, status, assigned_to, updated_at, updated_by)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT (alert_id) DO UPDATE SET
                 status = excluded.status,
-                notes = excluded.notes,
                 assigned_to = excluded.assigned_to,
                 updated_at = excluded.updated_at,
                 updated_by = excluded.updated_by
-        """, [alert_id, status, notes, assigned_to, datetime.utcnow(), updated_by])
+        """, [alert_id, status, assigned_to, datetime.utcnow(), updated_by])
 
 
 def query_events_for_archive(cutoff: datetime, limit: int = 5000) -> list[dict]:

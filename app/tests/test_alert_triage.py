@@ -43,7 +43,6 @@ async def test_get_alerts_includes_triage_fields(client, admin_headers, alerts_f
     found = next((a for a in data["alerts"] if a["alert_id"] == alert["alert_id"]), None)
     assert found is not None
     assert found["status"] == "open"
-    assert found["notes"] == ""
     assert found["assigned_to"] == ""
 
 
@@ -105,13 +104,13 @@ async def test_patch_alert_partial_update(client, admin_headers, alerts_file):
     _, alert = alerts_file
     alert_id = alert["alert_id"]
     # Set initial state
-    await client.patch(f"/alerts/{alert_id}", json={"status": "investigating", "notes": "first note"}, headers=admin_headers)
-    # Patch only notes — status should remain
-    resp = await client.patch(f"/alerts/{alert_id}", json={"notes": "updated note"}, headers=admin_headers)
+    await client.patch(f"/alerts/{alert_id}", json={"status": "investigating", "assigned_to": "alice"}, headers=admin_headers)
+    # Patch only assigned_to — status should remain
+    resp = await client.patch(f"/alerts/{alert_id}", json={"assigned_to": "bob"}, headers=admin_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "investigating"
-    assert data["notes"] == "updated note"
+    assert data["assigned_to"] == "bob"
 
 
 async def test_patch_alert_requires_auth(client, alerts_file):
