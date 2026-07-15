@@ -113,7 +113,7 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 
 ```bash
 # 1. Clone and configure
-git clone https://github.com/your-username/tinysiem.git
+git clone https://github.com/netsecid/tinysiem.git
 cd tinysiem
 cp .env.example .env
 # Edit .env — set TINYSIEM_API_KEY, TINYSIEM_JWT_SECRET, and TINYSIEM_SUPERADMIN_PASSWORD

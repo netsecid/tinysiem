@@ -41,6 +41,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .search-result .fallback a{color:var(--accent);text-decoration:none}
 .search-result .fallback a:hover{text-decoration:underline}
 .search-loading{color:var(--text-muted);font-size:12px}
+.home-footer{flex-shrink:0;text-align:center;padding:10px 20px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border)}
+.home-footer a{color:var(--text-dim);text-decoration:none}
+.home-footer a:hover{color:var(--accent);text-decoration:underline}
 </style>
 </head>
 <body>
@@ -63,6 +66,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         <div id="searchResult"></div>
       </div>
     </div>
+    <div class="home-footer" id="homeFooter">
+      <span id="homeVersion">TinySIEM</span> · MIT Licensed ·
+      <a href="https://github.com/netsecid/tinysiem" target="_blank" rel="noopener">GitHub</a> ·
+      <a href="https://github.com/netsecid/tinysiem/blob/main/docs/quickstart.md" target="_blank" rel="noopener">Documentation</a>
+    </div>
   </div>
 </div>
 <script>
@@ -73,7 +81,18 @@ const TH=document.documentElement;
   if(!jwt){window.location.href='/ui/login.html';return}
   const p=parseJwt(jwt);
   if(!p||p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  loadVersion();
 })();
+
+async function loadVersion(){
+  const ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
+  try{
+    const res=await fetch(ep+'/health');
+    if(!res.ok)return;
+    const h=await res.json();
+    document.getElementById('homeVersion').textContent='TinySIEM v'+h.version;
+  }catch(e){/* leave default label */}
+}
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 

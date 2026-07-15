@@ -10,7 +10,7 @@
 ## 1. Clone and Configure
 
 ```bash
-git clone https://github.com/your-username/tinysiem.git
+git clone https://github.com/netsecid/tinysiem.git
 cd tinysiem
 cp .env.example .env
 ```

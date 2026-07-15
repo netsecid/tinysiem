@@ -52,6 +52,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .arch-table td{padding:5px 8px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11.5px}
 .spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
 @keyframes spin{to{transform:rotate(360deg)}}
+.role-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.role-superadmin{background:rgba(77,159,255,.15);color:#4d9fff}
+.role-admin{background:rgba(234,179,8,.12);color:#eab308}
+.role-analyst{background:rgba(59,130,246,.12);color:#3b82f6}
 </style>
 </head>
 <body>
@@ -91,10 +95,74 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         <!-- Users & Access (superadmin only) -->
         <div class="settings-panel" data-panel="users">
         <div class="card" id="usersCard" style="display:none">
-          <div class="section-label">Users &amp; Access</div>
-          <div style="color:var(--text-dim);font-size:12px;margin-bottom:12px">Create and manage user accounts, assign roles, and control access.</div>
-          <a href="/ui/users.html" class="btn-prim" style="text-decoration:none;display:inline-block">Manage Users</a>
+          <div class="section-label" style="display:flex;align-items:center;justify-content:space-between">
+            <span>Users &amp; Access</span>
+            <button class="btn-sec" id="newUserBtn" onclick="openAddUserModal()" style="font-size:11px;padding:3px 10px">+ Add User</button>
+          </div>
+          <div id="usersSummary" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"><span class="spinner"></span>Loading…</div>
+          <table class="arch-table" id="usersTable" style="display:none">
+            <thead><tr><th>Username</th><th>Role</th><th>Created</th><th></th></tr></thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+          <div class="msg" id="usersMsg"></div>
         </div>
+        </div>
+
+        <!-- Add User Modal -->
+        <div id="addUserModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center">
+          <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:24px;width:360px;max-height:80vh;overflow-y:auto">
+            <div style="font-size:13px;font-weight:600;margin-bottom:16px">Add User</div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Username</label>
+              <input id="addUserUsername" type="text" autocomplete="off" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+            </div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Password</label>
+              <input id="addUserPassword" type="password" autocomplete="new-password" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+            </div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Role</label>
+              <select id="addUserRole" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+                <option value="analyst">analyst</option>
+                <option value="admin">admin</option>
+                <option value="superadmin">superadmin</option>
+              </select>
+            </div>
+            <div class="msg" id="addUserMsg" style="margin-bottom:8px"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn-sec" onclick="closeUserModal('addUserModal')">Cancel</button>
+              <button class="btn-prim" onclick="submitAddUser()">Create</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edit User Modal -->
+        <div id="editUserModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center">
+          <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:24px;width:360px;max-height:80vh;overflow-y:auto">
+            <div style="font-size:13px;font-weight:600;margin-bottom:16px">Edit User</div>
+            <input type="hidden" id="editUserId">
+            <div style="margin-bottom:12px">
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Username</label>
+              <input id="editUserUsername" type="text" autocomplete="off" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+            </div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">New Password <span style="font-weight:400;text-transform:none">(leave blank to keep)</span></label>
+              <input id="editUserPassword" type="password" autocomplete="new-password" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+            </div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Role</label>
+              <select id="editUserRole" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px">
+                <option value="analyst">analyst</option>
+                <option value="admin">admin</option>
+                <option value="superadmin">superadmin</option>
+              </select>
+            </div>
+            <div class="msg" id="editUserMsg" style="margin-bottom:8px"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn-sec" onclick="closeUserModal('editUserModal')">Cancel</button>
+              <button class="btn-prim" onclick="submitEditUser()">Save</button>
+            </div>
+          </div>
         </div>
 
         <!-- Notifications (admin+) -->
@@ -304,7 +372,7 @@ async function loadConfig(){
     document.getElementById('cfgUser').textContent=me.username;
     document.getElementById('cfgRole').textContent=me.role;
     S.role=me.role;
-    if(me.role==='superadmin') document.getElementById('usersCard').style.display='';
+    if(me.role==='superadmin'){document.getElementById('usersCard').style.display='';loadUsers();}
     if(me.role==='admin'||me.role==='superadmin'){
       document.getElementById('notifCard').style.display='';
       document.getElementById('retentionCard').style.display='';
@@ -345,6 +413,85 @@ async function testNotify(channel){
   if(d.email) parts.push('Email: '+d.email);
   if(d.webhook) parts.push('Webhook: '+d.webhook);
   showMsg('notifMsg',parts.join(' | ')||'Done','info');
+}
+
+// ── Users & Access ───────────────────────────────────────────────────────────
+function formatErrorDetail(detail){
+  if(Array.isArray(detail)) return detail.map(e=>e&&e.msg?e.msg:JSON.stringify(e)).join('; ');
+  return detail||'Error';
+}
+function roleBadge(role){return `<span class="role-badge role-${esc(role)}">${esc(role)}</span>`}
+function closeUserModal(id){document.getElementById(id).style.display='none'}
+function openAddUserModal(){
+  document.getElementById('addUserUsername').value='';
+  document.getElementById('addUserPassword').value='';
+  document.getElementById('addUserRole').value='analyst';
+  document.getElementById('addUserMsg').className='msg';
+  document.getElementById('addUserModal').style.display='flex';
+}
+function openEditUserModalFromBtn(btn){
+  document.getElementById('editUserId').value=btn.dataset.id;
+  document.getElementById('editUserUsername').value=btn.dataset.username;
+  document.getElementById('editUserPassword').value='';
+  document.getElementById('editUserRole').value=btn.dataset.role;
+  document.getElementById('editUserMsg').className='msg';
+  document.getElementById('editUserModal').style.display='flex';
+}
+async function submitAddUser(){
+  const username=document.getElementById('addUserUsername').value.trim();
+  const password=document.getElementById('addUserPassword').value;
+  const role=document.getElementById('addUserRole').value;
+  if(!username||!password){showMsg('addUserMsg','Username and password are required','err');return}
+  const res=await api('/users',{method:'POST',body:JSON.stringify({username,password,role})});
+  if(!res)return;
+  if(!res.ok){const d=await res.json();showMsg('addUserMsg',formatErrorDetail(d.detail),'err');return}
+  closeUserModal('addUserModal');
+  loadUsers();
+}
+async function submitEditUser(){
+  const id=document.getElementById('editUserId').value;
+  const username=document.getElementById('editUserUsername').value.trim()||undefined;
+  const password=document.getElementById('editUserPassword').value||undefined;
+  const role=document.getElementById('editUserRole').value;
+  const body={role};
+  if(username)body.username=username;
+  if(password)body.password=password;
+  const res=await api(`/users/${id}`,{method:'PUT',body:JSON.stringify(body)});
+  if(!res)return;
+  if(!res.ok){const d=await res.json();showMsg('editUserMsg',formatErrorDetail(d.detail),'err');return}
+  closeUserModal('editUserModal');
+  loadUsers();
+}
+async function deleteUserFromBtn(btn){
+  const id=btn.dataset.id,username=btn.dataset.username;
+  if(!confirm(`Delete user "${username}"? This cannot be undone.`))return;
+  const res=await api(`/users/${id}`,{method:'DELETE'});
+  if(!res)return;
+  if(!res.ok){const d=await res.json();showMsg('usersMsg',formatErrorDetail(d.detail),'err');return}
+  loadUsers();
+}
+async function loadUsers(){
+  const sumEl=document.getElementById('usersSummary');
+  const tbl=document.getElementById('usersTable');
+  sumEl.innerHTML='<span class="spinner"></span>Loading…';
+  tbl.style.display='none';
+  const res=await api('/users');
+  if(!res){sumEl.textContent='Failed to load';return}
+  const d=await res.json();
+  const users=d.users||[];
+  sumEl.innerHTML=`<span style="color:var(--text)">${users.length} user${users.length!==1?'s':''}</span>`;
+  const tbody=document.getElementById('usersBody');
+  tbody.innerHTML=users.map(u=>`
+    <tr>
+      <td style="font-family:var(--mono)">${esc(u.username)}</td>
+      <td>${roleBadge(u.role)}</td>
+      <td style="color:var(--text-muted)">${esc((u.created_at||'').slice(0,10))}</td>
+      <td>
+        <button class="btn-sec" data-id="${esc(u.id)}" data-username="${esc(u.username)}" data-role="${esc(u.role)}" style="font-size:11px;padding:2px 7px" onclick="openEditUserModalFromBtn(this)">Edit</button>
+        <button class="btn-sec" data-id="${esc(u.id)}" data-username="${esc(u.username)}" style="font-size:11px;padding:2px 7px;color:var(--red)" onclick="deleteUserFromBtn(this)">Delete</button>
+      </td>
+    </tr>`).join('');
+  tbl.style.display=users.length?'':'none';
 }
 
 function onAIProviderChange(){

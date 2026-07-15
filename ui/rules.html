@@ -24,8 +24,12 @@
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
 .nav-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:14px;transition:all .15s}
 .nav-btn:hover{color:var(--text);border-color:var(--border2);background:var(--surface3)}
+.rp-panel{display:none;flex:1;overflow:hidden;flex-direction:column}
+.rp-panel.active{display:flex}
 .rules-body{flex:1;display:flex;overflow:hidden}
-.list-panel{width:260px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto}
+.list-panel{width:260px;min-width:180px;max-width:640px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto}
+.resizer{width:5px;flex-shrink:0;cursor:col-resize;background:var(--border);transition:background .15s}
+.resizer:hover,.resizer.dragging{background:var(--accent)}
 .list-panel table{width:100%;border-collapse:collapse}
 .list-panel th{padding:8px 12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:1}
 .list-panel td{padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;vertical-align:middle}
@@ -54,7 +58,7 @@ tr.selected td,.list-panel tr:hover td{background:var(--accent-dim)}
 .hr{border:none;border-top:1px solid var(--border);margin:4px 0}
 .field-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;margin-bottom:8px}
 .field-input:focus{border-color:var(--accent)}
-.mitre-col{min-width:150px;flex-shrink:0}
+.mitre-col{min-width:190px;flex:0 0 190px}
 .mitre-col-hdr{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:6px;white-space:nowrap}
 .mitre-tech{padding:5px 7px;border-radius:4px;margin-bottom:4px;font-family:var(--mono);font-size:11px;cursor:default}
 .mitre-tech-empty{color:var(--text-muted);font-size:11px;padding:5px 0}
@@ -70,21 +74,30 @@ tr.selected td,.list-panel tr:hover td{background:var(--accent-dim)}
         <button class="btn btn-primary" id="newBtn" onclick="newRule()" style="display:none">+ New Rule</button>
       </div>
     </div>
-    <div class="rules-body">
-      <div class="list-panel">
-        <table>
-          <thead><tr><th>Name</th><th>Sev</th><th>Source</th></tr></thead>
-          <tbody id="ruleList"><tr><td colspan="3" style="color:var(--text-muted);padding:16px">Loading&hellip;</td></tr></tbody>
-        </table>
-      </div>
-      <div id="detailWrap" style="flex:1;display:flex;overflow:hidden">
-        <div class="detail-empty" id="detailEmpty">Select a rule to view or edit</div>
-        <div class="detail-panel" id="detailPanel" style="display:none"></div>
+    <div class="settings-tabs" id="rulesTabs">
+      <button class="settings-tab active" data-tab="list" onclick="switchRulesTab('list')">Rules</button>
+      <button class="settings-tab" data-tab="mitre" onclick="switchRulesTab('mitre')">MITRE ATT&amp;CK Coverage</button>
+    </div>
+    <div class="rp-panel active" data-panel="list">
+      <div class="rules-body">
+        <div class="list-panel" id="listPanel">
+          <table>
+            <thead><tr><th>Name</th><th>Sev</th><th>Source</th></tr></thead>
+            <tbody id="ruleList"><tr><td colspan="3" style="color:var(--text-muted);padding:16px">Loading&hellip;</td></tr></tbody>
+          </table>
+        </div>
+        <div class="resizer" id="listResizer"></div>
+        <div id="detailWrap" style="flex:1;display:flex;overflow:hidden">
+          <div class="detail-empty" id="detailEmpty">Select a rule to view or edit</div>
+          <div class="detail-panel" id="detailPanel" style="display:none"></div>
+        </div>
       </div>
     </div>
-    <div id="mitreSection" style="border-top:1px solid var(--border);padding:14px 20px;overflow-x:auto">
-      <div class="section-title" style="margin-bottom:10px">MITRE ATT&amp;CK Coverage</div>
-      <div id="mitreGrid" style="display:flex;gap:10px;min-width:max-content">Loading&hellip;</div>
+    <div class="rp-panel" data-panel="mitre">
+      <div id="mitreSection" style="padding:20px 24px;overflow-y:auto;flex:1">
+        <div class="section-title" style="margin-bottom:12px;font-size:12px">MITRE ATT&amp;CK Coverage</div>
+        <div id="mitreGrid" style="display:flex;flex-wrap:wrap;gap:14px">Loading&hellip;</div>
+      </div>
     </div>
   </div>
 </div>
@@ -94,6 +107,38 @@ const S={theme:'dark',jwt:'',ep:'',role:'',selected:null};
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function sevClass(s){return 'sev sev-'+(s||'low').toLowerCase()}
+
+function switchRulesTab(tab){
+  document.querySelectorAll('#rulesTabs .settings-tab').forEach(btn=>{
+    btn.classList.toggle('active',btn.dataset.tab===tab);
+  });
+  document.querySelectorAll('.rp-panel').forEach(panel=>{
+    panel.classList.toggle('active',panel.dataset.panel===tab);
+  });
+}
+
+function initListResizer(panel,resizer,storageKey){
+  const saved=parseInt(localStorage.getItem(storageKey)||'',10);
+  if(!isNaN(saved))panel.style.width=saved+'px';
+  let dragging=false,startX=0,startWidth=0;
+  resizer.addEventListener('mousedown',e=>{
+    dragging=true;startX=e.clientX;startWidth=panel.getBoundingClientRect().width;
+    resizer.classList.add('dragging');
+    document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    panel.style.width=(startWidth+(e.clientX-startX))+'px';
+  });
+  window.addEventListener('mouseup',()=>{
+    if(!dragging)return;
+    dragging=false;
+    resizer.classList.remove('dragging');
+    document.body.style.userSelect='';
+    localStorage.setItem(storageKey,Math.round(panel.getBoundingClientRect().width));
+  });
+}
 
 async function api(path,opts={}){
   const res=await fetch(S.ep+path,{headers:{'Authorization':'Bearer '+S.jwt,'Content-Type':'application/json'},...opts});
@@ -506,6 +551,7 @@ function load(){
     const btn=e.target.closest('[data-action="delete-exception"]');
     if(btn)deleteException(btn.dataset.id);
   });
+  initListResizer(document.getElementById('listPanel'),document.getElementById('listResizer'),'ts_rules_list_width');
   loadRules();
   loadMitreCoverage();
 }
