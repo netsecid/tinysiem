@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.auth import AuthUser, require_analyst
+from app.cases import store as case_store
 from app.storage import duckdb_store
 from app.storage.csv_export import rows_to_csv
 
@@ -117,3 +118,9 @@ def get_event_by_id(event_id: str, _: AuthUser = Depends(require_analyst)):
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     return event
+
+
+@router.get("/{event_id}/cases")
+def get_event_cases(event_id: str, _: AuthUser = Depends(require_analyst)):
+    cases = case_store.get_cases_for_event(event_id)
+    return {"cases": cases}

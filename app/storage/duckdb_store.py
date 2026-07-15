@@ -906,6 +906,13 @@ def init_cases_tables() -> None:
             linked_by   VARCHAR NOT NULL,
             PRIMARY KEY (case_id, alert_id)
         )""")
+        _conn.execute("""CREATE TABLE IF NOT EXISTS case_events (
+            case_id     VARCHAR NOT NULL,
+            event_id    VARCHAR NOT NULL,
+            linked_at   TIMESTAMP NOT NULL,
+            linked_by   VARCHAR NOT NULL,
+            PRIMARY KEY (case_id, event_id)
+        )""")
         _conn.execute("""CREATE TABLE IF NOT EXISTS case_comments (
             comment_id  VARCHAR PRIMARY KEY,
             case_id     VARCHAR NOT NULL,

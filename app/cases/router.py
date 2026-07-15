@@ -103,6 +103,10 @@ class AlertsLink(BaseModel):
     alert_ids: list[str] = Field(..., min_length=1)
 
 
+class EventsLink(BaseModel):
+    event_ids: list[str] = Field(..., min_length=1)
+
+
 class StepComplete(BaseModel):
     rule_name: str = Field(..., min_length=1)
     step_id: str = Field(..., min_length=1)
@@ -298,6 +302,37 @@ def unlink_alert(case_id: str, alert_id: str, current_user: AuthUser = Depends(r
         raise HTTPException(404, "Alert not linked to this case")
     case_store.insert_comment(
         case_id, "system", f"Alert {alert_id} unlinked by {current_user.username}", is_system=True
+    )
+
+
+@router.post("/{case_id}/events")
+def link_events(case_id: str, body: EventsLink, current_user: AuthUser = Depends(require_analyst)):
+    if not case_store.get_case(case_id):
+        raise HTTPException(404, "Case not found")
+    linked = case_store.link_events(case_id, body.event_ids, current_user.username)
+    for eid in linked:
+        case_store.insert_comment(case_id, "system", f"Event {eid} linked by {current_user.username}", is_system=True)
+    audit.log_event(
+        "case.link_event", "linked", actor=current_user.username, actor_role=current_user.role,
+        resource_type="case", resource_id=case_id,
+        detail={"event_ids": linked},
+    )
+    return {"linked": linked}
+
+
+@router.delete("/{case_id}/events/{event_id}", status_code=204)
+def unlink_event(case_id: str, event_id: str, current_user: AuthUser = Depends(require_analyst)):
+    if not case_store.get_case(case_id):
+        raise HTTPException(404, "Case not found")
+    if not case_store.unlink_event(case_id, event_id):
+        raise HTTPException(404, "Event not linked to this case")
+    case_store.insert_comment(
+        case_id, "system", f"Event {event_id} unlinked by {current_user.username}", is_system=True,
+    )
+    audit.log_event(
+        "case.unlink_event", "unlinked", actor=current_user.username, actor_role=current_user.role,
+        resource_type="case", resource_id=case_id,
+        detail={"event_id": event_id},
     )
 
 

@@ -146,6 +146,14 @@ def get_case(case_id: str) -> Optional[dict]:
             {"alert_id": r[0], "linked_at": r[1].isoformat() + "Z" if r[1] else None, "linked_by": r[2]}
             for r in al_rows
         ]
+        ev_rows = conn.execute(
+            "SELECT event_id, linked_at, linked_by FROM case_events WHERE case_id = ? ORDER BY linked_at",
+            [case_id],
+        ).fetchall()
+        c["linked_event_ids"] = [
+            {"event_id": r[0], "linked_at": r[1].isoformat() + "Z" if r[1] else None, "linked_by": r[2]}
+            for r in ev_rows
+        ]
         # comments + timeline
         cm_rows = conn.execute(
             "SELECT comment_id,author,body,created_at,edited_at,is_system "
@@ -311,6 +319,56 @@ def unlink_alert(case_id: str, alert_id: str) -> bool:
             return False
         conn.execute("DELETE FROM case_alerts WHERE case_id = ? AND alert_id = ?", [case_id, alert_id])
     return True
+
+
+def link_events(case_id: str, event_ids: list[str], linked_by: str) -> list[str]:
+    now = _now()
+    conn = _get_conn()
+    linked = []
+    with _lock:
+        for eid in event_ids:
+            existing = conn.execute(
+                "SELECT 1 FROM case_events WHERE case_id = ? AND event_id = ?", [case_id, eid]
+            ).fetchone()
+            if not existing:
+                conn.execute(
+                    "INSERT INTO case_events (case_id,event_id,linked_at,linked_by) VALUES (?,?,?,?)",
+                    [case_id, eid, now, linked_by],
+                )
+                linked.append(eid)
+    return linked
+
+
+def unlink_event(case_id: str, event_id: str) -> bool:
+    conn = _get_conn()
+    with _lock:
+        existing = conn.execute(
+            "SELECT 1 FROM case_events WHERE case_id = ? AND event_id = ?", [case_id, event_id]
+        ).fetchone()
+        if not existing:
+            return False
+        conn.execute("DELETE FROM case_events WHERE case_id = ? AND event_id = ?", [case_id, event_id])
+    return True
+
+
+def get_cases_for_event(event_id: str) -> list[dict]:
+    conn = _get_conn()
+    with _lock:
+        rows = conn.execute(
+            """SELECT c.case_id, c.title, c.status, c.severity, ce.linked_at
+               FROM case_events ce JOIN cases c ON ce.case_id = c.case_id
+               WHERE ce.event_id = ?
+               ORDER BY ce.linked_at DESC""",
+            [event_id],
+        ).fetchall()
+    result = []
+    for row in rows:
+        linked_at = row[4]
+        result.append({
+            "case_id": row[0], "title": row[1], "status": row[2], "severity": row[3],
+            "linked_at": linked_at.isoformat() + "Z" if linked_at and hasattr(linked_at, "isoformat") else None,
+        })
+    return result
 
 
 def get_case_facets() -> dict:
