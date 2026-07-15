@@ -209,6 +209,7 @@ def delete_case(case_id: str) -> bool:
             return False
         conn.execute("DELETE FROM case_comments WHERE case_id = ?", [case_id])
         conn.execute("DELETE FROM case_alerts WHERE case_id = ?", [case_id])
+        conn.execute("DELETE FROM case_events WHERE case_id = ?", [case_id])
         conn.execute("DELETE FROM cases WHERE case_id = ?", [case_id])
     return True
 
