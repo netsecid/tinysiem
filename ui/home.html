@@ -32,6 +32,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .search-box input{flex:1;background:none;border:none;outline:none;color:var(--text-muted);font-family:var(--sans);font-size:14px;cursor:not-allowed}
 .search-box .send-btn{width:32px;height:32px;border-radius:6px;background:var(--surface3);border:none;color:var(--text-muted);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .coming-soon{font-size:12px;color:var(--text-muted);margin-top:8px}
+.search-result{text-align:left;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:16px 18px;font-size:13px;line-height:1.6}
+.search-result .answer{color:var(--text);margin-bottom:10px}
+.search-result .link-row a{color:var(--accent);text-decoration:none;font-size:12.5px}
+.search-result .link-row a:hover{text-decoration:underline}
+.search-result .fallback{color:var(--text-dim)}
+.search-result .fallback a{color:var(--accent);text-decoration:none}
+.search-result .fallback a:hover{text-decoration:underline}
+.search-loading{color:var(--text-muted);font-size:12px}
 </style>
 </head>
 <body>
@@ -46,12 +54,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         <div class="home-title">TinySIEM</div>
         <div class="home-subtitle">Ask anything about your logs, alerts, or environment —<br>TinySIEM's AI will search, correlate, and summarize it for you.</div>
         <div class="search-box">
-          <input type="text" placeholder="Ask TinySIEM… e.g. show me critical alerts from the last 24 hours" disabled>
-          <button class="send-btn" disabled>
+          <input type="text" id="searchInput" placeholder="Ask TinySIEM… e.g. show me critical alerts from the last 24 hours" onkeydown="if(event.key==='Enter')runSearch()">
+          <button class="send-btn" id="searchBtn" onclick="runSearch()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </button>
         </div>
-        <div class="coming-soon">AI-powered search is coming soon.</div>
+        <div id="searchResult"></div>
       </div>
     </div>
   </div>
@@ -65,6 +73,52 @@ const TH=document.documentElement;
   const p=parseJwt(jwt);
   if(!p||p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
 })();
+
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+async function runSearch(){
+  const input=document.getElementById('searchInput');
+  const question=input.value.trim();
+  if(!question)return;
+  const resultEl=document.getElementById('searchResult');
+  const btn=document.getElementById('searchBtn');
+  btn.disabled=true;
+  resultEl.innerHTML='<div class="search-loading">Searching…</div>';
+  const ep=localStorage.getItem('ts_ep')||'http://localhost:8000';
+  const jwt=localStorage.getItem('ts_jwt')||'';
+  try{
+    const res=await fetch(ep+'/ai/search',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},
+      body:JSON.stringify({question}),
+    });
+    if(res.status===401){clearAuth();window.location.href='/ui/login.html';return}
+    if(res.status===503||res.status===502){
+      const e=await res.json().catch(()=>({}));
+      const reason=e.detail||'unknown error';
+      resultEl.innerHTML=`<div class="search-result"><div class="fallback">AI search isn't available right now (${esc(reason)}). You can still search manually: `
+        +`<a href="/ui/events.html">Events</a> · <a href="/ui/alerts.html">Alerts</a> · <a href="/ui/cases.html">Cases</a></div></div>`;
+      return;
+    }
+    if(!res.ok){
+      const e=await res.json().catch(()=>({}));
+      resultEl.innerHTML=`<div class="search-result"><div class="fallback">Error: ${esc(e.detail||res.status)}</div></div>`;
+      return;
+    }
+    const d=await res.json();
+    let html=`<div class="search-result"><div class="answer">${esc(d.answer)}</div>`;
+    if(d.link){
+      html+=`<div class="link-row"><a href="${esc(d.link)}">${esc(d.link_label)} →</a></div>`;
+    }
+    html+='</div>';
+    resultEl.innerHTML=html;
+  }catch(e){
+    resultEl.innerHTML=`<div class="search-result"><div class="fallback">AI search isn't available right now (network error). You can still search manually: `
+      +`<a href="/ui/events.html">Events</a> · <a href="/ui/alerts.html">Alerts</a> · <a href="/ui/cases.html">Cases</a></div></div>`;
+  }finally{
+    btn.disabled=false;
+  }
+}
 </script>
 </body>
 </html>
