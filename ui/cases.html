@@ -314,6 +314,14 @@ const S={
 
 function apiHeaders(){return{'Content-Type':'application/json','Authorization':'Bearer '+(S.jwt||localStorage.getItem('ts_key')||'')}}
 
+function hydrateFromURL(){
+  const params=new URLSearchParams(window.location.search);
+  if(![...params.keys()].length)return;
+  if(params.has('q'))document.getElementById('fSearch').value=params.get('q');
+  if(params.has('status'))document.getElementById('fStatus').value=params.get('status');
+  if(params.has('severity'))document.getElementById('fSev').value=params.get('severity');
+}
+
 function init(){
   S.theme=localStorage.getItem('ts_theme')||'dark';
   TH.setAttribute('data-theme',S.theme);
@@ -324,6 +332,7 @@ function init(){
   if(!S.jwt&&!localStorage.getItem('ts_key')){location.href='/ui/login.html';return}
   const p=parseJwt(S.jwt);
   if(p){S.role=p.role||S.role;S.username=p.username||S.username}
+  hydrateFromURL();
   doSearch();
 }
 
