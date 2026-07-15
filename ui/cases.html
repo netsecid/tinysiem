@@ -320,6 +320,7 @@ function hydrateFromURL(){
   if(params.has('q'))document.getElementById('fSearch').value=params.get('q');
   if(params.has('status'))document.getElementById('fStatus').value=params.get('status');
   if(params.has('severity'))document.getElementById('fSev').value=params.get('severity');
+  if(params.has('case_id'))openCase(params.get('case_id'));
 }
 
 function init(){
