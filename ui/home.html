@@ -107,7 +107,7 @@ async function runSearch(){
     }
     const d=await res.json();
     let html=`<div class="search-result"><div class="answer">${esc(d.answer)}</div>`;
-    if(d.link){
+    if(d.link&&typeof d.link==='string'&&d.link.startsWith('/ui/')){
       html+=`<div class="link-row"><a href="${esc(d.link)}">${esc(d.link_label)} →</a></div>`;
     }
     html+='</div>';
