@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from datetime import datetime, timezone
 
 _VALID_TARGETS = {"events", "alerts", "cases"}
@@ -61,9 +62,6 @@ def extract_search_intent(question: str) -> dict:
         if k in allowed_keys and v not in (None, "")
     }
     return {"target": target, "filters": filters}
-
-
-from collections import Counter
 
 
 def _parse_iso_datetime(value):
@@ -172,10 +170,10 @@ def run_search(question: str, actor: str) -> dict:
         _log_ai_call("home_search", actor, question, result.text, duration_ms, success=True, model=provider.model)
         return {"answer": result.text, "link": None, "link_label": None}
 
-    # Dispatch through the module namespace (not the pre-bound _TARGET_QUERY_FNS
-    # values) so that tests patching app.ai.home_search._query_events/_alerts/_cases
-    # take effect — a dict of function objects captured at import time would keep
-    # pointing at the originals after unittest.mock.patch swaps the module attribute.
+    # Dispatch through the module namespace (not a pre-bound dict of function objects)
+    # so that tests patching app.ai.home_search._query_events/_alerts/_cases take
+    # effect — a dict built at import time would keep pointing at the originals
+    # after unittest.mock.patch swaps the module attribute.
     query_fn = globals()[f"_query_{target}"]
     count, summary = query_fn(filters)
     context = f"Question: {question}\n\nReal results: {count} {target} matched.\nSummary: {summary}"
