@@ -82,7 +82,7 @@ async def test_get_cases_for_event_empty(client, analyst_headers):
     assert resp.json()["cases"] == []
 
 
-async def test_delete_case_removes_event_linkage(client, analyst_headers):
+async def test_delete_case_removes_event_linkage(client, analyst_headers, admin_headers):
     """Regression test: deleting a case should remove case_events rows."""
     cr = await client.post("/cases", json={"title": "Delete Linkage"}, headers=analyst_headers)
     case_id = cr.json()["case_id"]
@@ -103,8 +103,8 @@ async def test_delete_case_removes_event_linkage(client, analyst_headers):
     case_ids_before = {c["case_id"] for c in before_delete.json()["cases"]}
     assert case_id in case_ids_before
 
-    # Delete the case
-    delete_resp = await client.delete(f"/cases/{case_id}", headers=analyst_headers)
+    # Delete the case (requires admin)
+    delete_resp = await client.delete(f"/cases/{case_id}", headers=admin_headers)
     assert delete_resp.status_code == 204
 
     # Verify the linkage is gone from reverse lookup
