@@ -194,3 +194,21 @@ async def test_generate_parser_analyst_forbidden(client, analyst_headers):
         headers=analyst_headers,
     )
     assert r.status_code == 403
+
+
+REDOS_YAML = """\
+name: test-redos-parser
+source: nginx
+type: regex
+pattern: '^(a+)+$'
+fields: {}
+"""
+
+
+async def test_create_parser_rejects_redos_pattern(client, admin_headers):
+    r = await client.post(
+        "/parsers",
+        json={"name": "test-redos-parser", "yaml_text": REDOS_YAML},
+        headers=admin_headers,
+    )
+    assert r.status_code == 422

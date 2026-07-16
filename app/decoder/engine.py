@@ -10,6 +10,8 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+_REDOS_HEURISTIC = re.compile(r'\([^()]*[+*][^()]*\)[+*]')
+
 _decoders: dict[str, dict] = {}
 
 _SCHEMA_FIELDS = {
@@ -42,6 +44,10 @@ def load_decoders(decoders_dir: Optional[Path] = None) -> None:
                 with open(yaml_file) as f:
                     decoder = yaml.safe_load(f)
                 source = decoder.get("source")
+                pattern = decoder.get("pattern")
+                if decoder.get("type", "regex") == "regex" and pattern and _REDOS_HEURISTIC.search(pattern):
+                    logger.warning(f"Skipping custom decoder {yaml_file}: pattern has a nested-quantifier ReDoS risk")
+                    continue
                 if source:
                     _decoders[source] = decoder
                     logger.info(f"Loaded custom decoder '{decoder.get('name')}' for source '{source}'")

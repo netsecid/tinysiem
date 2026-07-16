@@ -16,6 +16,7 @@ _DECODERS_DIR = Path(__file__).parent.parent / "decoder" / "decoders"
 _CUSTOM_DIR = _DECODERS_DIR / "custom"
 _REQUIRED_KEYS = {"name", "source", "type", "pattern", "fields"}
 _VALID_NAME = re.compile(r'^[a-z0-9][a-z0-9\-_]{0,63}$')
+_REDOS_PATTERN = re.compile(r'\([^()]*[+*][^()]*\)[+*]')
 
 
 def _check_name(name: str) -> None:
@@ -23,6 +24,18 @@ def _check_name(name: str) -> None:
         raise HTTPException(
             status_code=422,
             detail="Name must be lowercase alphanumeric, hyphens or underscores only",
+        )
+
+
+def _check_redos_risk(pattern: str) -> None:
+    """Reject regex patterns with a classic nested-quantifier ReDoS shape, e.g. (a+)+ or (a*)*.
+    This is a heuristic, not a full ReDoS detector — it catches the most common catastrophic-
+    backtracking construction without executing the pattern."""
+    if _REDOS_PATTERN.search(pattern):
+        raise HTTPException(
+            status_code=422,
+            detail="Pattern contains a nested quantifier (e.g. (a+)+) that risks catastrophic "
+            "backtracking (ReDoS) — restructure the regex to avoid nested repetition.",
         )
 
 
@@ -59,6 +72,8 @@ def _validate_parser_yaml(yaml_text: str) -> dict:
             status_code=422,
             detail=f"Missing required keys: {', '.join(sorted(missing))}",
         )
+    if data.get("type", "regex") == "regex" and data.get("pattern"):
+        _check_redos_risk(data["pattern"])
     return data
 
 
