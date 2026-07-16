@@ -47,3 +47,8 @@ def test_warn_if_integrations_missing_master_key(monkeypatch, caplog):
     with caplog.at_level("WARNING"):
         warn_if_integrations_missing_master_key()
     assert any("TINYSIEM_MASTER_KEY" in r.message for r in caplog.records)
+
+
+def test_validate_jwt_secret_rejects_env_example_placeholder_even_if_padded():
+    with pytest.raises(RuntimeError):
+        validate_jwt_secret("replace-with-64-char-random-string-padded-to-be-64-chars-long!")

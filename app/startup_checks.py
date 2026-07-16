@@ -3,6 +3,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 MIN_JWT_SECRET_LENGTH = 32
+_KNOWN_PLACEHOLDER_PREFIX = "replace-with-64-char-random-string"
 
 
 def validate_jwt_secret(secret: str) -> None:
@@ -11,6 +12,11 @@ def validate_jwt_secret(secret: str) -> None:
         raise RuntimeError(
             f"TINYSIEM_JWT_SECRET must be at least {MIN_JWT_SECRET_LENGTH} characters "
             f"(got {len(secret)}). Generate one with: openssl rand -hex 32"
+        )
+    if secret.startswith(_KNOWN_PLACEHOLDER_PREFIX):
+        raise RuntimeError(
+            "TINYSIEM_JWT_SECRET is still derived from the placeholder value in .env.example — "
+            "generate a real one with: openssl rand -hex 32"
         )
 
 
