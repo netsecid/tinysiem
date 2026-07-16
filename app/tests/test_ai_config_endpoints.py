@@ -102,7 +102,9 @@ async def test_put_ai_config_custom_requires_model(client, admin_headers):
 async def test_put_ai_config_custom_no_api_key_ok(client, admin_headers):
     r = await client.put(
         "/ai/config",
-        json={"provider": "custom", "model": "llama3.1", "base_url": "http://localhost:11434/v1"},
+        # An IP literal (not "localhost") so the new base_url SSRF validation has a
+        # non-private address to check without needing live DNS resolution in test env.
+        json={"provider": "custom", "model": "llama3.1", "base_url": "http://8.8.8.8:11434/v1"},
         headers=admin_headers,
     )
     assert r.status_code == 200
@@ -154,7 +156,7 @@ async def test_put_ai_config_switching_provider_clears_old_key(client, admin_hea
     )
     r = await client.put(
         "/ai/config",
-        json={"provider": "custom", "model": "llama3.1", "base_url": "http://localhost:11434/v1"},
+        json={"provider": "custom", "model": "llama3.1", "base_url": "http://8.8.8.8:11434/v1"},
         headers=admin_headers,
     )
     assert r.status_code == 200
@@ -237,3 +239,30 @@ async def test_test_ai_config_provider_error_returns_failure_not_exception(clien
     body = r.json()
     assert body["success"] is False
     assert "invalid x-api-key" in body["detail"]
+
+
+async def test_put_ai_config_custom_rejects_loopback_base_url(client, admin_headers):
+    r = await client.put(
+        "/ai/config",
+        json={"provider": "custom", "model": "m", "base_url": "http://127.0.0.1:8080/v1", "api_key": "k"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 422
+
+
+async def test_put_ai_config_custom_rejects_link_local_metadata_base_url(client, admin_headers):
+    r = await client.put(
+        "/ai/config",
+        json={"provider": "custom", "model": "m", "base_url": "http://169.254.169.254/latest/meta-data/", "api_key": "k"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 422
+
+
+async def test_put_ai_config_custom_rejects_non_http_scheme(client, admin_headers):
+    r = await client.put(
+        "/ai/config",
+        json={"provider": "custom", "model": "m", "base_url": "ftp://example.com/v1", "api_key": "k"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 422
