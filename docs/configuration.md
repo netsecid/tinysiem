@@ -134,6 +134,8 @@ Every feature — parser generation, rule generation, alert explain, event analy
 
 If no provider is configured, AI-powered UI elements degrade gracefully — the Home page falls back to a plain message with manual links to Events/Alerts/Cases, and buttons like "Explain with AI" surface a clear "not configured" error instead of failing silently.
 
+`TINYSIEM_AI_DAILY_CALL_LIMIT` (default `100`) caps how many AI-powered calls (explain-alert, analyze-events, home search) a single user can make per rolling 24-hour window — a cost-abuse guard, not a security boundary. Raise it if your team's legitimate usage exceeds the default.
+
 ---
 
 ## MCP Server
