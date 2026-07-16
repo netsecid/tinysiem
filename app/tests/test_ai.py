@@ -1,4 +1,16 @@
 """Tests for AI endpoints and enrichment context builder."""
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _reset_ai_rate_limit():
+    """Clears the in-memory AI daily-call-limit counter before AND after each test so
+    calls made by other tests/files don't leak into this file's assertions (and vice
+    versa) — this project's test suite shares module-level state across every test file."""
+    from app.ai import rate_limit
+    rate_limit.reset_all()
+    yield
+    rate_limit.reset_all()
 
 
 async def test_explain_alert_no_key(client, analyst_headers):

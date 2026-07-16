@@ -18,6 +18,17 @@ def _clear_ai_config():
     _clear()
 
 
+@pytest.fixture(autouse=True)
+def _reset_ai_rate_limit():
+    """Clears the in-memory AI daily-call-limit counter before AND after each test so
+    calls made by other tests/files don't leak into this file's rate-limit assertions
+    (and vice versa) — mirrors the _clear_ai_config fixture above."""
+    from app.ai import rate_limit
+    rate_limit.reset_all()
+    yield
+    rate_limit.reset_all()
+
+
 async def test_search_requires_auth(client):
     r = await client.post("/ai/search", json={"question": "show me alerts"})
     assert r.status_code == 401
@@ -66,3 +77,28 @@ async def test_search_provider_error_returns_502(client, analyst_headers):
 async def test_search_requires_question_field(client, analyst_headers):
     r = await client.post("/ai/search", json={}, headers=analyst_headers)
     assert r.status_code == 422
+
+
+async def test_ai_search_returns_429_after_daily_limit_reached(client, analyst_headers, monkeypatch):
+    from app.ai import config_store, rate_limit
+    rate_limit.reset_all()
+    monkeypatch.setattr("app.config.settings.tinysiem_ai_daily_call_limit", 1)
+
+    config_store.save_ai_config(
+        provider="anthropic", model="claude-sonnet-4-6",
+        base_url=None, api_key="sk-ant-test", updated_by="admin",
+    )
+    mock_result = MagicMock()
+    mock_result.text = '{"target": "alerts", "filters": {"severity": "critical"}}'
+    mock_answer = MagicMock()
+    mock_answer.text = "2 critical alerts found."
+
+    # First call consumes the limit of 1.
+    with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", side_effect=[mock_result, mock_answer]):
+        with patch("app.ai.home_search._query_alerts", return_value=(2, {"severity_breakdown": {"critical": 2}})):
+            r1 = await client.post("/ai/search", json={"question": "test"}, headers=analyst_headers)
+    assert r1.status_code == 200
+
+    # Second call should be rate-limited regardless of provider state.
+    r2 = await client.post("/ai/search", json={"question": "test"}, headers=analyst_headers)
+    assert r2.status_code == 429

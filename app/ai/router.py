@@ -9,6 +9,16 @@ from app.crypto import MasterKeyNotConfigured
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 
+def _enforce_ai_rate_limit(actor: AuthUser) -> None:
+    from app.ai.rate_limit import check_and_record
+    from app.config import settings
+    if not check_and_record(actor.username, settings.tinysiem_ai_daily_call_limit):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily AI call limit reached ({settings.tinysiem_ai_daily_call_limit}/day). Contact an admin to increase TINYSIEM_AI_DAILY_CALL_LIMIT.",
+        )
+
+
 def _validate_base_url(url: str) -> None:
     import ipaddress
     import socket
@@ -48,6 +58,7 @@ class AnalyzeEventsRequest(BaseModel):
 
 @router.post("/explain-alert")
 def explain_alert_endpoint(req: ExplainAlertRequest, actor: AuthUser = Depends(require_analyst)):
+    _enforce_ai_rate_limit(actor)
     from app.ai import enrichment
     try:
         return enrichment.explain_alert(req.alert_id, actor=actor.username)
@@ -61,6 +72,7 @@ def explain_alert_endpoint(req: ExplainAlertRequest, actor: AuthUser = Depends(r
 
 @router.post("/analyze-events")
 def analyze_events_endpoint(req: AnalyzeEventsRequest, actor: AuthUser = Depends(require_analyst)):
+    _enforce_ai_rate_limit(actor)
     from app.ai import enrichment
     try:
         return enrichment.analyze_events(req.event_ids, req.question, actor=actor.username)
@@ -74,6 +86,7 @@ def analyze_events_endpoint(req: AnalyzeEventsRequest, actor: AuthUser = Depends
 
 @router.post("/search")
 def home_search_endpoint(req: HomeSearchRequest, actor: AuthUser = Depends(require_analyst)):
+    _enforce_ai_rate_limit(actor)
     from app.ai import home_search
     try:
         return home_search.run_search(req.question, actor=actor.username)

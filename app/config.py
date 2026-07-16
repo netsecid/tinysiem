@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     tinysiem_jwt_expiry_hours: int = 24
     tinysiem_superadmin_password: str = "admin"
     tinysiem_mcp_enabled: bool = False
+    tinysiem_ai_daily_call_limit: int = 100
 
     # Notifications
     tinysiem_smtp_host: str = ""
