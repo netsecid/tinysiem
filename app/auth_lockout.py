@@ -66,6 +66,34 @@ def record_failure(key: tuple[str, str]) -> None:
         _evict_stale(now)
 
 
+def check_and_note_attempt(key: tuple[str, str]) -> float:
+    """Atomically check lockout status and, if not locked, immediately record this
+    attempt as a provisional failure. Returns seconds remaining if locked (0.0 if the
+    attempt was allowed and recorded). Callers MUST call record_success(key) on
+    successful auth to clear the provisional failure — this closes the TOCTOU window
+    where concurrent requests could all pass a separate is_locked() check before any
+    of them called record_failure() (the expensive bcrypt verify in between gave
+    concurrent requests time to stack up past MAX_ATTEMPTS)."""
+    with _lock:
+        now = _now()
+        entry = _failures.get(key)
+        if entry:
+            remaining = entry["locked_until"] - now
+            if remaining > 0:
+                return remaining
+        entry = _failures.setdefault(
+            key, {"count": 0, "locked_until": 0.0, "last_seen": now}
+        )
+        entry["count"] += 1
+        entry["last_seen"] = now
+        if entry["count"] >= MAX_ATTEMPTS:
+            extra = entry["count"] - MAX_ATTEMPTS
+            backoff = min(BASE_BACKOFF_SECONDS * (2 ** extra), MAX_BACKOFF_SECONDS)
+            entry["locked_until"] = now + backoff
+        _evict_stale(now)
+        return 0.0
+
+
 def record_success(key: tuple[str, str]) -> None:
     with _lock:
         _failures.pop(key, None)

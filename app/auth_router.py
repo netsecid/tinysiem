@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from app.auth import AuthUser, create_token, require_analyst
 from app.audit import store as audit
-from app.auth_lockout import is_locked, record_failure, record_success
+from app.auth_lockout import check_and_note_attempt, record_success
 from app.config import settings
 from app.password import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from app.storage import duckdb_store
@@ -31,7 +31,7 @@ def login(req: LoginRequest, request: Request):
     ip = request.client.host if request.client else "unknown"
     lock_key = (req.username, ip)
 
-    remaining = is_locked(lock_key)
+    remaining = check_and_note_attempt(lock_key)
     if remaining > 0:
         audit.log_event(
             "auth.lockout", "login", "failure",
@@ -46,7 +46,8 @@ def login(req: LoginRequest, request: Request):
     password_hash = user["password_hash"] if user else _DUMMY_HASH
     password_valid = verify_password(req.password, password_hash)
     if not user or not password_valid:
-        record_failure(lock_key)
+        # Failure already recorded by check_and_note_attempt() above — do not record
+        # it again here, that would double-count this attempt.
         audit.log_event(
             "auth.login", "login", "failure",
             actor=req.username,
@@ -91,12 +92,20 @@ def logout(user: AuthUser = Depends(require_analyst)):
 
 
 @router.post("/change-password")
-def change_password(req: ChangePasswordRequest, user: AuthUser = Depends(require_analyst)):
+def change_password(req: ChangePasswordRequest, request: Request, user: AuthUser = Depends(require_analyst)):
+    ip = request.client.host if request.client else "unknown"
+    lock_key = (f"pwchange:{user.username}", ip)
+
+    remaining = check_and_note_attempt(lock_key)
+    if remaining > 0:
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
+
     row = duckdb_store.get_user_by_id(user.user_id)
     if row is None:
         raise HTTPException(status_code=401, detail="User no longer exists")
     if not verify_password(req.current_password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Current password is incorrect")
+    record_success(lock_key)
     if len(req.new_password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(status_code=422, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
     updated = duckdb_store.change_own_password(user.user_id, hash_password(req.new_password))

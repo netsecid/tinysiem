@@ -269,3 +269,19 @@ async def test_change_password_enforces_min_length(client):
         headers=headers,
     )
     assert resp.status_code == 422
+
+
+async def test_change_password_locks_out_after_repeated_wrong_current_password(client, analyst_headers):
+    from app.auth_lockout import MAX_ATTEMPTS, reset_all
+    reset_all()
+    # Same as login(): the MAX_ATTEMPTS-th call is the one that sets the lock for
+    # subsequent calls but is itself still processed (401, wrong current password),
+    # so one extra call past the threshold is needed to observe the 429.
+    r = None
+    for _ in range(MAX_ATTEMPTS + 1):
+        r = await client.post(
+            "/auth/change-password",
+            json={"current_password": "definitely-wrong", "new_password": "some-new-password-12345"},
+            headers=analyst_headers,
+        )
+    assert r.status_code == 429

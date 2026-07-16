@@ -178,3 +178,35 @@ def test_interleaved_decoy_failures_do_not_reset_target_lockout_count(monkeypatc
         fake_time[0] += 1
 
     assert is_locked(target) > 0.0
+
+
+def test_check_and_note_attempt_allows_under_threshold():
+    reset_all()
+    key = ("user-f", "1.1.1.1")
+    for _ in range(MAX_ATTEMPTS - 1):
+        assert auth_lockout.check_and_note_attempt(key) == 0.0
+
+
+def test_check_and_note_attempt_locks_at_threshold():
+    reset_all()
+    key = ("user-g", "1.1.1.1")
+    # The MAX_ATTEMPTS-th call is the one that *sets* locked_until (for future
+    # calls) — it still returns 0.0 for itself, matching the original
+    # is_locked()-before/record_failure()-after ordering where the attempt that
+    # pushes the count to the threshold is still let through (this is what keeps
+    # the REST-level test_login_lockout_after_repeated_failures behavior — 5x 401
+    # then 429 on the 6th — unchanged). So we need one call *past* the threshold
+    # to observe the lock actually engage.
+    for _ in range(MAX_ATTEMPTS + 1):
+        remaining = auth_lockout.check_and_note_attempt(key)
+    assert remaining > 0.0
+
+
+def test_check_and_note_attempt_stays_locked_without_double_counting():
+    reset_all()
+    key = ("user-h", "1.1.1.1")
+    for _ in range(MAX_ATTEMPTS):
+        auth_lockout.check_and_note_attempt(key)
+    remaining_1 = auth_lockout.check_and_note_attempt(key)
+    remaining_2 = auth_lockout.check_and_note_attempt(key)
+    assert remaining_1 > 0.0 and remaining_2 > 0.0
