@@ -126,6 +126,8 @@ Go to **Settings → AI Config** (admin role required) and pick one of:
 | `deepseek` | No | Defaults to `https://api.deepseek.com/v1`. |
 | `custom` | **Yes** | Any OpenAI-compatible endpoint — a self-hosted model gateway, Ollama, LM Studio, etc. |
 
+For `custom`, `base_url` is validated when you save it — private, loopback, link-local, reserved, and multicast addresses are rejected — but that check happens once, at save time; it does not re-verify on every request, so a hostname that later starts resolving to an internal address (DNS rebinding) after being saved would not be re-checked. Only admins can set this field.
+
 The **Model** field is free text — providers ship new models faster than this doc (or any dropdown) could track, so check your provider's own documentation for the exact model name/ID to enter. Click **Test Connection** after saving to confirm the key and endpoint actually work before relying on them.
 
 The API key is encrypted at rest the same way integration credentials are — see [`TINYSIEM_MASTER_KEY`](#api-integrations) above; without it set, AI Config save requests will still work (the key is stored, just less safely — set the master key before storing anything sensitive in production).
