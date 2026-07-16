@@ -17,7 +17,14 @@ class _JWTMiddleware(BaseHTTPMiddleware):
         if auth.startswith("Bearer "):
             payload = decode_token(auth[7:])
             if payload and payload.get("role") in _MCP_ALLOWED_ROLES:
-                return await call_next(request)
+                from app.storage import duckdb_store
+                user_row = duckdb_store.get_user_by_id(payload.get("sub", ""))
+                if (
+                    user_row is not None
+                    and payload.get("epoch", 0) == user_row.get("token_epoch", 0)
+                    and not user_row.get("must_change_password")
+                ):
+                    return await call_next(request)
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
 
