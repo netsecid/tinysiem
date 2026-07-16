@@ -30,7 +30,7 @@ function toggleProfileMenu(){
   if(dd) dd.classList.toggle('show');
 }
 
-function navEsc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function navEsc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
 function renderNav(){
   const root=document.getElementById('nav-root');

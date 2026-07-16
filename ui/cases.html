@@ -366,7 +366,7 @@ function renderTable(cases){
   if(!cases.length){tbody.innerHTML='';empty.style.display='block';return}
   empty.style.display='none';
   tbody.innerHTML=cases.map(c=>`
-    <tr data-id="${c.case_id}" onclick="openCase('${c.case_id}')" class="${S.currentCaseId===c.case_id?'active-row':''}">
+    <tr data-id="${esc(c.case_id)}" class="${S.currentCaseId===c.case_id?'active-row':''}">
       <td><span class="badge sev-${c.severity||'medium'}">${(c.severity||'medium').toUpperCase()}</span></td>
       <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.title)}">${esc(c.title)}</td>
       <td><span class="badge status-${c.status||'open'}">${fmtStatus(c.status||'open')}</span></td>
@@ -376,6 +376,10 @@ function renderTable(cases){
       <td class="col-updated" title="${c.updated_at||''}">${relTime(c.updated_at)}</td>
     </tr>`).join('');
 }
+document.getElementById('casesBody').addEventListener('click', e => {
+  const row = e.target.closest('tr[data-id]');
+  if (row) openCase(row.dataset.id);
+});
 
 function renderPagination(){
   const total=S.total,page=S.page,limit=S.limit;
@@ -761,7 +765,7 @@ async function refinePlaybook(caseId,ruleName){
 }
 
 // ── Helpers ──
-function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function ipLink(ip){
   if(!ip)return '—';
   return `<a href="/ui/entity.html?ip=${encodeURIComponent(ip)}" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-family:var(--mono)" title="View entity">${esc(ip)}</a>`;

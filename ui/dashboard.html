@@ -147,7 +147,7 @@ const WIDGET_TYPES={
 
 const SEV_COLORS={critical:'#e85555',high:'#f5c842',medium:'#4d9fff',low:'#3ddc84'};
 
-function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function uuid4(){return([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16))}
 
 async function api(path,opts={}){
@@ -264,23 +264,23 @@ function renderGrid(){
     const rows=Math.min(2,Math.max(1,gp.height||1));
     const colClass=cols>1?'col-'+cols:'';
     const rowClass=rows>1?'row-'+rows:'';
-    return `<div class="widget-card ${colClass} ${rowClass} ${S.editMode?'edit-mode':''}" id="wc_${w.widget_id}">
+    return `<div class="widget-card ${colClass} ${rowClass} ${S.editMode?'edit-mode':''}" id="wc_${esc(w.widget_id)}" data-widget-id="${esc(w.widget_id)}">
       <div class="widget-hdr">
         <span class="widget-title">${esc(w.title||WIDGET_TYPES[w.type]?.name||w.type)}</span>
         <div class="widget-menu">
-          <button class="widget-menu-btn" onclick="toggleMenu('${w.widget_id}')">⋮</button>
-          <div class="widget-dropdown" id="wm_${w.widget_id}">
-            <button onclick="refreshWidget('${w.widget_id}');closeMenus()">↻ Refresh</button>
-            <button onclick="editWidget('${w.widget_id}');closeMenus()">✎ Edit settings</button>
-            <button onclick="removeWidget('${w.widget_id}');closeMenus()" style="color:var(--red)">✕ Remove</button>
+          <button class="widget-menu-btn" data-action="toggle-menu">⋮</button>
+          <div class="widget-dropdown" id="wm_${esc(w.widget_id)}">
+            <button data-action="refresh">↻ Refresh</button>
+            <button data-action="edit">✎ Edit settings</button>
+            <button data-action="remove" style="color:var(--red)">✕ Remove</button>
           </div>
         </div>
       </div>
-      <div class="widget-body" id="wb_${w.widget_id}"><span class="spinner"></span></div>
-      <div class="widget-footer" id="wf_${w.widget_id}"></div>
+      <div class="widget-body" id="wb_${esc(w.widget_id)}"><span class="spinner"></span></div>
+      <div class="widget-footer" id="wf_${esc(w.widget_id)}"></div>
       <div class="edit-overlay">
-        <button class="edit-remove" onclick="removeWidget('${w.widget_id}')">✕ Remove</button>
-        <button class="btn-sec" style="font-size:12px" onclick="editWidget('${w.widget_id}')">✎ Edit settings</button>
+        <button class="edit-remove" data-action="remove">✕ Remove</button>
+        <button class="btn-sec" style="font-size:12px" data-action="edit">✎ Edit settings</button>
       </div>
     </div>`;
   }).join('');
@@ -293,6 +293,18 @@ function renderGrid(){
   document.getElementById('addWidgetBtn').style.display=S.editMode?'block':'none';
   document.getElementById('editHint').style.display=S.editMode?'block':'none';
 }
+document.getElementById('widgetGrid').addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const card = e.target.closest('[data-widget-id]');
+  const widgetId = card?.dataset.widgetId;
+  if (!widgetId) return;
+  const action = btn.dataset.action;
+  if (action === 'toggle-menu') toggleMenu(widgetId);
+  else if (action === 'refresh') { refreshWidget(widgetId); closeMenus(); }
+  else if (action === 'edit') { editWidget(widgetId); closeMenus(); }
+  else if (action === 'remove') { removeWidget(widgetId); closeMenus(); }
+});
 
 function refreshWidget(id){const w=S.widgets.find(x=>x.widget_id===id);if(w)renderWidget(w);}
 function refreshAll(){S.widgets.forEach(w=>renderWidget(w));}

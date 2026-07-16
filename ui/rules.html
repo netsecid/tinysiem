@@ -105,7 +105,7 @@ tr.selected td,.list-panel tr:hover td{background:var(--accent-dim)}
 const TH=document.documentElement;
 const S={theme:'dark',jwt:'',ep:'',role:'',selected:null};
 
-function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function sevClass(s){return 'sev sev-'+(s||'low').toLowerCase()}
 
 function switchRulesTab(tab){
