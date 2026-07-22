@@ -40,6 +40,9 @@ docker-compose restart tinysiem
 # Seed test data (Python stdlib, no pip install needed)
 python scripts/ingest_test_logs.py 500
 
+# Bulk-load a real log/CSV file for an investigation (generic, any decoder source)
+python scripts/ingest_file.py --source my_custom_csv --file evidence.csv --csv
+
 # Run all tests
 pytest app/tests/
 
@@ -177,6 +180,26 @@ fields:
 timestamp_field: timestamp
 timestamp_format: '%d/%b/%Y:%H:%M:%S %z'
 ```
+
+A `csv` type is also supported — it reads column names from the file's own header
+row (uploaded as line 1) rather than a fixed capture-group pattern, so custom
+column names/order need no code changes, just a `fields:` mapping:
+
+```yaml
+name: my_custom_csv
+source: my_custom_csv
+type: csv
+fields:
+  source_ip: client_ip      # normalized field: your CSV's header name
+  status_code: http_status
+timestamp_field: event_time  # optional, must be a key in fields:
+timestamp_format: '%Y-%m-%d %H:%M:%S'
+```
+
+`type: csv` decoders only work via `POST /ingest/file` (they need the header row
+from the uploaded content) — not `POST /ingest/raw` or `POST /ingest/beats`.
+Column values containing embedded newlines inside quotes are not supported: each
+CSV row must be a single line, since files are split line-by-line before decoding.
 
 ## Rule YAML format
 
