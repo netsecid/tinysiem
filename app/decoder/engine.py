@@ -55,6 +55,10 @@ def load_decoders(decoders_dir: Optional[Path] = None) -> None:
                 logger.warning(f"Failed to load custom decoder {yaml_file}: {exc}")
 
 
+def get_decoder(source: str) -> Optional[dict]:
+    return _decoders.get(source)
+
+
 def decode(source: str, raw: str) -> Optional[dict]:
     decoder = _decoders.get(source)
     if not decoder:
@@ -73,6 +77,8 @@ def decode(source: str, raw: str) -> Optional[dict]:
         logger.warning(f"Decoder error for source '{source}': {exc}")
         return None
 
+    # type: csv intentionally unsupported here — it needs a file-level header
+    # (see decode_csv_row); only usable via /ingest/file.
     logger.warning(f"Unknown decoder type '{dtype}'")
     return None
 
@@ -192,6 +198,39 @@ def _decode_kv(decoder: dict, source: str, raw: str) -> Optional[dict]:
     event = _base_event(source, raw)
     fields = decoder.get("fields", {})
     _apply_fields(event, fields, data)
+    return event
+
+
+def parse_csv_header(line: str) -> list[str]:
+    import csv
+    import io
+    return next(csv.reader(io.StringIO(line)))
+
+
+def decode_csv_row(decoder: dict, source: str, header: list[str], raw: str) -> Optional[dict]:
+    import csv
+    import io
+    try:
+        row = next(csv.reader(io.StringIO(raw)), None)
+    except csv.Error as exc:
+        logger.warning(f"CSV parse error for source '{source}': {exc}")
+        return None
+    if row is None or len(row) != len(header):
+        logger.warning(
+            f"CSV row column count mismatch for source '{source}' "
+            f"(expected {len(header)}, got {len(row) if row is not None else 0})"
+        )
+        return None
+
+    data = dict(zip(header, row))
+    event = _base_event(source, raw)
+    fields = decoder.get("fields", {})
+    _apply_fields(event, fields, data)
+    mapped_src_keys = set(fields.values())
+    for key, val in data.items():
+        if key not in mapped_src_keys:
+            event.setdefault("extra", {})[key] = val
+    _parse_timestamp(event, decoder, data)
     return event
 
 
