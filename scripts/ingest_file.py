@@ -37,10 +37,13 @@ def _load_api_key(explicit_key):
 
 
 def read_batches(path, batch_size, has_header):
-    """Yield (batch_start_line, header_line_or_None, data_lines) tuples, reading
+    """Yield (header_line_or_None, data_lines, line_numbers) tuples, reading
     `path` line-by-line so the whole file is never held in memory at once.
-    batch_start_line is the 1-indexed absolute line number of data_lines[0] in the
-    original file."""
+    `line_numbers[i]` is the 1-indexed absolute physical line number of
+    `data_lines[i]` in the original file — tracked explicitly (not derived by
+    arithmetic from a single batch-start line) because blank lines are skipped
+    and can appear anywhere, including inside a batch, so physical line numbers
+    are not derivable from a linear offset off one start line."""
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         header_line = None
         line_no = 0
@@ -51,32 +54,21 @@ def read_batches(path, batch_size, has_header):
             header_line = first.rstrip("\n")
             line_no = 1
 
-        chunk = []
-        chunk_start = None
+        data_lines = []
+        line_numbers = []
         for raw_line in f:
             line_no += 1
             line = raw_line.rstrip("\n")
             if not line.strip():
                 continue
-            if chunk_start is None:
-                chunk_start = line_no
-            chunk.append(line)
-            if len(chunk) >= batch_size:
-                yield (chunk_start, header_line, chunk)
-                chunk = []
-                chunk_start = None
-        if chunk:
-            yield (chunk_start, header_line, chunk)
-
-
-def map_batch_error_line(batch_start_line, has_header, server_line):
-    """Map a 1-indexed line number from a batch's /ingest/file response back to
-    the absolute 1-indexed line number in the original source file. Server line
-    numbers count within the uploaded batch content, which includes the repeated
-    header line (at position 1) when has_header is set."""
-    if has_header:
-        return batch_start_line + (server_line - 2)
-    return batch_start_line + (server_line - 1)
+            data_lines.append(line)
+            line_numbers.append(line_no)
+            if len(data_lines) >= batch_size:
+                yield (header_line, data_lines, line_numbers)
+                data_lines = []
+                line_numbers = []
+        if data_lines:
+            yield (header_line, data_lines, line_numbers)
 
 
 def _build_multipart_body(filename, content_bytes):
@@ -135,7 +127,7 @@ def run(args):
     rejects_written = 0
 
     with open(rejects_path, "w", encoding="utf-8") as rejects_f:
-        for batch_start_line, header_line, data_lines in read_batches(
+        for header_line, data_lines, line_numbers in read_batches(
             args.file, args.batch_size, args.csv
         ):
             total_lines += len(data_lines)
@@ -153,9 +145,9 @@ def run(args):
             except RuntimeError as exc:
                 print(f"Warning: {exc}")
                 batch_failures += 1
-                for line in data_lines:
+                for line_no, line in zip(line_numbers, data_lines):
                     rejects_f.write(json.dumps({
-                        "line": None, "source_line_content": line, "error": str(exc),
+                        "line": line_no, "source_line_content": line, "error": str(exc),
                     }) + "\n")
                     rejects_written += 1
                 total_failed += len(data_lines)
@@ -164,8 +156,8 @@ def run(args):
             total_processed += result.get("processed", 0)
             total_failed += result.get("failed", 0)
             for err in result.get("errors", []):
-                abs_line = map_batch_error_line(batch_start_line, args.csv, err["line"])
                 idx = err["line"] - (2 if args.csv else 1)
+                abs_line = line_numbers[idx] if 0 <= idx < len(line_numbers) else None
                 source_content = data_lines[idx] if 0 <= idx < len(data_lines) else None
                 rejects_f.write(json.dumps({
                     "line": abs_line, "source_line_content": source_content, "error": err["error"],
