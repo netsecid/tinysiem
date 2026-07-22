@@ -12,6 +12,14 @@ from app.watchlists import matcher as watchlist_matcher
 logger = logging.getLogger(__name__)
 
 
+def store_and_evaluate(event: dict) -> str:
+    """Insert a decoded event and run it through the rule engine and watchlist matcher."""
+    duckdb_store.insert_event(event)
+    rule_engine.evaluate(event)
+    watchlist_matcher.check_event(event)
+    return event["id"]
+
+
 def process_line(source: str, raw: str, strict: bool = True) -> str:
     """Decode, store, and evaluate rules for a single log line.
 
@@ -29,7 +37,4 @@ def process_line(source: str, raw: str, strict: bool = True) -> str:
             "raw": raw,
         }
 
-    duckdb_store.insert_event(event)
-    rule_engine.evaluate(event)
-    watchlist_matcher.check_event(event)
-    return event["id"]
+    return store_and_evaluate(event)
