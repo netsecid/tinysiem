@@ -43,26 +43,28 @@ def read_batches(path, batch_size, has_header):
     original file."""
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         header_line = None
-        line_no = 1
+        line_no = 0
         if has_header:
             first = f.readline()
             if not first:
                 return
             header_line = first.rstrip("\n")
-            line_no = 2
+            line_no = 1
 
         chunk = []
-        chunk_start = line_no
+        chunk_start = None
         for raw_line in f:
-            line = raw_line.rstrip("\n")
             line_no += 1
+            line = raw_line.rstrip("\n")
             if not line.strip():
                 continue
+            if chunk_start is None:
+                chunk_start = line_no
             chunk.append(line)
             if len(chunk) >= batch_size:
                 yield (chunk_start, header_line, chunk)
                 chunk = []
-                chunk_start = line_no
+                chunk_start = None
         if chunk:
             yield (chunk_start, header_line, chunk)
 

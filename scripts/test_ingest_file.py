@@ -56,3 +56,12 @@ def test_read_batches_header_only_file_yields_nothing(tmp_path):
     batches = list(ingest_file.read_batches(str(f), batch_size=10, has_header=True))
 
     assert batches == []
+
+
+def test_read_batches_blank_line_at_chunk_boundary_reports_correct_line_number(tmp_path):
+    f = tmp_path / "data.log"
+    f.write_text("line1\n\nline2\n")
+
+    batches = list(ingest_file.read_batches(str(f), batch_size=1, has_header=False))
+
+    assert batches == [(1, None, ["line1"]), (3, None, ["line2"])]
