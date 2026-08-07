@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     # UI static dir (native-run override; empty = resolve repo ui/ relative to app/)
     tinysiem_ui_dir: str = ""
 
+    # Read-only SQL sandbox (/query/sql)
+    tinysiem_sql_enabled: bool = True
+    tinysiem_sql_max_rows: int = 1000
+    tinysiem_sql_timeout_ms: int = 5000
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
