@@ -22,12 +22,12 @@ fields:
 
 @pytest.fixture(autouse=True)
 def clean_custom_parsers():
-    if CUSTOM_DIR.exists():
-        for f in CUSTOM_DIR.glob("*.yaml"):
-            f.unlink()
+    # Only clean up files the tests themselves create — never delete
+    # pre-existing custom decoders (a user's decoders live in this same dir).
+    before = set(CUSTOM_DIR.glob("*.yaml")) if CUSTOM_DIR.exists() else set()
     yield
     if CUSTOM_DIR.exists():
-        for f in CUSTOM_DIR.glob("*.yaml"):
+        for f in set(CUSTOM_DIR.glob("*.yaml")) - before:
             f.unlink()
 
 

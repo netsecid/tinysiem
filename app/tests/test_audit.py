@@ -138,6 +138,10 @@ async def test_parser_create_creates_audit(client, admin_headers):
     assert entry is not None
     assert entry["action"] == "created"
     assert entry["resource_id"] == name
+    # Clean up the repo-tree file this test created (no autouse cleanup here)
+    from pathlib import Path
+    leftover = Path(__file__).parent.parent / "decoder" / "decoders" / "custom" / f"{name}.yaml"
+    leftover.unlink(missing_ok=True)
 
 
 async def test_rule_create_creates_audit(client, admin_headers):
@@ -152,6 +156,10 @@ async def test_rule_create_creates_audit(client, admin_headers):
     entry = _latest_audit("rule.create")
     assert entry is not None
     assert entry["resource_id"] == name
+    # Clean up the repo-tree file this test created (no autouse cleanup here)
+    from pathlib import Path
+    leftover = Path(__file__).parent.parent / "rules" / "rules" / "custom" / f"{name}.yaml"
+    leftover.unlink(missing_ok=True)
 
 
 # ── AI call audit ─────────────────────────────────────────────────────────────
