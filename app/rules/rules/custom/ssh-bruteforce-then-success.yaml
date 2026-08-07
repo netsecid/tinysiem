@@ -1,0 +1,52 @@
+name: ssh-bruteforce-then-success
+severity: critical
+source: "*"
+condition:
+  type: correlation
+  window_seconds: 300
+  capture_field: source_ip
+  steps:
+    - source: sshd
+      field: method
+      value: "Failed password"
+      operator: eq
+    - source: sshd
+      field: method
+      value: "Accepted"
+      operator: contains
+mitre_tactic: "Credential Access"
+mitre_technique: "T1110"
+playbook:
+  summary: "Same IP failed SSH auth then successfully authenticated — assume account compromise"
+  steps:
+    - id: confirm_sequence
+      name: "Confirm failed→accepted sequence from same IP within 5 minutes"
+      action: query_events
+      auto: true
+      params:
+        filter: "source_ip={source_ip} source=sshd"
+        window_seconds: 300
+      notes: "List both the failed attempts and the accepted session"
+    - id: identify_account
+      name: "Identify which account authenticated successfully"
+      action: query_events
+      auto: false
+      params:
+        filter: "source=sshd method=Accepted* source_ip={source_ip}"
+        window_seconds: 300
+    - id: check_post_login
+      name: "Review actions after successful login"
+      action: query_events
+      auto: false
+      params:
+        filter: "source_ip={source_ip}"
+        window_seconds: 3600
+      notes: "Look for privilege escalation, data access, lateral movement"
+    - id: contain
+      name: "Disable account / rotate credentials / block IP"
+      action: block_ip
+      auto: false
+    - id: notify
+      name: "Notify account owner and security team"
+      action: notify
+      auto: false

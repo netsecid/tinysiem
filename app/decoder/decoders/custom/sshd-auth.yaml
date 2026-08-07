@@ -1,0 +1,20 @@
+name: sshd_auth
+source: sshd
+type: json
+# Consumes pre-normalized JSON events from scripts/ingest_auth_log.py:
+#   {"event_time": "<naive UTC iso>", "action": "<canonical action>",
+#    "user": "<username>", "source_ip": "<ipv4>", "message": "<original log line>"}
+# The script exists because sshd emits many message shapes that a single
+# TinySIEM regex decoder cannot reliably cover.
+#
+# 'action' is mapped to the events.method column — it is the only
+# allowlist-queryable free-text field in the threshold engine, so rules can
+# count e.g. method = "Failed password" over a time window.
+fields:
+  source_ip: source_ip
+  method: action
+  user: user
+  event_time: event_time
+  message: message
+timestamp_field: event_time
+timestamp_format: '%Y-%m-%dT%H:%M:%S.%f'

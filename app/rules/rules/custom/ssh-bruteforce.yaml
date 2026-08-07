@@ -1,0 +1,39 @@
+name: ssh-bruteforce
+severity: high
+source: sshd
+condition:
+  type: threshold
+  field: method
+  value: "Failed password"
+  operator: eq
+  threshold_count: 5
+  window_seconds: 60
+mitre_tactic: "Credential Access"
+mitre_technique: "T1110"
+suppress_seconds: 300
+playbook:
+  summary: "Multiple failed SSH password attempts — active credential-stuffing or brute-force"
+  steps:
+    - id: identify_scope
+      name: "List all failed-password source IPs and usernames"
+      action: query_events
+      auto: true
+      params:
+        filter: "source=sshd method=\"Failed password\""
+        window_seconds: 3600
+      notes: "Facet by source_ip and extra.user to size the attack"
+    - id: check_ip_rep
+      name: "Check source IP reputation (TOR, proxy, known scanner)"
+      action: lookup_threat_intel
+      auto: false
+    - id: harden
+      name: "Block offending IPs; consider fail2ban / SSH rate limiting"
+      action: block_ip
+      auto: false
+    - id: verify_no_success
+      name: "Confirm no successful login followed the failures"
+      action: query_events
+      auto: false
+      params:
+        filter: "source=sshd method=Accepted*"
+        window_seconds: 3600
