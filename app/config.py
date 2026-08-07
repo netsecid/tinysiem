@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     tinysiem_sql_max_rows: int = 1000
     tinysiem_sql_timeout_ms: int = 5000
 
+    # TLS (documented in .env.example + used by docker-entrypoint; declare here
+    # so pydantic-settings accepts them when they appear in .env)
+    tinysiem_tls_cert: str = ""
+    tinysiem_tls_key: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
