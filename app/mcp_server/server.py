@@ -283,6 +283,6 @@ def build_mcp_app():
         columns, rows = _execute(query, params)
         return {"columns": columns, "rows": rows[:1000], "total_rows": len(rows)}
 
-    raw_app = mcp.streamable_http_app()
+    raw_app = mcp.sse_app()
     raw_app.add_middleware(_JWTMiddleware)
     return raw_app
