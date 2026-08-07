@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # CORS (v1.4)
     tinysiem_cors_origins: str = ""   # comma-separated allowed origins; empty = same-origin only
 
+    # UI static dir (native-run override; empty = resolve repo ui/ relative to app/)
+    tinysiem_ui_dir: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

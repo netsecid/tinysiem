@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
@@ -189,7 +191,8 @@ app.include_router(searches_router)
 app.include_router(admin_router)
 app.include_router(entities_router)
 
-app.mount("/ui", StaticFiles(directory="/app/ui"), name="ui")
+_ui_dir = settings.tinysiem_ui_dir or str(Path(__file__).resolve().parent.parent / "ui")
+app.mount("/ui", StaticFiles(directory=_ui_dir), name="ui")
 
 
 @app.get("/", include_in_schema=False)
