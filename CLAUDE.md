@@ -15,7 +15,15 @@ v1.5 "Analyst Experience" shipped and tested:
 - **E6** CSV export — `format=csv` on `GET /events`/`GET /alerts`, honoring all filters, 10,000-row cap
 - **E7** MITRE ATT&CK coverage matrix — `GET /rules/mitre-coverage` + UI section on the Rules page
 
-**Next version: v1.6.** Deferred from v1.4/v1.5: TOTP/2FA, dependency extras split, audit-log hash chaining, GeoIP enrichment, username/actor entities.
+**Next version: v1.6.** Deferred from v1.4/v1.5: TOTP/2FA, dependency extras split, audit-log hash chaining, username/actor entities.
+
+v1.6 progress (merged via PR):
+- **GeoIP enrichment (PR #4)** — offline IP → country/city/ASN enrichment at ingest:
+  - `app/geoip/` package: CSV provider (db-ip lite `.csv`/`.csv.gz`, stdlib-only, family-aware binary search over IPv4+IPv6 ranges) + optional MaxMind `.mmdb` provider (`pip install geoip2`; optional GeoLite2-ASN via `TINYSIEM_GEOIP_ASN_PATH`). No DB configured → Null provider, enrichment no-ops.
+  - Events table gains `country_code`, `country_name`, `city`, `asn` columns (plain `ADD COLUMN` migration for pre-v1.6 DBs). Enrichment hook lives in `duckdb_store.insert_event()` — one chokepoint covering raw/file/beats/syslog/integrations.
+  - `country_code` added to `_ALLOWED_FIELDS` (threshold rules can now count per-country) and to `/events/facets`.
+  - `GET /geoip/{ip}` (analyst+), `geo` field on `GET /entities/ip/{value}` and on MCP `investigate_ip`; entity page shows a geolocation card, events table shows a flag badge + geo fields in the row expander.
+  - `scripts/fetch_geoip_db.py` (db-ip lite download, no registration) + `scripts/backfill_geoip.py` (offline rebuild of the events table to enrich historical rows — UPDATE is blocked by the PK+index constraint, so it rebuilds via LEFT JOIN + RENAME; run with the server stopped).
 
 **After v1.6 ships:** update this section to "Current State: v1.6" and set next to v1.7.
 

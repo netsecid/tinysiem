@@ -17,6 +17,7 @@ _lock = threading.Lock()
 _ALLOWED_FIELDS = {
     "source", "source_ip", "method", "uri",
     "status_code", "response_size", "user_agent", "referer",
+    "country_code",
 }
 
 
@@ -39,7 +40,11 @@ def init_db(path: Optional[str] = None) -> None:
                 user_agent      VARCHAR,
                 referer         VARCHAR,
                 raw             VARCHAR NOT NULL,
-                extra           JSON
+                extra           JSON,
+                country_code    VARCHAR,
+                country_name    VARCHAR,
+                city            VARCHAR,
+                asn             VARCHAR
             )
         """)
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_ingested_at ON events (ingested_at)")
@@ -68,6 +73,20 @@ def init_db(path: Optional[str] = None) -> None:
             _conn.execute("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE")
         if "token_epoch" not in _existing_cols:
             _conn.execute("ALTER TABLE users ADD COLUMN token_epoch INTEGER DEFAULT 0")
+
+        # Migrate pre-v1.6 databases: add GeoIP enrichment columns to events.
+        # Same DuckDB constraint as above — plain ADD COLUMN, no NOT NULL.
+        # Enrichment only ever writes explicit values on insert, and NULL
+        # means "not enriched" (historical rows keep NULL until a backfill).
+        _existing_event_cols = {row[1] for row in _conn.execute("PRAGMA table_info('events')").fetchall()}
+        if "country_code" not in _existing_event_cols:
+            _conn.execute("ALTER TABLE events ADD COLUMN country_code VARCHAR")
+        if "country_name" not in _existing_event_cols:
+            _conn.execute("ALTER TABLE events ADD COLUMN country_name VARCHAR")
+        if "city" not in _existing_event_cols:
+            _conn.execute("ALTER TABLE events ADD COLUMN city VARCHAR")
+        if "asn" not in _existing_event_cols:
+            _conn.execute("ALTER TABLE events ADD COLUMN asn VARCHAR")
 
 
 def close_db() -> None:
@@ -142,6 +161,11 @@ def _build_where(
 
 def insert_event(event: dict) -> None:
     conn = _get_conn()
+    # Ingest-time GeoIP enrichment — every insert path (raw/file/beats/syslog/
+    # integrations) flows through here, so enrichment is a single chokepoint.
+    from app.geoip import enrich_event
+    enrich_event(event)
+
     ingested_at = event.get("ingested_at", datetime.now(timezone.utc))
     if hasattr(ingested_at, "tzinfo") and ingested_at.tzinfo is not None:
         ingested_at = ingested_at.replace(tzinfo=None)
@@ -157,8 +181,9 @@ def insert_event(event: dict) -> None:
             """
             INSERT INTO events
                 (id, source, ingested_at, event_time, source_ip, method, uri,
-                 status_code, response_size, user_agent, referer, raw, extra)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 status_code, response_size, user_agent, referer, raw, extra,
+                 country_code, country_name, city, asn)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 event.get("id"), event.get("source"), ingested_at, event_time,
@@ -166,6 +191,8 @@ def insert_event(event: dict) -> None:
                 event.get("status_code"), event.get("response_size"),
                 event.get("user_agent"), event.get("referer"),
                 event.get("raw"), extra_json,
+                event.get("country_code"), event.get("country_name"),
+                event.get("city"), event.get("asn"),
             ],
         )
 
@@ -221,7 +248,8 @@ def query_events(
         total = conn.execute(f"SELECT COUNT(*) FROM events {where}", params).fetchone()[0]
         rows = conn.execute(
             f"""SELECT id, source, ingested_at, event_time, source_ip, method, uri,
-                       status_code, response_size, user_agent, referer, raw, extra
+                       status_code, response_size, user_agent, referer, raw, extra,
+                       country_code, country_name, city, asn
                 FROM events {where}
                 ORDER BY ingested_at DESC
                 LIMIT ? OFFSET ?""",
@@ -231,6 +259,7 @@ def query_events(
     columns = [
         "id", "source", "ingested_at", "event_time", "source_ip", "method",
         "uri", "status_code", "response_size", "user_agent", "referer", "raw", "extra",
+        "country_code", "country_name", "city", "asn",
     ]
     events = []
     for row in rows:
@@ -298,11 +327,18 @@ def get_event_facets(
             params,
         ).fetchall()
 
+        geo_rows = conn.execute(
+            f"SELECT country_code, COUNT(*) FROM events {where} {and_or_where} country_code IS NOT NULL "
+            f"GROUP BY country_code ORDER BY COUNT(*) DESC LIMIT 12",
+            params,
+        ).fetchall()
+
     return {
         "source":       [{"value": r[0], "count": r[1]} for r in source_rows],
         "method":       [{"value": r[0], "count": r[1]} for r in method_rows],
         "status_class": [{"value": r[0], "count": r[1]} for r in status_rows],
         "source_ip":    [{"value": r[0], "count": r[1]} for r in ip_rows],
+        "country_code": [{"value": r[0], "count": r[1]} for r in geo_rows],
     }
 
 
@@ -1168,14 +1204,16 @@ def get_event_full(event_id: str) -> Optional[dict]:
     with _lock:
         row = _get_conn().execute(
             """SELECT id, source, ingested_at, event_time, source_ip, method, uri,
-                      status_code, response_size, user_agent, referer, raw, extra
+                      status_code, response_size, user_agent, referer, raw, extra,
+                      country_code, country_name, city, asn
                FROM events WHERE id = ?""",
             [event_id],
         ).fetchone()
     if not row:
         return None
     cols = ["id", "source", "ingested_at", "event_time", "source_ip", "method",
-            "uri", "status_code", "response_size", "user_agent", "referer", "raw", "extra"]
+            "uri", "status_code", "response_size", "user_agent", "referer", "raw", "extra",
+            "country_code", "country_name", "city", "asn"]
     d = dict(zip(cols, row))
     for f in ("ingested_at", "event_time"):
         if d.get(f) and hasattr(d[f], "isoformat"):

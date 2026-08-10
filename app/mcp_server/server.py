@@ -47,10 +47,11 @@ class _JWTMiddleware(BaseHTTPMiddleware):
 
 
 def build_ip_context(ip: str, days: int = 7) -> dict:
-    """One-call entity pivot for an IP: summary, top activity, alerts, cases."""
+    """One-call entity pivot for an IP: summary, geo, top activity, alerts, cases."""
     from datetime import datetime, timedelta, timezone
     from app.alerts.router import read_all_alerts
     from app.cases import store as case_store
+    from app.geoip import lookup as geoip_lookup
     from app.storage import duckdb_store
 
     end = datetime.now(timezone.utc)
@@ -72,6 +73,7 @@ def build_ip_context(ip: str, days: int = 7) -> dict:
     return {
         "ip": ip,
         **summary,
+        "geo": geoip_lookup(ip),
         "related_alerts": related_alerts[:50],
         "related_cases": related_cases,
     }
@@ -245,10 +247,11 @@ def build_mcp_app():
     def investigate_ip(ip: str, days: int = 7) -> dict:
         """Full-context investigation for one IP address.
 
-        Returns first/last seen, event volume, top methods and sources,
-        hourly activity histogram, up to 50 related alerts and any cases
-        linked to those alerts. Use this when an alert references an IP or
-        when asked 'what do we know about this IP?'.
+        Returns first/last seen, event volume, geolocation (country/city/ASN
+        when a GeoIP database is configured), top methods and sources, hourly
+        activity histogram, up to 50 related alerts and any cases linked to
+        those alerts. Use this when an alert references an IP or when asked
+        'what do we know about this IP?'.
 
         Example: investigate_ip(ip="45.153.34.161", days=7)
         """
