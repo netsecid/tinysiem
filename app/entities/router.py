@@ -12,6 +12,7 @@ router = APIRouter(prefix="/entities", tags=["entities"])
 def get_ip_entity(value: str, _: AuthUser = Depends(require_analyst)):
     from app.alerts.router import read_all_alerts
     from app.cases import store as case_store
+    from app.geoip import lookup as geoip_lookup
 
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=7)
@@ -32,6 +33,7 @@ def get_ip_entity(value: str, _: AuthUser = Depends(require_analyst)):
     return {
         "ip": value,
         **summary,
+        "geo": geoip_lookup(value),
         "related_alerts": related_alerts[:50],
         "related_cases": related_cases,
     }
