@@ -91,13 +91,12 @@ async def test_events_csv_export_plain_value_unchanged(client, analyst_headers):
 
 
 async def test_events_csv_export_sanitizes_other_trigger_characters(client, analyst_headers):
-    ip = f"198.51.100.{uuid.uuid4().int % 200 + 1}"
+    # Fixed disjoint last octets OUTSIDE the 1-200 range other tests in this
+    # file draw from (source_ip filtering is a LIKE substring match, so even
+    # "198.51.100.3" can match "198.51.100.30" from another test).
+    ip, ip2, ip3 = "198.51.100.250", "198.51.100.251", "198.51.100.252"
     _insert_event(ip, "+cmd exec")
-
-    ip2 = f"198.51.100.{uuid.uuid4().int % 200 + 1}"
     _insert_event(ip2, "-cmd exec")
-
-    ip3 = f"198.51.100.{uuid.uuid4().int % 200 + 1}"
     _insert_event(ip3, "@cmd exec")
 
     for ip_val, expected in ((ip, "'+cmd exec"), (ip2, "'-cmd exec"), (ip3, "'@cmd exec")):

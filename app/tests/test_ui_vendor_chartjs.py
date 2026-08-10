@@ -1,9 +1,9 @@
 import pathlib
 
-# Two parents (tests -> app-root), matching the container layout where /app is
-# the app/ directory root and ui/ is bind-mounted at /app/ui (see test_ui_fonts.py
-# for the same parent.parent convention used elsewhere).
-_UI_DIR = pathlib.Path(__file__).parent.parent / "ui"
+# Resolve the repo root the same way main.py does: app/tests/../.. = repo root
+# (this also holds in the container, where the repo root is /app and ui/ is
+# bind-mounted at /app/ui).
+_UI_DIR = pathlib.Path(__file__).resolve().parents[2] / "ui"
 
 
 def test_no_cdn_chartjs_references_in_ui():
