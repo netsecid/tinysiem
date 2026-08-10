@@ -2,11 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current State: v1.6
+## Current State: v1.5
 
-v1.4 "Hardened Tiny", v1.5 "Analyst Experience", and v1.6 shipped and tested (see git history for A1–A10, B1–B3, C1, E1–E7, and the PRs below).
+All v1.4 "Hardened Tiny" features shipped and tested (see git history for A1–A10, B1–B3, C1).
 
-v1.5 "Analyst Experience":
+v1.5 "Analyst Experience" shipped and tested:
 - **E1** entity pivot view — `GET /entities/ip/{value}` + `ui/entity.html`; every rendered IP in Events/Alerts/Cases links to it
 - **E2** IOC watchlists — `watchlist_entries` table, CRUD + CSV import under `/watchlists`, ingest-time matching emits `watchlist:<list_name>` alerts
 - **E3** rule backtesting — `POST /rules/{name}/backtest` and `POST /rules/backtest` (inline), UI in the rule detail panel
@@ -15,19 +15,17 @@ v1.5 "Analyst Experience":
 - **E6** CSV export — `format=csv` on `GET /events`/`GET /alerts`, honoring all filters, 10,000-row cap
 - **E7** MITRE ATT&CK coverage matrix — `GET /rules/mitre-coverage` + UI section on the Rules page
 
-v1.6 additions:
+**Next version: v1.6.** Deferred from v1.4/v1.5: TOTP/2FA, dependency extras split, audit-log hash chaining, username/actor entities.
+
+v1.6 progress (merged via PR):
 - **GeoIP enrichment (PR #4)** — offline IP → country/city/ASN enrichment at ingest:
   - `app/geoip/` package: CSV provider (db-ip lite `.csv`/`.csv.gz`, stdlib-only, family-aware binary search over IPv4+IPv6 ranges) + optional MaxMind `.mmdb` provider (`pip install geoip2`; optional GeoLite2-ASN via `TINYSIEM_GEOIP_ASN_PATH`). No DB configured → Null provider, enrichment no-ops.
   - Events table gains `country_code`, `country_name`, `city`, `asn` columns (plain `ADD COLUMN` migration for pre-v1.6 DBs). Enrichment hook lives in `duckdb_store.insert_event()` — one chokepoint covering raw/file/beats/syslog/integrations.
   - `country_code` added to `_ALLOWED_FIELDS` (threshold rules can now count per-country) and to `/events/facets`.
   - `GET /geoip/{ip}` (analyst+), `geo` field on `GET /entities/ip/{value}` and on MCP `investigate_ip`; entity page shows a geolocation card, events table shows a flag badge + geo fields in the row expander.
   - `scripts/fetch_geoip_db.py` (db-ip lite download, no registration) + `scripts/backfill_geoip.py` (offline rebuild of the events table to enrich historical rows — UPDATE is blocked by the PK+index constraint, so it rebuilds via LEFT JOIN + RENAME; run with the server stopped).
-- **UTC timestamp correctness (PR #5)** — storage stays naive UTC; every serialized API timestamp ends in `Z`; the UI renders browser-local time. See docs/development.md → "Timestamps are naive UTC everywhere".
-- **Multi-source real-time ingestion (PR #6)** — `scripts/ingest_syslog_tail.py` generic raw-line tailer (422 = skip-not-retry); `ufw` + `fail2ban` decoders and rules (`fail2ban-ban`/`-unban`, `ufw-repeated-blocks`); systemd tailers for sshd/ufw/fail2ban on the live VPS (one per file — dupes otherwise).
-- **Agent access (earlier PRs)** — MCP server at `/mcp/sse` with 8 tools (incl. `investigate_ip`, `get_alert_context`, `query_events_sql`) and the read-only SQL sandbox `POST /query/sql`; both JWT-gated (analyst+), every sandbox query audited.
-- **AI Config (earlier)** — single active AI provider (Anthropic/OpenAI/DeepSeek/custom) configured in-app via Settings → AI Config; the API key is Fernet-encrypted at rest via `TINYSIEM_MASTER_KEY` (required to save one — no plaintext fallback).
 
-**Next version: v1.7.** Deferred: TOTP/2FA, dependency extras split, audit-log hash chaining, username/actor entities.
+**After v1.6 ships:** update this section to "Current State: v1.6" and set next to v1.7.
 
 **Known DuckDB constraints:**
 - DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, cases tables, `integrations`, `integration_runs`, `case_playbook_steps`, `users`, and `watchlist_entries` (v1.5 — the `active` toggle is a plain `UPDATE`, so this table never gets a secondary index either). Dashboard uses DELETE+INSERT pattern (no UNIQUE on `owner`) to avoid this. `saved_searches` and `rule_exceptions` (also v1.5) are insert/delete-only, so this constraint doesn't apply to them at all.
@@ -61,11 +59,6 @@ pytest app/tests/test_ingest.py::test_ingest_raw_returns_200
 
 # Health check
 curl http://localhost:8000/health
-
-# Native run (no Docker — the live VPS runs this way)
-python3.11 -m venv .venv && .venv/bin/pip install -r app/requirements.txt
-# .env must set TINYSIEM_UI_DIR to the repo ui/ path
-.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --ssl-certfile certs/tinysiem.crt --ssl-keyfile certs/tinysiem.key
 ```
 
 **Key rule:** `docker-compose restart` does NOT rebake the image. Any change to `app/` Python files requires `docker-compose up --build`.
@@ -99,16 +92,8 @@ python3.11 -m venv .venv && .venv/bin/pip install -r app/requirements.txt
 main.py          → FastAPI entry; CORS middleware; StaticFiles /ui; root redirect; routers
 config.py        → pydantic-settings for TINYSIEM_* env vars
 auth.py          → Bearer token dependency (HTTPBearer)
-crypto.py        → Fernet encrypt()/decrypt() keyed by TINYSIEM_MASTER_KEY (integrations + AI Config)
-startup_checks.py→ fatal JWT-secret validation; advisory warnings (default superadmin password, missing master key)
 
-ai/              → AI Config (single active provider: anthropic/openai/deepseek/custom), explain/analyze/search endpoints; API key encrypted via crypto.py
-geoip/           → offline IP → country/city/ASN (db-ip CSV stdlib / optional MaxMind mmdb); enrich hook in duckdb_store.insert_event()
-query/           → POST /query/sql — read-only SQL sandbox (allowlist, blocked-keyword scan, row cap, thread timeout, audited)
-mcp_server/      → FastMCP app at /mcp/sse, 8 tools, JWT-gated (analyst+)
-integrations/    → API integrations (AWS CloudTrail, Google Workspace) + Fernet credential store
-
-ingest/          → POST /ingest/raw, POST /ingest/file, POST /ingest/beats
+ingest/          → POST /ingest/raw, POST /ingest/file
 events/          → GET /events, GET /events/facets, GET /events/histogram
 alerts/          → GET /alerts, GET /alerts/facets (router.py) + JSONL file writer (file_writer.py)
 decoder/         → YAML decoder engine; decoders/nginx_access.yaml
@@ -127,7 +112,7 @@ rules/           → YAML rule loader + threshold/field_match evaluator
 ### Events API endpoints
 | Endpoint | Notes |
 |---|---|
-| `GET /events` | source, source_ip, status_code, status_min, status_max, method, uri, q, start, end, limit, offset; `format=csv` streams CSV (10k cap) |
+| `GET /events` | source, source_ip, status_code, status_min, status_max, method, uri, q, start, end, limit, offset |
 | `GET /events/facets` | Same filter params as /events; returns `{source, method, status_class, source_ip}` value/count lists |
 | `GET /events/histogram` | start, end, buckets (10–200) |
 
@@ -147,9 +132,7 @@ Alert record fields (JSONL): `alert_id`, `triggered_at` (ISO), `rule_name`, `sev
 POST /ingest/raw
   → auth check (Bearer token)
   → decoder engine (YAML regex → normalized dict + UUID)
-  → GeoIP enrichment (country_code/city/asn when a DB is configured)
   → DuckDB insert (events table)
-  → watchlist matcher (IOC hit → watchlist:<list> alert)
   → rule engine (evaluate all YAML rules for this source)
   → alert writer (JSONL append if rule triggers)
 ```
@@ -285,22 +268,13 @@ TINYSIEM_SYSLOG_MAX_BYTES     # 8192; oversized syslog messages are dropped and 
 TINYSIEM_CORS_ORIGINS         # comma-separated allowed cross-origin URLs; empty = same-origin only
 TINYSIEM_TLS_CERT             # path to PEM certificate; set with TINYSIEM_TLS_KEY to serve HTTPS instead of HTTP
 TINYSIEM_TLS_KEY              # path to matching PEM private key
-TINYSIEM_UI_DIR               # native run only: absolute path to ui/ (empty = container layout)
-TINYSIEM_MCP_ENABLED          # false | true — mount the MCP server at /mcp/sse
-TINYSIEM_MASTER_KEY           # Fernet key — required for API Integrations and saving an AI API key
-TINYSIEM_GEOIP_DB_PATH        # db-ip CSV / MaxMind mmdb country DB; empty = GeoIP disabled
-TINYSIEM_GEOIP_ASN_PATH       # optional GeoLite2-ASN .mmdb (or db-ip asn-lite CSV) for the asn field
-TINYSIEM_SQL_ENABLED          # true — POST /query/sql read-only sandbox
-TINYSIEM_SQL_MAX_ROWS         # 1000
-TINYSIEM_SQL_TIMEOUT_MS       # 5000
-TINYSIEM_AI_DAILY_CALL_LIMIT  # 100 — per-user rolling 24h AI call cap
 ```
 
 ---
 
 ## Do NOT Add (out of scope for this project)
 
-- Server-side real-time streaming (SSE / WebSocket) — real-time ingestion is handled by the standalone tailer scripts POSTing to /ingest/raw, not by the server pushing
+- Real-time SSE / WebSocket log tailing (polling is fine)
 - Slack/PagerDuty alert destinations
 - Multi-tenant / org isolation
 - SBOM UI (a static `/sbom` endpoint is acceptable)

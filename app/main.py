@@ -29,6 +29,7 @@ from app.auth_router import router as auth_router
 from app.baselines.router import router as baselines_router
 from app.cases.router import router as cases_router
 from app.events.router import router as events_router
+from app.geoip.router import router as geoip_router
 from app.ingest.router import router as ingest_router
 from app.parsers.router import router as parsers_router
 from app.rules.router import router as rules_crud_router
@@ -73,6 +74,8 @@ async def lifespan(app: FastAPI):
     duckdb_store.ensure_superadmin(hash_password(settings.tinysiem_superadmin_password))
     warn_if_default_superadmin_password()
     warn_if_integrations_missing_master_key()
+    from app.geoip import configure as geoip_configure
+    geoip_configure()
     from app.retention.archiver import start_retention_thread
     from app.reports.generator import start_report_scheduler
     start_retention_thread()
@@ -192,6 +195,7 @@ app.include_router(searches_router)
 app.include_router(query_router)
 app.include_router(admin_router)
 app.include_router(entities_router)
+app.include_router(geoip_router)
 
 _ui_dir = settings.tinysiem_ui_dir or str(Path(__file__).resolve().parent.parent / "ui")
 app.mount("/ui", StaticFiles(directory=_ui_dir), name="ui")

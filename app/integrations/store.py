@@ -26,7 +26,7 @@ def _row_to_dict(row: tuple, cols: list[str]) -> dict:
     d = dict(zip(cols, row))
     for f in ("created_at", "updated_at", "last_run_at", "started_at", "finished_at"):
         if f in d and d[f] and hasattr(d[f], "isoformat"):
-            d[f] = d[f].isoformat()
+            d[f] = d[f].isoformat() + "Z"  # explicit UTC marker
     return d
 
 

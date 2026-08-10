@@ -914,7 +914,7 @@ function ipLink(ip){
 function fmtTime(ts){
   if(!ts) return '—';
   try{
-    const d=new Date(ts);
+    const d=new Date(ts.endsWith('Z')||ts.includes('+')?ts:ts+'Z');
     const pad=n=>String(n).padStart(2,'0');
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} `+
            `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;

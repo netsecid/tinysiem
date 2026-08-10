@@ -73,7 +73,8 @@ const S={jwt:'',ep:'',ip:''};
 
 function toggleTheme(){const t=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',t);localStorage.setItem('ts_theme',t);if(_chart)renderHistogram(_lastHist)}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-function fmtTime(ts){if(!ts)return'—';try{const d=new Date(ts);return d.toLocaleString()}catch{return ts}}
+function fmtTime(ts){if(!ts)return'—';try{const d=new Date(ts.endsWith('Z')||ts.includes('+')?ts:ts+'Z');return d.toLocaleString()}catch{return ts}}
+function flagOf(cc){if(!cc||cc.length!==2)return'';return String.fromCodePoint(...[...cc.toUpperCase()].map(c=>127397+c.charCodeAt(0)))}
 function sevClass(s){return 'badge sev-'+esc((s||'unknown').toLowerCase())}
 
 async function api(path){
@@ -154,6 +155,17 @@ async function loadEntity(){
       <span class="entity-meta">First seen: ${fmtTime(d.first_seen)}</span>
       <span class="entity-meta">Last seen: ${fmtTime(d.last_seen)}</span>
     </div>
+    ${d.geo?`
+    <div class="card">
+      <div class="section-title">Geolocation</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:26px;line-height:1">${flagOf(d.geo.country_code)}</span>
+        <span style="font-weight:600">${esc(d.geo.country_name||d.geo.country_code||'Unknown')}</span>
+        ${d.geo.city?`<span class="entity-meta">${esc(d.geo.city)}</span>`:''}
+        ${d.geo.asn?`<span class="entity-meta" style="font-family:var(--mono)">${esc(d.geo.asn)}</span>`:''}
+        ${d.geo.country_code?`<span class="entity-meta" style="font-family:var(--mono)">${esc(d.geo.country_code)}</span>`:''}
+      </div>
+    </div>`:''}
     <div class="grid-4">
       ${statBox('Total events', (d.total_events||0).toLocaleString())}
       ${statBox('Related alerts', (d.related_alerts||[]).length)}

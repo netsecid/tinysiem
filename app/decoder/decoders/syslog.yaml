@@ -1,0 +1,16 @@
+name: syslog-rsyslog-iso8601
+source: syslog
+type: regex
+# Modern rsyslog default template (no PRI/version marker): ISO8601 timestamp
+# with offset, hostname, then program[pid]: message. Same prefix format as the
+# ufw log — this is the generic catch-all for /var/log/syslog.
+# Continuation lines (no timestamp prefix) don't match → 422-skipped by the tailer.
+pattern: '^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) (?P<hostname>\S+) (?P<program>[^\s:]+?)(?:\[(?P<pid>\d+)\])?: (?P<message>.*)$'
+timestamp_field: event_time
+timestamp_format: '%Y-%m-%dT%H:%M:%S.%f%z'
+fields:
+  event_time: timestamp
+  method: program
+  hostname: hostname
+  pid: pid
+  message: message
