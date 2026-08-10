@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import pathlib
+import ssl
 import sys
 import time
 import urllib.error
@@ -23,6 +24,21 @@ DEFAULT_ENDPOINT = "http://localhost:8000"
 DEFAULT_BATCH_SIZE = 20000
 MAX_RETRIES = 3
 RETRY_BACKOFF_SECONDS = 2
+
+
+def _make_ssl_context() -> ssl.SSLContext:
+    """Trust the local self-signed cert if present; otherwise unverified.
+
+    The endpoint is our own TinySIEM (local network), and the self-signed cert
+    can't be hostname-checked against 'localhost' — so verify the signature
+    against our own cert file but skip hostname verification.
+    """
+    cert = pathlib.Path(__file__).parent.parent / "certs" / "tinysiem.crt"
+    ctx = ssl.create_default_context()
+    if cert.exists():
+        ctx.load_verify_locations(str(cert))
+    ctx.check_hostname = False
+    return ctx
 
 
 def _load_api_key(explicit_key):
@@ -93,7 +109,7 @@ def upload_batch(endpoint, source, api_key, filename, content_bytes):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=120, context=_make_ssl_context()) as resp:  # nosemgrep: dynamic-urllib-use-detected -- endpoint is operator-supplied CLI arg or hardcoded localhost, never attacker input  # nosec B310
         return json.loads(resp.read().decode())
 
 
@@ -119,7 +135,7 @@ def run(args):
         print("Error: no API key found (pass --api-key or set TINYSIEM_API_KEY in .env)")
         return 1
 
-    rejects_path = pathlib.Path(str(args.file) + ".rejects.jsonl")
+    rejects_path = pathlib.Path(getattr(args, "rejects_path", None) or str(args.file) + ".rejects.jsonl")
     total_processed = 0
     total_failed = 0
     total_lines = 0

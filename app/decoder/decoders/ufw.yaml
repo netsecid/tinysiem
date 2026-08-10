@@ -1,0 +1,17 @@
+name: ufw-firewall
+source: ufw
+type: regex
+# rsyslog ISO8601 timestamp (with +08:00 offset), then kernel: [UFW BLOCK] + iptables-style KV.
+# Field order after SRC is fixed (SRC DST LEN TOS PREC TTL ID PROTO SPT DPT WINDOW RES ...);
+# SPT/DPT are absent on ICMP lines, so both are optional.
+pattern: '^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) \S+ kernel: \[UFW (?P<action>\w+)\] .*?\bSRC=(?P<source_ip>\d{1,3}(?:\.\d{1,3}){3})\s+DST=(?P<dst_ip>\S+).*?\bPROTO=(?P<proto>\w+)(?:\s+SPT=(?P<sport>\d+))?(?:\s+DPT=(?P<dport>\d+))?'
+timestamp_field: event_time
+timestamp_format: '%Y-%m-%dT%H:%M:%S.%f%z'
+fields:
+  event_time: timestamp
+  source_ip: source_ip
+  uri: dst_ip
+  method: proto
+  action: action
+  src_port: sport
+  dst_port: dport

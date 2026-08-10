@@ -1,0 +1,36 @@
+name: fail2ban-ban
+description: "Fail2ban banned an IP — automated response to a detected brute-force pattern"
+severity: high
+source: fail2ban
+suppress_seconds: 300
+condition:
+  type: field_match
+  field: method
+  value: Ban
+  operator: eq
+mitre_tactic: "Credential Access"
+mitre_technique: "T1110"
+playbook:
+  summary: "Fail2ban automatically banned an IP after repeated failures — correlate with sshd events to confirm the attack narrative"
+  steps:
+    - id: pull_attacker_events
+      name: "Pull sshd events from the banned IP"
+      action: query_events
+      auto: true
+      params:
+        filter: "source_ip={source_ip}"
+        window_seconds: 3600
+      notes: "Confirm failed-password pattern and targeted usernames before the ban"
+    - id: check_recidivism
+      name: "Check whether the IP is a repeat offender across jails"
+      action: query_events
+      auto: false
+      notes: "Multiple bans/unbans over days suggest a botnet segment — consider a permanent deny rule"
+    - id: assess_success
+      name: "Verify no successful authentication preceded the ban"
+      action: query_events
+      auto: false
+      params:
+        filter: "source={source} AND method=Accepted*"
+        window_seconds: 3600
+      notes: "If any Accepted event exists, escalate — brute force may have succeeded"
