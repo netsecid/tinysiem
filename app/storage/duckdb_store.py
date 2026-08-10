@@ -266,7 +266,8 @@ def query_events(
         ev = dict(zip(columns, row))
         for f in ("ingested_at", "event_time"):
             if ev[f] is not None:
-                ev[f] = ev[f].isoformat()
+                # Explicit UTC marker so JS clients render in browser-local tz
+                ev[f] = ev[f].isoformat() + "Z"
         events.append(ev)
 
     return {"total": total, "events": events}
@@ -392,8 +393,8 @@ def get_ip_summary(ip: str, start: datetime, end: datetime) -> dict:
             [3600, 3600, ip, s, e],
         ).fetchall()
     return {
-        "first_seen": bounds[0].isoformat() if bounds[0] else None,
-        "last_seen": bounds[1].isoformat() if bounds[1] else None,
+        "first_seen": bounds[0].isoformat() + "Z" if bounds[0] else None,
+        "last_seen": bounds[1].isoformat() + "Z" if bounds[1] else None,
         "total_events": bounds[2] or 0,
         "top_sources": [{"value": r[0], "count": r[1]} for r in source_rows],
         "top_methods": [{"value": r[0], "count": r[1]} for r in method_rows],

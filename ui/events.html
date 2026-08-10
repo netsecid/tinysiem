@@ -772,7 +772,7 @@ function rowH(e,anim){
       <input type="checkbox" class="ev-cb" data-eid="${esc(e.id)}" ${checked} onchange="toggleSelect('${esc(e.id)}',this.checked)">
     </td>
     <td style="color:var(--text-muted);font-size:10px;text-align:center">›</td>
-    <td style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">${fmtT(e.ingested_at)}</td>
+    <td style="font-family:var(--mono);font-size:11px;color:var(--text-dim)" title="ingested_at (UTC): ${esc(e.ingested_at)}">${fmtT(e.ingested_at)}</td>
     <td>${e.source?`<span class="badge bsrc">${esc(e.source)}</span>`:'—'}</td>
     <td style="font-family:var(--mono);font-size:11px">${ipLink(e.source_ip)}${e.country_code?` <span title="${esc(e.country_name||'')}" style="font-size:10px">${flagOf(e.country_code)}</span>`:''}</td>
     <td>${mBadge(e.method)}</td>
@@ -793,7 +793,8 @@ function toggleRow(row,encoded){
     ['source',e.source],['source_ip',e.source_ip],['method',e.method],
     ['uri',e.uri],['status_code',e.status_code],
     ['response_size',e.response_size!=null?fmtB(e.response_size):null],
-    ['event_time',e.event_time],['user_agent',e.user_agent],
+    ['event_time (log time)',e.event_time?fmtTFull(e.event_time):null],
+    ['user_agent',e.user_agent],
     ['referer',e.referer],['id',e.id],
     ['country_code',e.country_code],['country_name',e.country_name],
     ['city',e.city],['asn',e.asn],
@@ -1136,10 +1137,15 @@ function ipLink(ip){
 }
 function fmtT(iso){
   if(!iso)return'—';
-  const d=new Date(iso),p=n=>String(n).padStart(2,'0');
+  const d=new Date(iso.endsWith('Z')||iso.includes('+')?iso:iso+'Z'),p=n=>String(n).padStart(2,'0');
   return`${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}<span style="color:var(--text-muted)">.${String(d.getMilliseconds()).padStart(3,'0')}</span>`;
 }
-function isoStr(iso){try{return new Date(iso).toISOString()}catch{return iso||''}}
+function fmtTFull(iso){
+  if(!iso)return'—';
+  const d=new Date(iso.endsWith('Z')||iso.includes('+')?iso:iso+'Z'),p=n=>String(n).padStart(2,'0');
+  return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function isoStr(iso){try{const d=new Date(iso.endsWith('Z')||iso.includes('+')?iso:iso+'Z');return d.toISOString()}catch{return iso||''}}
 function fmtNum(n){return Number(n).toLocaleString()}
 function fmtB(b){if(b==null)return'—';if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB'}
 function mBadge(m){
