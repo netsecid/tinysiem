@@ -107,6 +107,8 @@ def _apply_fields(event: dict, fields: dict, data: dict) -> dict:
     extra: dict = {}
     for normalized, src_key in fields.items():
         value = _get_nested(data, src_key)
+        if value is None:
+            continue  # absent optional groups / missing keys — no null noise in extra
         if normalized in _SCHEMA_FIELDS:
             event[normalized] = _coerce(normalized, value)
         else:
@@ -135,7 +137,17 @@ def _parse_timestamp(event: dict, decoder: dict, data: dict) -> None:
     ts_str = _get_nested(data, fields[ts_field])
     if ts_str:
         try:
-            event["event_time"] = datetime.strptime(ts_str, ts_format)
+            parsed = datetime.strptime(ts_str, ts_format)
+            # Naive timestamps get the decoder's declared timezone (timestamp_tz),
+            # then everything is normalized to naive UTC for storage. This keeps
+            # event_time consistent with the ingest-time rule windows regardless
+            # of whether the log line carries an offset (ufw) or not (fail2ban).
+            if parsed.tzinfo is None and decoder.get("timestamp_tz"):
+                tz_offset = datetime.strptime(decoder["timestamp_tz"], "%z").tzinfo
+                parsed = parsed.replace(tzinfo=tz_offset)
+            if parsed.tzinfo is not None:
+                parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+            event["event_time"] = parsed
         except ValueError:
             pass
 
