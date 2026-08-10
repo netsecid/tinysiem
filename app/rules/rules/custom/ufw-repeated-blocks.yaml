@@ -1,0 +1,76 @@
+name: ufw-repeated-blocks
+description: "Same source IP blocked 10+ times by ufw within 5 minutes — port scan / firewall sweep pattern"
+severity: medium
+source: ufw
+suppress_seconds: 300
+condition:
+  type: correlation
+  window_seconds: 300
+  capture_field: source_ip
+  steps:
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+    - source: ufw
+      field: method
+      value: TCP
+      operator: eq
+mitre_tactic: "Discovery"
+mitre_technique: "T1046"
+playbook:
+  summary: "The firewall is dropping repeated TCP probes from one host — likely automated scanning, verify before blocking"
+  steps:
+    - id: confirm_scan
+      name: "Review the blocked ports from this IP"
+      action: query_events
+      auto: true
+      params:
+        filter: "source_ip={source_ip} AND source=ufw"
+        window_seconds: 300
+      notes: "Many distinct DPT values = port sweep; repeated same-port = targeted service probe"
+    - id: cross_reference_sshd
+      name: "Check whether the same IP is in sshd logs"
+      action: query_events
+      auto: false
+      params:
+        filter: "source_ip={source_ip}"
+        window_seconds: 3600
+      notes: "Scanner that also hits SSH = likely botnet — report to fail2ban / add ufw deny"
+    - id: decide_mitigation
+      name: "Decide on blocking action"
+      action: block_ip
+      auto: false
+      notes: "Permanent ufw deny for confirmed scanners, or fail2ban recidive jail for repeat offenders"

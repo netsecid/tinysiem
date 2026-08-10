@@ -31,9 +31,14 @@ Note: only sshd lines are ingested (non-sshd auth.log lines are skipped).
 import argparse
 import datetime as dt
 import json
+import os
 import pathlib
 import re
+import ssl
 import sys
+import time
+import urllib.error
+import urllib.request
 
 from ingest_file import run as run_ingest_file, DEFAULT_ENDPOINT
 
@@ -89,6 +94,93 @@ def parse_line(line: str):
     return ev
 
 
+def _make_ssl_context() -> ssl.SSLContext:
+    """Trust the local self-signed cert if present; otherwise unverified.
+
+    Endpoint is our own TinySIEM (local network), and the self-signed cert
+    can't be hostname-checked against 'localhost' — so verify the signature
+    against our own cert file but skip hostname verification.
+    """
+    cert = pathlib.Path(__file__).parent.parent / "certs" / "tinysiem.crt"
+    ctx = ssl.create_default_context()
+    if cert.exists():
+        ctx.load_verify_locations(str(cert))
+    ctx.check_hostname = False
+    return ctx
+
+
+def _post_event(endpoint: str, api_key: str, ev: dict) -> None:
+    """POST one normalized event to /ingest/raw (source=sshd)."""
+    payload = json.dumps({"source": "sshd", "raw": json.dumps(ev)}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{endpoint}/ingest/raw",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10, context=_make_ssl_context()) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"HTTP {resp.status}")
+
+
+def follow(path: str, endpoint: str, api_key: str, poll_interval: float = 0.5) -> None:
+    """tail -F style follower: stream new auth.log lines to TinySIEM in
+    real time. Handles logrotate (weekly) by inode detection: drains the old
+    (renamed) file, then reopens the new one. Starts at end-of-file so only
+    NEW lines are ingested."""
+    sent = 0
+    errors = 0
+
+    def post_line(line: str) -> None:
+        nonlocal sent, errors
+        if not line.strip():
+            return
+        ev = parse_line(line)
+        if ev is None:
+            return  # non-sshd line
+        for attempt in range(3):
+            try:
+                _post_event(endpoint, api_key, ev)
+                sent += 1
+                if sent % 100 == 0:
+                    print(f"follow: {sent} events sent, {errors} errors", flush=True)
+                return
+            except Exception as exc:
+                errors += 1
+                if attempt == 2:
+                    print(f"follow: giving up on line: {exc}", flush=True)
+                    return
+                time.sleep(1 + attempt)  # server restart window
+
+    fh = open(path, "r", encoding="utf-8", errors="replace")
+    fh.seek(0, os.SEEK_END)
+    fd_inode = os.fstat(fh.fileno()).st_ino
+    print(f"follow: tailing {path} (inode {fd_inode}) -> {endpoint}", flush=True)
+
+    while True:
+        line = fh.readline()
+        if line:
+            post_line(line.rstrip("\n"))
+            continue
+        # EOF — check rotation
+        try:
+            st = os.stat(path)
+        except FileNotFoundError:
+            time.sleep(poll_interval)
+            continue
+        if st.st_ino != fd_inode:
+            for old_line in fh:
+                post_line(old_line.rstrip("\n"))
+            fh.close()
+            fh = open(path, "r", encoding="utf-8", errors="replace")
+            fd_inode = os.fstat(fh.fileno()).st_ino
+            print(f"follow: rotated to new inode {fd_inode}", flush=True)
+        time.sleep(poll_interval)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -98,7 +190,24 @@ def main():
     ap.add_argument("--api-key", default=None, help="TinySIEM API key (default: TINYSIEM_API_KEY env / .env)")
     ap.add_argument("--dry-run", action="store_true", help="Parse and print stats only, no upload")
     ap.add_argument("--out", default="/tmp/sshd_normalized.jsonl", help="Temp JSONL path (default %(default)s)")
+    ap.add_argument("--follow", action="store_true",
+                    help="Stream new lines from the FIRST file in real time "
+                         "(tail -F; starts at EOF, so history is not re-ingested)")
     args = ap.parse_args()
+
+    if args.follow:
+        api_key = args.api_key or os.environ.get("TINYSIEM_API_KEY", "")
+        if not api_key:
+            env_file = pathlib.Path(__file__).parent.parent / ".env"
+            if env_file.exists():
+                for line in env_file.read_text().splitlines():
+                    if line.startswith("TINYSIEM_API_KEY="):
+                        api_key = line.split("=", 1)[1].strip()
+        if not api_key:
+            print("Error: no API key found (pass --api-key or set TINYSIEM_API_KEY in .env)")
+            return 1
+        follow(args.files[0], args.endpoint or "https://localhost:8000", api_key)
+        return 0
 
     stats = {"lines": 0, "sshd": 0, "ip": 0, "user": 0, "other": 0, "non_sshd": 0}
     out_path = pathlib.Path(args.out)

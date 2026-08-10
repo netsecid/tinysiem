@@ -1,0 +1,23 @@
+name: fail2ban-unban
+description: "Fail2ban lifted a ban (bantime expired or manual unban)"
+severity: low
+source: fail2ban
+suppress_seconds: 300
+condition:
+  type: field_match
+  field: method
+  value: Unban
+  operator: eq
+mitre_tactic: "Credential Access"
+mitre_technique: "T1110"
+playbook:
+  summary: "A previously banned IP is reachable again — verify it is not immediately re-offending"
+  steps:
+    - id: watch_reoffense
+      name: "Watch for immediate repeat activity from the unbanned IP"
+      action: query_events
+      auto: true
+      params:
+        filter: "source_ip={source_ip}"
+        window_seconds: 600
+      notes: "Rapid re-offense after unban = persistent scanner; consider extending bantime or permanent deny"
