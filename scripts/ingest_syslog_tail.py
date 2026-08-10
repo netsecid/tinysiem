@@ -181,6 +181,8 @@ def main():
             endpoint=args.endpoint or FOLLOW_DEFAULT_ENDPOINT,
             api_key=api_key,
             batch_size=args.batch_size,
+            # /var/log is not writable by the tailer user — rejects go to /tmp.
+            rejects_path=f"/tmp/{pathlib.Path(path).name}.rejects.jsonl",
         )
         rc = run_ingest_file(ingest_args)
         if rc != 0:

@@ -135,7 +135,7 @@ def run(args):
         print("Error: no API key found (pass --api-key or set TINYSIEM_API_KEY in .env)")
         return 1
 
-    rejects_path = pathlib.Path(str(args.file) + ".rejects.jsonl")
+    rejects_path = getattr(args, "rejects_path", None) or pathlib.Path(str(args.file) + ".rejects.jsonl")
     total_processed = 0
     total_failed = 0
     total_lines = 0
