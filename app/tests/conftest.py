@@ -21,6 +21,11 @@ os.environ["TINYSIEM_REPORT_SCHEDULE"] = "disabled"
 os.environ["TINYSIEM_SYSLOG_UDP_PORT"] = "0"
 os.environ["TINYSIEM_SYSLOG_TCP_PORT"] = "0"
 os.environ["TINYSIEM_BEATS_ENABLED"] = "true"
+# GeoIP: pinned OFF so tests default to the Null provider regardless of any
+# live .env (pydantic-settings reads .env from CWD); geoip tests configure
+# their own fixture DBs explicitly via app.geoip.configure()
+os.environ["TINYSIEM_GEOIP_DB_PATH"] = ""
+os.environ["TINYSIEM_GEOIP_ASN_PATH"] = ""
 import base64
 os.environ["TINYSIEM_MASTER_KEY"] = base64.urlsafe_b64encode(b"tinysiem-test-master-key-paddin!").decode()
 

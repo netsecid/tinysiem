@@ -73,7 +73,7 @@ const S={jwt:'',ep:'',ip:''};
 
 function toggleTheme(){const t=TH.getAttribute('data-theme')==='dark'?'light':'dark';TH.setAttribute('data-theme',t);localStorage.setItem('ts_theme',t);if(_chart)renderHistogram(_lastHist)}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-function fmtTime(ts){if(!ts)return'—';try{const d=new Date(ts);return d.toLocaleString()}catch{return ts}}
+function fmtTime(ts){if(!ts)return'—';try{const d=new Date(ts.endsWith('Z')||ts.includes('+')?ts:ts+'Z');return d.toLocaleString()}catch{return ts}}
 function flagOf(cc){if(!cc||cc.length!==2)return'';return String.fromCodePoint(...[...cc.toUpperCase()].map(c=>127397+c.charCodeAt(0)))}
 function sevClass(s){return 'badge sev-'+esc((s||'unknown').toLowerCase())}
 
