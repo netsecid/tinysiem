@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     tinysiem_tls_cert: str = ""
     tinysiem_tls_key: str = ""
 
+    # GeoIP enrichment (v1.6) — offline IP → country/city/ASN lookup
+    # Supported formats: db-ip lite CSV (.csv / .csv.gz, stdlib only) or
+    # MaxMind GeoLite2 .mmdb (requires `pip install geoip2`). Empty = disabled.
+    # Fetch a fresh db-ip lite DB: python scripts/fetch_geoip_db.py
+    tinysiem_geoip_db_path: str = ""
+    # Optional second .mmdb (MaxMind GeoLite2-ASN) to populate the `asn` field
+    tinysiem_geoip_asn_path: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

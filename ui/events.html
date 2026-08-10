@@ -774,7 +774,7 @@ function rowH(e,anim){
     <td style="color:var(--text-muted);font-size:10px;text-align:center">›</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">${fmtT(e.ingested_at)}</td>
     <td>${e.source?`<span class="badge bsrc">${esc(e.source)}</span>`:'—'}</td>
-    <td style="font-family:var(--mono);font-size:11px">${ipLink(e.source_ip)}</td>
+    <td style="font-family:var(--mono);font-size:11px">${ipLink(e.source_ip)}${e.country_code?` <span title="${esc(e.country_name||'')}" style="font-size:10px">${flagOf(e.country_code)}</span>`:''}</td>
     <td>${mBadge(e.method)}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text-dim)" title="${esc(e.uri||'')}">
       ${e.uri?esc(e.uri).slice(0,24)+(e.uri.length>24?'…':''):'—'}</td>
@@ -795,6 +795,8 @@ function toggleRow(row,encoded){
     ['response_size',e.response_size!=null?fmtB(e.response_size):null],
     ['event_time',e.event_time],['user_agent',e.user_agent],
     ['referer',e.referer],['id',e.id],
+    ['country_code',e.country_code],['country_name',e.country_name],
+    ['city',e.city],['asn',e.asn],
     ...Object.entries(xtra(e.extra)),
   ].filter(([,v])=>v!=null&&v!=='');
   const tr=document.createElement('tr');tr.className='expand-row';
@@ -1127,6 +1129,7 @@ document.getElementById('savedSearchList').addEventListener('click',function(e){
 // ── UTILS ─────────────────────────────────────────────────────────────
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function dim(s){return`<span style="color:var(--text-muted)">${s}</span>`}
+function flagOf(cc){if(!cc||cc.length!==2)return'';return String.fromCodePoint(...[...cc.toUpperCase()].map(c=>127397+c.charCodeAt(0)))}
 function ipLink(ip){
   if(!ip)return dim('—');
   return `<a href="/ui/entity.html?ip=${encodeURIComponent(ip)}" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-family:var(--mono)" title="View entity">${esc(ip)}</a>`;

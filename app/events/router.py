@@ -22,6 +22,7 @@ _CSV_EXPORT_CAP = 10_000
 _CSV_COLUMNS = [
     "id", "source", "ingested_at", "event_time", "source_ip", "method",
     "uri", "status_code", "response_size", "user_agent", "referer", "raw",
+    "country_code", "country_name", "city", "asn",
 ]
 
 
