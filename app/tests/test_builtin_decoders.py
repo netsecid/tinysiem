@@ -204,3 +204,47 @@ def test_fail2ban_event_time_declared_tz_to_utc():
 def test_fail2ban_no_match_returns_none():
     event = decoder_engine.decode("fail2ban", "2026-08-09 00:00:02,453 fail2ban.server [1751546]: INFO    rollover performed on /var/log/fail2ban.log")
     assert event is None
+
+
+# --- /var/log/syslog (modern rsyslog ISO8601 template) ---
+
+SYSLOG_SAMPLE = (
+    "2026-08-09T00:00:05.244609+08:00 localhost systemd[1]: "
+    "rsyslog.service: Sent signal SIGHUP to main process 1087 (rsyslogd) on client request."
+)
+SYSLOG_KERNEL_SAMPLE = (
+    "2026-08-09T00:00:06.643004+08:00 localhost kernel: [123456.789] "
+    "IPv6: ADDRCONF(NETDEV_CHANGE): eth0: link becomes ready"
+)
+
+
+def test_syslog_decodes():
+    event = decoder_engine.decode("syslog", SYSLOG_SAMPLE)
+    assert event is not None
+    assert event["source"] == "syslog"
+    assert event.get("method") == "systemd"
+    extra = event.get("extra", {})
+    assert extra.get("hostname") == "localhost"
+    assert extra.get("pid") == "1"
+    assert "SIGHUP" in extra.get("message", "")
+
+
+def test_syslog_kernel_program_no_pid():
+    event = decoder_engine.decode("syslog", SYSLOG_KERNEL_SAMPLE)
+    assert event is not None
+    assert event.get("method") == "kernel"
+    extra = event.get("extra", {})
+    assert "pid" not in extra
+    assert "link becomes ready" in extra.get("message", "")
+
+
+def test_syslog_event_time_converted_to_utc():
+    event = decoder_engine.decode("syslog", SYSLOG_SAMPLE)
+    assert event is not None
+    # 2026-08-09T00:00:05+08:00 == 2026-08-08T16:00:05Z — stored naive UTC.
+    assert event["event_time"] == datetime(2026, 8, 8, 16, 0, 5, 244609)
+
+
+def test_syslog_continuation_line_returns_none():
+    event = decoder_engine.decode("syslog", "    Traceback (most recent call last):")
+    assert event is None
