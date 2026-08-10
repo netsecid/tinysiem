@@ -20,7 +20,7 @@ docker-compose exec -w /app tinysiem pytest tests/test_audit.py::test_login_succ
 docker-compose exec -w /app tinysiem pytest tests/ -q
 ```
 
-Test coverage: **445 tests** across ingest, events, alerts, parsers, rules (incl. exceptions, backtest, MITRE coverage, name/filename invariant), users, auth, correlation, syslog, Beats, retention, reports, notifications, audit, AI (provider abstraction, home search), baselines, cases (incl. alert and event linkage, playbooks), entities, watchlists, saved searches, integrations, dashboard, alert enrichment, and hardening (lockout, forced password change, token revocation, API key scoping, syslog guardrails, CORS, TLS, startup guardrails, SBOM, suppression, self-monitoring, backup, footprint).
+Test coverage: **546 tests** across ingest, events, alerts, parsers, rules (incl. exceptions, backtest, MITRE coverage, name/filename invariant), users, auth, correlation, syslog, Beats, retention, reports, notifications, audit, AI (provider abstraction, home search), baselines, cases (incl. alert and event linkage, playbooks), entities, watchlists, saved searches, integrations, dashboard, alert enrichment, SQL sandbox, GeoIP, startup checks, and hardening (lockout, forced password change, token revocation, API key scoping, syslog guardrails, CORS, TLS, startup guardrails, SBOM, suppression, self-monitoring, backup, footprint).
 
 One known, pre-existing flaky test: `tests/test_csv_export_sanitization.py` occasionally fails only when run as part of the full suite (never in isolation) due to test-order-dependent DB state — not a regression signal on its own.
 
@@ -87,6 +87,12 @@ tinysiem/
 │   │       ├── __init__.py     — DRIVERS registry
 │   │       ├── aws_cloudtrail.py
 │   │       └── google_workspace.py
+│   ├── geoip/
+│   │   ├── provider.py         — CsvGeoProvider / MaxMindGeoProvider / Null; family-aware binary search
+│   │   ├── router.py           — GET /geoip/{ip} (analyst+)
+│   │   └── __init__.py         — configure()/enrich_event()/lookup(); called from duckdb_store.insert_event()
+│   ├── query/
+│   │   └── router.py           — POST /query/sql — read-only sandbox (statement allowlist, blocked-keyword scan, row cap + cell truncation, thread timeout, single-flight lock, audit)
 │   ├── dashboard/
 │   │   ├── router.py           — GET/PUT/DELETE /dashboard, POST /dashboard/export/html
 │   │   ├── renderer.py         — HTML export; html.escape() throughout
@@ -102,8 +108,10 @@ tinysiem/
 │   │       ├── windows-event.yaml
 │   │       ├── aws-cloudtrail.yaml
 │   │       ├── iptables.yaml
+│   │       ├── ufw.yaml        — UFW block lines (regex; inline rsyslog ISO8601 offset)
+│   │       ├── fail2ban.yaml   — fail2ban Ban/Unban/Found lines (naive tz via timestamp_tz)
 │   │       ├── tinysiem-internal.yaml  — self-monitoring feed (source tinysiem_internal)
-│   │       └── custom/         — drop custom decoders here (hot-reloaded)
+│   │       └── custom/         — drop custom decoders here (hot-reloaded; sshd-auth.yaml ships here)
 │   ├── rules/
 │   │   ├── engine.py           — load_rules(), evaluate(); threshold (source-scoped) + correlation + suppression state
 │   │   ├── router.py           — GET/POST/PUT/DELETE /rules, /rules/generate, /rules/{name}/backtest, /rules/mitre-coverage, /rules/{name}/exceptions, /rules/{name}/playbook/generate
@@ -111,13 +119,13 @@ tinysiem/
 │   │   ├── exceptions_store.py — DuckDB CRUD for rule_exceptions
 │   │   └── rules/
 │   │       ├── tinysiem-internal-brute-force.yaml  — built-in self-monitoring rule (filename must match its internal name: field — enforced on create/update)
-│   │       └── custom/         — drop custom rules here (hot-reloaded)
+│   │       └── custom/         — drop custom rules here (hot-reloaded; ssh-bruteforce, ssh-bruteforce-then-success, fail2ban-ban, fail2ban-unban, ufw-repeated-blocks ship here)
 │   ├── parsers/
 │   │   └── router.py           — GET/POST/PUT/DELETE /parsers, /parsers/generate, /parsers/{name}/test
 │   ├── users/
 │   │   └── router.py           — GET/POST/PUT/DELETE /users
 │   ├── mcp_server/
-│   │   └── server.py           — FastMCP app; _JWTMiddleware with role check; 5 tools (list_events, get_alerts, list_parsers, list_rules, get_health); mounted at /mcp only if TINYSIEM_MCP_ENABLED
+│   │   └── server.py           — FastMCP app; _JWTMiddleware with role check; 8 tools (list_events, get_alerts, list_parsers, list_rules, get_health, investigate_ip, get_alert_context, query_events_sql); mounted at /mcp/sse only if TINYSIEM_MCP_ENABLED
 │   ├── ai/
 │   │   ├── router.py           — POST /ai/explain-alert, /ai/analyze-events, /ai/search, GET/PUT /ai/config, POST /ai/config/test
 │   │   ├── provider_factory.py — get_active_provider(); PROVIDER_PRESETS (anthropic / openai / deepseek / custom base_url)
@@ -142,7 +150,7 @@ tinysiem/
 │   │   └── duckdb_store.py     — all DuckDB table definitions + ops; single _conn + threading.Lock; _escape_like(); count_events_in_window(source-scoped)
 │   ├── listeners/
 │   │   └── syslog.py           — asyncio UDP + TCP syslog listeners; RFC auto-detect; CIDR allowlist + size cap; drop counters
-│   └── tests/                  — 60 files, 445 tests. conftest.py sets env vars + JWT-backed role fixtures (analyst_headers/admin_headers/superadmin_headers) and an ingest-only API key fixture before any app.* module is imported. Organized roughly one file per router/feature module (test_ingest.py, test_events.py, test_alerts.py, test_cases.py, test_case_event_linkage.py, test_rules_crud.py, test_correlation_rules.py, test_watchlist_matching.py, test_home_search.py, test_ai_search_endpoint.py, test_auth.py, test_auth_lockout.py, test_baselines.py, test_integrations.py, test_dashboard.py, test_backup.py, etc.) — see the directory for the authoritative, current list rather than relying on this doc.
+│   └── tests/                  — 69 files, 546 tests. conftest.py sets env vars + JWT-backed role fixtures (analyst_headers/admin_headers/superadmin_headers) and an ingest-only API key fixture before any app.* module is imported. Organized roughly one file per router/feature module (test_ingest.py, test_events.py, test_alerts.py, test_cases.py, test_case_event_linkage.py, test_rules_crud.py, test_correlation_rules.py, test_watchlist_matching.py, test_home_search.py, test_ai_search_endpoint.py, test_auth.py, test_auth_lockout.py, test_baselines.py, test_integrations.py, test_dashboard.py, test_backup.py, etc.) — see the directory for the authoritative, current list rather than relying on this doc.
 ├── ui/
 │   ├── nav.js                  — shared top nav bar (Dashboard · Events · Alerts · Cases · Rules · Parsers) + profile dropdown (Settings, Audit Log for superadmin); active-item highlight from location.pathname
 │   ├── shared.css               — nav styling, design tokens, badge styles
@@ -163,7 +171,13 @@ tinysiem/
 │   └── settings.html           — 10 tabs: Instance, Users & Access, Notifications, Retention, Ingestion, Baselines, Integrations, Sources, Reports, AI Config
 ├── scripts/
 │   ├── gen_nginx_logs.py       — generate nginx log lines to stdout
-│   └── ingest_test_logs.py     — generate + POST to TinySIEM (stdlib only)
+│   ├── ingest_test_logs.py     — generate + POST to TinySIEM (stdlib only)
+│   ├── ingest_file.py          — bulk-upload any log/CSV file (20k lines/request, retries, rejects file)
+│   ├── ingest_auth_log.py      — parse auth.log* → normalized JSONL; --follow = real-time sshd tailer (systemd-ready)
+│   ├── ingest_syslog_tail.py   — generic raw-line tailer (--source <decoder> --follow <file>; 422 = skip-not-retry) — used for ufw/fail2ban
+│   ├── fetch_geoip_db.py       — download current db-ip lite CSV files (no registration)
+│   ├── backfill_geoip.py       — enrich historical events (rebuild events table; run with server stopped)
+│   └── mcp_probe.py            — MCP SSE client probe (initialize + tools/list + call a tool)
 └── logs/                       — shared Docker volume (nginx writes, tinysiem reads :ro)
 ```
 
@@ -215,7 +229,25 @@ Every user row carries a `token_epoch` integer; every JWT carries an `epoch` cla
 Shared by all ingest paths (HTTP routes + syslog listeners). `strict=False` stores a minimal raw event when no decoder matches (used by Beats and syslog where decoder availability isn't guaranteed).
 
 ### conftest.py ordering
-`conftest.py` must set env vars before any `app.*` module is imported (pydantic-settings reads them at import time). Never import `app.*` at module level in test files.
+`conftest.py` must set env vars before any `app.*` module is imported (pydantic-settings reads them at import time). Never import `app.*` at module level in test files. It also pins every `TINYSIEM_*` var (including `TINYSIEM_MASTER_KEY`, `TINYSIEM_GEOIP_DB_PATH`, `TINYSIEM_GEOIP_ASN_PATH`) — a live `.env` in the CWD would otherwise leak into the suite.
+
+### SQL sandbox (read-only)
+`app/query/router.py` guards `POST /query/sql`: statement allowlist (SELECT/WITH/SHOW/DESCRIBE/EXPLAIN/VALUES), comments stripped BEFORE the keyword check, bare `;` rejected, blocked-keyword scan, row cap + 500-char cell truncation, thread-based timeout (`fut.result(timeout=)` — DuckDB 1.1.3 has no `statement_timeout`), single-flight `_exec_lock` (busy → 429), and every query audited as `query.sql`. It connects to the same DB file **in-process** — a second connection is fine; only a second *process* hits the single-writer file lock.
+
+### Timestamps are naive UTC everywhere
+DuckDB TIMESTAMP stores no timezone; every parsed `event_time` is normalized to naive UTC at decode (decoders may declare `timestamp_tz` for naive logs — see `app/decoder/engine.py::_parse_timestamp`). The API serializes every timestamp with an explicit `Z` suffix so browsers parse them as UTC, and the UI renders browser-local time. Filter params are UTC — never send local time. For live windows in SQL compare with `epoch(ingested_at) >= epoch(current_timestamp) - N` (server-local `current_timestamp` on a CST host is 8h off stored UTC).
+
+### GeoIP enrichment chokepoint
+`duckdb_store.insert_event()` calls `geoip.enrich_event()` — one hook covers raw/file/beats/syslog/integrations. Providers: db-ip lite CSV (stdlib-only binary search; formats vary by release — parser maps by column count) or MaxMind `.mmdb` (`pip install geoip2`, optional dep). Historical backfill rebuilds the table via `CREATE TABLE events_new AS SELECT ... LEFT JOIN` + `DROP`/`ALTER RENAME` (UPDATE is blocked by PK + indexes); run with the server stopped.
+
+### AI Config encryption
+`app/ai/config_store.py` upserts the single-row `ai_config` via DELETE+INSERT (DuckDB UPDATE constraint). The API key is Fernet-encrypted via `app/crypto.py` — **saving a config with an `api_key` raises `MasterKeyNotConfigured` when `TINYSIEM_MASTER_KEY` is unset**; there is no plaintext fallback (older docs claiming otherwise are stale). Switching provider without a new key clears the old key rather than leaking it across providers.
+
+### Real-time tailers (systemd)
+`ingest_auth_log.py --follow` and `ingest_syslog_tail.py` implement tail -F semantics in stdlib (start at EOF, inode detection for logrotate, per-line POST with 3-attempt backoff). `ingest_syslog_tail.py` treats 422 (no decoder match) as permanent — counted and skipped, never retried. Run exactly ONE tailer per file (two = duplicate events). The live VPS runs them as `tinysiem-{sshd,ufw,fail2ban}-tailer.service`.
+
+### Repo-tree mutation landmines (tests)
+`test_rules_crud.py`/`test_parsers.py` autouse fixtures USED to unlink every `*.yaml` in the repo's custom dirs; `test_audit.py` leaked created files. Now diff-only cleanup. If custom files vanish after a pytest run: `git status` → `git checkout -- <path>`. Don't blame `git stash` first.
 
 ---
 

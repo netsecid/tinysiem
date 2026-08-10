@@ -12,10 +12,11 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - REST API for single-line and bulk log ingestion
 - Beats-compatible endpoint (Filebeat, Winlogbeat, Metricbeat)
 - Syslog listener — UDP and TCP, auto-detects RFC 3164 / RFC 5424
+- Real-time file tailers — `scripts/ingest_auth_log.py --follow` (sshd auth.log) and `scripts/ingest_syslog_tail.py` (any raw-log file: ufw, fail2ban, …); logrotate-aware, per-line HTTP retry, systemd-ready
 
 **Parsing**
 - YAML decoder engine — regex, JSON, and key-value formats
-- Built-in decoders: nginx access, syslog RFC 3164/5424, Windows Event Log, AWS CloudTrail, iptables
+- Built-in decoders: nginx access, syslog RFC 3164/5424, Windows Event Log, AWS CloudTrail, iptables, ufw, fail2ban — plus a custom sshd auth-log decoder
 - AI-assisted parser generation (Anthropic, OpenAI, DeepSeek, or any OpenAI-compatible endpoint)
 - Hot-reload: add a YAML file, no rebuild required
 
@@ -23,7 +24,7 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - YAML rule engine — `field_match`, `threshold`, and multi-step `correlation` condition types
 - MITRE ATT&CK tactic and technique tagging
 - AI-assisted rule generation
-- Ships with example rules: 404 spike, 500 errors, brute-force-then-success
+- Ships with example rules: 404 spike, 500 errors, brute-force-then-success, SSH brute-force, fail2ban ban/unban, ufw repeated-block
 
 **Alerting**
 - Append-only JSONL alert log with automatic rotation
@@ -101,9 +102,25 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - CSV export — server-side, honors every active filter, proper quoting, 10,000-row cap
 - MITRE ATT&CK coverage matrix — see which of the 14 Enterprise tactics your loaded rules actually cover
 
+**GeoIP Enrichment**
+- Offline IP → country/city/ASN enrichment at ingest — db-ip lite CSV (stdlib-only, no registration) or MaxMind GeoLite2 `.mmdb`
+- New event columns `country_code` / `country_name` / `city` / `asn`; per-country threshold rules and `/events/facets` counts
+- `GET /geoip/{ip}` lookup endpoint, geolocation card on the entity page, flag badge in the events table
+- `scripts/fetch_geoip_db.py` (download) + `scripts/backfill_geoip.py` (enrich historical events; run with the server stopped)
+
+**Read-Only SQL Sandbox**
+- `POST /query/sql` — run `SELECT`/`WITH`/`SHOW`/`DESCRIBE`/`EXPLAIN`/`VALUES` against the event store, for analysts and AI agents
+- Safety model: statement allowlist, blocked-keyword scan, row cap + cell truncation, thread-based timeout, single-flight lock — and every query is audited
+- JWT-gated (analyst+), uses an in-process second connection so it never contends with the writer
+
+**Real-Time Log Tailers**
+- `scripts/ingest_auth_log.py --follow` — tail sshd `auth.log` (tail -F semantics, inode detection across logrotate, per-line retry)
+- `scripts/ingest_syslog_tail.py --source <decoder> --follow <file>` — generic raw-line tailer; lines with no decoder match (422) are skipped, not retried
+- Designed to run as systemd units — exactly one tailer per file (two = duplicate events)
+
 **MCP Server (optional)**
-- Model Context Protocol server mountable at `/mcp` for Claude Desktop integration
-- 5 tools: `list_events`, `get_alerts`, `list_parsers`, `list_rules`, `get_health`
+- Model Context Protocol server at `/mcp/sse` (SSE transport) for Claude Desktop and other MCP clients
+- 8 tools: `list_events`, `get_alerts`, `list_parsers`, `list_rules`, `get_health`, `investigate_ip`, `get_alert_context`, `query_events_sql`
 - JWT-authenticated, analyst role required
 
 ---
@@ -122,7 +139,7 @@ Generate strong values:
 ```bash
 openssl rand -hex 32   # TINYSIEM_API_KEY
 openssl rand -hex 32   # TINYSIEM_JWT_SECRET
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # TINYSIEM_MASTER_KEY (optional — required for Integrations)
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # TINYSIEM_MASTER_KEY (required for API Integrations and saving an AI provider API key)
 ```
 
 ```bash
@@ -145,11 +162,25 @@ python scripts/ingest_test_logs.py 500
 
 → See [docs/quickstart.md](docs/quickstart.md) for a full walkthrough including Filebeat, syslog, and integration setup.
 
+## Native Run (no Docker)
+
+TinySIEM also runs directly on Python 3.11+ — useful on hosts where Docker isn't available:
+
+```bash
+python3.11 -m venv .venv && .venv/bin/pip install -r app/requirements.txt
+cp .env.example .env   # set TINYSIEM_UI_DIR to the repo's ui/ path
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Set `TINYSIEM_UI_DIR=<repo>/ui` so the UI is served from the native checkout, and add
+`--ssl-certfile/--ssl-keyfile` for HTTPS (see [Configuration → TLS](docs/configuration.md#tls)).
+The live deployment runs this way under systemd (see [Development](docs/development.md)).
+
 ---
 
 ## How It Works
 
-A log line is ingested (REST, syslog, or Beats), decoded by a YAML parser into a normalized event, stored in DuckDB, checked against the IOC watchlist, and evaluated by the rule engine — a match writes an alert, which can trigger an email/webhook and feed into a case. Everything runs through one shared pipeline regardless of entry point, including security-relevant events about TinySIEM itself (failed logins, lockouts), so the same rule engine can detect attacks against the tool.
+A log line is ingested (REST, syslog, Beats, or a file tailer), decoded by a YAML parser into a normalized event, enriched with GeoIP country/city/ASN when a database is configured, stored in DuckDB, checked against the IOC watchlist, and evaluated by the rule engine — a match writes an alert, which can trigger an email/webhook and feed into a case. Everything runs through one shared pipeline regardless of entry point, including security-relevant events about TinySIEM itself (failed logins, lockouts), so the same rule engine can detect attacks against the tool.
 
 → See [Architecture](docs/architecture.md) for the full diagram-first walkthrough — system overview, the ingest-to-alert sequence, the AI provider abstraction, and background jobs.
 
@@ -160,7 +191,7 @@ A log line is ingested (REST, syslog, or Beats), decoded by a YAML parser into a
 | Component | Technology |
 |---|---|
 | API | FastAPI (Python 3.12) |
-| Storage | DuckDB — events, cases (+ alert/event links), users, baselines, watchlists, saved searches, integrations, dashboard, audit |
+| Storage | DuckDB — events, cases (+ alert/event links), users, baselines, watchlists, saved searches, integrations, dashboard, audit; GeoIP via offline db-ip CSV / MaxMind mmdb |
 | Alert log | JSONL (append-only, rotated at configurable size, suppression-aware) |
 | UI | Vanilla HTML/CSS/JS — no build step; self-hosted fonts + scripts (zero external requests) |
 | Container | Docker Compose, non-root `appuser`; optional built-in TLS via env vars |

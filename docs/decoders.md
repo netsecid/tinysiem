@@ -132,6 +132,61 @@ Jun 29 10:00:00 host kernel: [DROPPED] IN=eth0 SRC=1.2.3.4 DST=10.0.0.1 PROTO=TC
 
 ---
 
+### sshd-auth (custom)
+
+Consumes pre-normalized JSON events produced by `scripts/ingest_auth_log.py` — the companion
+real-time sshd tailer. The script exists because sshd emits many message shapes a single regex
+decoder can't reliably cover; it parses each `auth.log` line and POSTs a normalized event.
+
+```yaml
+source: sshd
+type: json
+```
+
+The sshd action (`Failed password`, `Accepted password`, …) maps to the `method` column — the
+free-text field threshold rules can count on — and `user` lands in `extra`.
+
+---
+
+### ufw
+
+Parses UFW firewall block lines from syslog (`kernel: [UFW BLOCK] ...`) with an inline rsyslog
+ISO8601 offset.
+
+```yaml
+source: ufw
+type: regex
+timestamp_format: '%Y-%m-%dT%H:%M:%S.%f%z'
+```
+
+`SRC` → `source_ip`, `DST` → `uri`, `PROTO` → `method` (iptables convention); `SPT`/`DPT` are
+optional (ICMP lines have neither) and skipped when absent.
+
+---
+
+### fail2ban
+
+Parses fail2ban's own log format — *not* syslog: `YYYY-MM-DD HH:MM:SS,mmm fail2ban.<comp> [pid]: LEVEL [jail] Ban|Unban|Found <ip> [- note]`.
+
+```yaml
+source: fail2ban
+type: regex
+timestamp_tz: '+08:00'   # naive log timestamps, treated as this offset
+```
+
+`action` (Ban/Unban/Found) → `method`; `jail`/`level`/`component` → `extra`. Rollover and startup
+lines deliberately don't match, so the tailer skips them as permanent 422s.
+
+---
+
+### Timestamps
+
+Decoders may declare `timestamp_tz` for naive log timestamps (e.g. `+08:00` for WIB syslog
+servers). Every parsed `event_time` is normalized to **naive UTC** before storage — whether the
+source carried a zone offset or not — so rule windows and cross-source comparisons stay consistent.
+
+---
+
 ### tinysiem-internal
 
 Parses the self-monitoring feed — security-relevant audit events (failed logins, lockouts,

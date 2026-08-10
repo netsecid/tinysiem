@@ -860,9 +860,56 @@ See [Backup & Restore](backup.md) for the response shape and the manual restore 
 
 ---
 
+## SQL Sandbox
+
+`POST /query/sql` — read-only DuckDB querying for analysts and AI agents. Requires `analyst` role.
+
+| Param | Type | Description |
+|---|---|---|
+| `query` | string | Single SQL statement: `SELECT`/`WITH`/`SHOW`/`DESCRIBE`/`EXPLAIN`/`VALUES`. Multi-statement input (`;`) is rejected. |
+| `params` | array | Optional positional parameters for `?` placeholders. |
+| `max_rows` | int | Optional per-request row cap (1–10,000); still clamped to `TINYSIEM_SQL_MAX_ROWS`. |
+
+**Request:**
+```json
+{ "query": "SELECT source, COUNT(*) AS n FROM events WHERE ingested_at >= ? GROUP BY source ORDER BY n DESC LIMIT 10", "params": ["2026-08-01 00:00:00"] }
+```
+
+**Response:**
+```json
+{ "columns": ["source", "n"], "rows": [["sshd", 1140000], ["fail2ban", 16100], ["ufw", 10900]], "total_rows": 3, "truncated": false, "duration_ms": 12 }
+```
+
+**Errors:** `422` for empty/disallowed/multi-statement queries, `429` when another query holds the
+single-flight lock, `408` on timeout (`TINYSIEM_SQL_TIMEOUT_MS`, threaded — DuckDB 1.1.3 has no
+statement timeout), `503` when `TINYSIEM_SQL_ENABLED=false`.
+
+Safety model: statement allowlist, comments stripped *before* the keyword check, blocked-keyword
+scan, row cap + 500-char cell truncation, and an audit entry (`query.sql`) per execution. Uses a
+second, in-process DuckDB connection to the same file — it never contends with the writer (a
+second *process* would hit the single-writer file lock, so this endpoint is the supported way to
+run ad-hoc analysis while the server is up).
+
+---
+
+## GeoIP Lookup
+
+### `GET /geoip/{ip}`
+Analyst+. Look up enrichment data for a single IP. Requires `TINYSIEM_GEOIP_DB_PATH` configured.
+
+**Response:**
+```json
+{ "ip": "45.153.34.161", "country_code": "NL", "country_name": "Netherlands", "city": "Amsterdam", "asn": "20473", "found": true }
+```
+
+`found: false` (with null geo fields) when the IP falls outside the database's ranges or no
+database is configured.
+
+---
+
 ## MCP Server
 
-When `TINYSIEM_MCP_ENABLED=true`, a Model Context Protocol server is mounted at `/mcp`. This enables Claude Desktop to query TinySIEM directly.
+When `TINYSIEM_MCP_ENABLED=true`, a Model Context Protocol server is mounted at `/mcp/sse` (SSE transport). This enables Claude Desktop and other MCP clients to query TinySIEM directly.
 
 **Authentication:** Bearer JWT required. Role must be `analyst` or above.
 
@@ -875,6 +922,9 @@ When `TINYSIEM_MCP_ENABLED=true`, a Model Context Protocol server is mounted at 
 | `list_parsers` | List all loaded decoders (built-in and custom) |
 | `list_rules` | List all loaded detection rules |
 | `get_health` | Instance health and summary stats (event count, alert count) |
+| `investigate_ip` | One-call IP pivot — first/last seen, histogram, top methods/URIs, related alerts and cases, geo lookup |
+| `get_alert_context` | Full context for one alert — the alert, its triggering event, rule, and related events |
+| `query_events_sql` | Run a read-only SQL query through the same sandbox as `POST /query/sql` |
 
 ---
 
