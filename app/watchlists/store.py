@@ -14,7 +14,7 @@ _COLS = ["id", "list_name", "indicator_type", "value", "severity", "note", "adde
 def _row_to_dict(row: tuple) -> dict:
     d = dict(zip(_COLS, row))
     if hasattr(d["added_at"], "isoformat"):
-        d["added_at"] = d["added_at"].isoformat()
+        d["added_at"] = d["added_at"].isoformat() + "Z"  # explicit UTC marker
     d["active"] = bool(d["active"])
     return d
 
