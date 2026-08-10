@@ -507,6 +507,26 @@ docker-compose up -d
 
 ---
 
+### `TINYSIEM_MASTER_KEY is not configured` when saving AI Config
+
+**Cause:** Saving an AI provider config that includes an `api_key` requires the Fernet master key —
+the AI Config endpoint encrypts the key at rest via `app/crypto.py`, and there is no plaintext
+fallback (the old docs that claimed otherwise were wrong).
+
+**Fix:** the same as the integration 503 above — generate a Fernet key and add it to `.env`, then
+restart the service (`sudo systemctl restart tinysiem` on a native/systemd run, or
+`docker-compose up -d` for Docker):
+
+```bash
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+```dotenv
+TINYSIEM_MASTER_KEY=<output from above>
+```
+
+---
+
 ### Integration created but never pulling events
 
 **Cause options:**

@@ -85,6 +85,7 @@ sequenceDiagram
     participant API as FastAPI ingest route<br/>(or syslog listener)
     participant Pipe as process_line()
     participant Dec as Decoder engine
+    participant Geo as GeoIP provider
     participant DB as DuckDB (events)
     participant WL as Watchlist matcher
     participant Rule as Rule engine
@@ -96,6 +97,8 @@ sequenceDiagram
     API->>Pipe: process_line(source, raw)
     Pipe->>Dec: decode(source, raw)
     Dec-->>Pipe: normalized event + UUID
+    Pipe->>Geo: enrich_event(event)
+    Geo-->>Pipe: + country_code/city/asn (when a DB is configured)
     Pipe->>DB: INSERT event
     Pipe->>WL: check_event(event)
     alt watchlist hit
@@ -113,6 +116,8 @@ A few details worth knowing:
 
 - **One shared pipeline.** `app/ingest/pipeline.py::process_line(source, raw, strict=True)` is the single entry point for HTTP ingestion, the syslog listener, and the Beats endpoint. There's exactly one place where "raw line → stored event" happens, which is why a decoder or a security fix applies everywhere at once. `strict=False` (used by Beats/syslog, where a matching decoder isn't guaranteed) stores a minimal raw event instead of dropping the line.
 - **Decoders are YAML, hot-reloaded.** Built-in decoders live in `app/decoder/decoders/*.yaml`; drop a file into `app/decoder/decoders/custom/` and it's picked up without a restart. Same pattern for rules (`app/rules/rules/` and `app/rules/rules/custom/`).
+- **GeoIP enrichment happens at insert.** `duckdb_store.insert_event()` consults the configured provider (db-ip lite CSV or MaxMind `.mmdb`) and attaches `country_code`/`country_name`/`city`/`asn` before the row lands — one chokepoint covers every ingest path. No database configured → enrichment is a no-op. Historical rows are enriched offline by `scripts/backfill_geoip.py` (server stopped; rebuilds the events table).
+- **Real-time ingestion is client-side.** The server does not stream. `scripts/ingest_auth_log.py --follow` and `scripts/ingest_syslog_tail.py` tail log files (tail -F semantics, inode detection across logrotate) and POST each line to `/ingest/raw` — usually as systemd units, one per file.
 - **Watchlist hits and rule hits both become alerts through the same writer.** `app/alerts/file_writer.py::write_alert()` is the only thing that appends to `alerts.log` — a watchlist match just synthesizes a fake rule (`watchlist:<list_name>`) and calls the same function a detection rule would.
 - **Self-monitoring is the same pipeline, recursed exactly once.** Security-relevant audit events (failed logins, lockouts, user/integration changes) are re-ingested as source `tinysiem_internal` via `app/audit/security_feed.py`, so the ordinary rule engine — including a built-in brute-force rule — can fire on attacks against TinySIEM itself. The feed only acts on an explicit allowlist of event types and never calls back into the audit logger, so there's no infinite loop.
 - **Rules are source-scoped.** A `threshold` rule counts matching events only within its own declared `source` (unless it's the wildcard `*`), so the self-monitoring rule counting `tinysiem_internal` failed logins can't be tripped by unrelated nginx 401s.

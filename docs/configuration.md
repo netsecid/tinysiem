@@ -42,8 +42,9 @@ openssl rand -hex 32   # TINYSIEM_JWT_SECRET
 
 | Variable | Default | Description |
 |---|---|---|
-| `TINYSIEM_RETENTION_DAYS` | `90` | Events older than this are archived and removed from DuckDB |
+| `TINYSIEM_RETENTION_DAYS` | `30` | Events older than this are archived and removed from DuckDB |
 | `TINYSIEM_ARCHIVE_PATH` | `/app/data/archive` | Directory for archived event files (Parquet) |
+| `TINYSIEM_ARCHIVE_CHUNK_MB` | `500` | Maximum size of each archived Parquet chunk |
 
 ---
 
@@ -95,6 +96,8 @@ openssl rand -hex 32   # TINYSIEM_JWT_SECRET
 | Variable | Default | Description |
 |---|---|---|
 | `TINYSIEM_REPORT_SCHEDULE` | `disabled` | Scheduled report cadence: `disabled`, `daily`, or `weekly` |
+| `TINYSIEM_REPORT_EMAIL` | `` | Recipient for scheduled reports |
+| `TINYSIEM_REPORT_HOUR` | `8` | Hour of day (server-local) to generate scheduled reports |
 
 ---
 
@@ -102,7 +105,7 @@ openssl rand -hex 32   # TINYSIEM_JWT_SECRET
 
 | Variable | Default | Description |
 |---|---|---|
-| `TINYSIEM_MASTER_KEY` | `` | Fernet key for encrypting integration credentials at rest. **Required to use API Integrations.** Returns `503` on integration endpoints when not set. |
+| `TINYSIEM_MASTER_KEY` | `` | Fernet key for encrypting credentials at rest — integration credentials **and** the AI Config API key. **Required to use API Integrations** and to save an AI provider API key (the save fails with `TINYSIEM_MASTER_KEY is not configured` otherwise). Integration endpoints return `503` when not set. |
 
 Generate a Fernet key:
 ```bash
@@ -130,7 +133,7 @@ For `custom`, `base_url` is validated when you save it — private, loopback, li
 
 The **Model** field is free text — providers ship new models faster than this doc (or any dropdown) could track, so check your provider's own documentation for the exact model name/ID to enter. Click **Test Connection** after saving to confirm the key and endpoint actually work before relying on them.
 
-The API key is encrypted at rest the same way integration credentials are — see [`TINYSIEM_MASTER_KEY`](#api-integrations) above; without it set, AI Config save requests will still work (the key is stored, just less safely — set the master key before storing anything sensitive in production).
+The API key is encrypted at rest the same way integration credentials are — see [`TINYSIEM_MASTER_KEY`](#api-integrations) above. **Saving a config that includes an `api_key` requires `TINYSIEM_MASTER_KEY` to be set** — without it the save fails with `TINYSIEM_MASTER_KEY is not configured` (Fernet has no plaintext fallback). Generate a key, add it to `.env`, restart, then save again.
 
 Every feature — parser generation, rule generation, alert explain, event analysis, playbook generation/refinement, and the Home page's natural-language search — calls whichever provider is configured through the same interface, so switching providers doesn't require reconfiguring each feature separately. See [Architecture → AI Layer](architecture.md#ai-layer-optional) for how this abstraction works, and [API Reference → AI](api-reference.md#ai) for the endpoints.
 
@@ -147,6 +150,47 @@ If no provider is configured, AI-powered UI elements degrade gracefully — the 
 | `TINYSIEM_MCP_ENABLED` | `false` | Mount the Model Context Protocol server at `/mcp` for Claude Desktop integration. Set to `true` to enable. |
 
 When enabled, Claude Desktop can query TinySIEM via the MCP protocol using a valid JWT. Requires `analyst` role or above.
+
+---
+
+## SQL Sandbox (Read-Only Query API)
+
+| Variable | Default | Description |
+|---|---|---|
+| `TINYSIEM_SQL_ENABLED` | `true` | Enable `POST /query/sql` for analysts and AI agents. |
+| `TINYSIEM_SQL_MAX_ROWS` | `1000` | Maximum rows returned per query. |
+| `TINYSIEM_SQL_TIMEOUT_MS` | `5000` | Per-query timeout, enforced via a worker thread (DuckDB has no statement timeout). |
+
+The sandbox is read-only: statements are restricted to `SELECT`/`WITH`/`SHOW`/`DESCRIBE`/`EXPLAIN`/`VALUES`, comments are stripped before the keyword check, a blocked-keyword scan runs on the rest, and every execution is audited (`query.sql` event). See [API Reference → SQL Sandbox](api-reference.md#sql-sandbox).
+
+---
+
+## GeoIP Enrichment
+
+| Variable | Default | Description |
+|---|---|---|
+| `TINYSIEM_GEOIP_DB_PATH` | `` | Path to a db-ip lite country/city CSV (`.csv`/`.csv.gz`) or a MaxMind GeoLite2 `.mmdb` country database. Empty = enrichment disabled. |
+| `TINYSIEM_GEOIP_ASN_PATH` | `` | Optional second database (GeoLite2-ASN `.mmdb` or db-ip asn-lite CSV) to populate the `asn` field. |
+
+Offline lookup at ingest: when a database is configured, every stored event gains `country_code`, `country_name`, `city`, and `asn` columns. db-ip lite needs no registration — `python scripts/fetch_geoip_db.py` downloads the current monthly files. Enrich historical events with `python scripts/backfill_geoip.py` (run with the server stopped — it rebuilds the events table). `country_code` is threshold-queryable, so per-country rules work (e.g. `method="Failed password" AND country_code=RU`).
+
+---
+
+## Smart Baselines
+
+| Variable | Default | Description |
+|---|---|---|
+| `TINYSIEM_BASELINE_INTERVAL_MINUTES` | `5` | How often the background learner recomputes per-source hour-of-day baselines. |
+| `TINYSIEM_BASELINE_Z_THRESHOLD` | `3.0` | Z-score above which a deviation is recorded as a violation. |
+| `TINYSIEM_BASELINE_MIN_SAMPLES` | `4` | Minimum samples in a bucket before it can produce violations. |
+
+---
+
+## Native Run (no Docker)
+
+| Variable | Default | Description |
+|---|---|---|
+| `TINYSIEM_UI_DIR` | `` | Absolute path to the `ui/` directory when running uvicorn directly (no container). Empty resolves the UI relative to the `app/` package — the container layout. |
 
 ---
 
@@ -192,7 +236,7 @@ Before exposing TinySIEM outside localhost:
 - [ ] `TINYSIEM_JWT_SECRET` — 64+ char random string; the container refuses to start below 32 characters
 - [ ] `TINYSIEM_SUPERADMIN_PASSWORD` — the seeded `admin` account is forced to change its password on first login if this is left at the default `admin`
 - [ ] `TINYSIEM_DEBUG=false` — never enable Swagger in production
-- [ ] `TINYSIEM_MASTER_KEY` — set if using API Integrations; keep it out of git
+- [ ] `TINYSIEM_MASTER_KEY` — set if using API Integrations **or** saving an AI provider API key; keep it out of git
 - [ ] `TINYSIEM_CORS_ORIGINS` — default is same-origin only; set explicitly only for origins you actually need
 - [ ] `TINYSIEM_TLS_CERT` / `TINYSIEM_TLS_KEY` — set for HTTPS; plain HTTP otherwise
 - [ ] `TINYSIEM_SYSLOG_ALLOW_CIDRS` — restrict to your log-source networks if the syslog ports are reachable beyond localhost

@@ -34,7 +34,7 @@ openssl rand -hex 32   # use for JWT_SECRET
 in via the UI (or `POST /auth/login`) to get a JWT for everything else. `TINYSIEM_JWT_SECRET`
 must be at least 32 characters or the container refuses to start.
 
-If you plan to use **API Integrations** (AWS CloudTrail, Google Workspace), also generate a Fernet key:
+If you plan to use **API Integrations** (AWS CloudTrail, Google Workspace) or save an **AI provider API key** (Settings → AI Config), also generate a Fernet key:
 ```bash
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 # Add output to .env as: TINYSIEM_MASTER_KEY=<key>
