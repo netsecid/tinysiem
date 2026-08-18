@@ -128,6 +128,10 @@ def save_ai_config_endpoint(req: SaveAIConfigRequest, actor: AuthUser = Depends(
         if not req.base_url:
             raise HTTPException(status_code=422, detail="base_url is required for the custom provider")
         _validate_base_url(req.base_url)
+    elif req.provider == "opencode":
+        # Local `opencode serve` — loopback session protocol, subscription auth
+        # handled by the serve process itself. No api_key, no base_url.
+        pass
     else:
         if not req.api_key:
             # A stored key only counts as "already there" for THIS save if it belongs to the

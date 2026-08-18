@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     tinysiem_superadmin_password: str = "admin"
     tinysiem_mcp_enabled: bool = False
     tinysiem_ai_daily_call_limit: int = 100
+    # Local `opencode serve` endpoint for the opencode provider (loopback, no api_key).
+    tinysiem_opencode_serve_url: str = "http://127.0.0.1:8099"
 
     # Notifications
     tinysiem_smtp_host: str = ""

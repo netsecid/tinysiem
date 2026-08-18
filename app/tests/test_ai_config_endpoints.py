@@ -212,6 +212,22 @@ async def test_test_ai_config_success(client, admin_headers):
     assert body["detail"] == "OK"
 
 
+async def test_put_ai_config_opencode_without_api_key(client, admin_headers):
+    """The opencode provider rides the local `opencode serve` subscription — no
+    api_key, no base_url required."""
+    r = await client.put(
+        "/ai/config",
+        json={"provider": "opencode", "model": "opencode/deepseek-v4-flash-free"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["configured"] is True
+    assert body["provider"] == "opencode"
+    assert body["model"] == "opencode/deepseek-v4-flash-free"
+    assert body["has_api_key"] is False
+
+
 async def test_put_ai_config_without_master_key_returns_503(client, admin_headers, monkeypatch):
     """When TINYSIEM_MASTER_KEY is unset, saving a config with an api_key must not leak
     an uncaught 500/traceback from crypto.encrypt() — it should be converted to a clean

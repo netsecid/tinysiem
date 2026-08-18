@@ -1,0 +1,21 @@
+# systemd unit for the local OpenCode headless server that TinySIEM's
+# "opencode" AI provider talks to (loopback session protocol, no API key).
+#
+# Deploy:  sudo cp scripts/opencode-serve.service /etc/systemd/system/
+#          sudo systemctl daemon-reload
+#          sudo systemctl enable --now opencode-serve
+# Verify:  curl http://127.0.0.1:8099/session   (should return JSON)
+[Unit]
+Description=OpenCode headless server (TinySIEM AI provider)
+After=network-online.target
+
+[Service]
+User=ubuntu
+ExecStart=/usr/bin/opencode serve --port 8099 --log-level ERROR
+Restart=always
+RestartSec=3
+# opencode writes state to ~/.local/share/opencode — keep the default home.
+Environment=HOME=/home/ubuntu
+
+[Install]
+WantedBy=multi-user.target

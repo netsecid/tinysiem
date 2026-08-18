@@ -291,3 +291,60 @@ def test_run_search_empty_summary_response_raises():
         with patch("app.ai.home_search._query_alerts", return_value=(2, {"severity_breakdown": {"critical": 2}})):
             with pytest.raises(RuntimeError, match="empty response"):
                 home_search.run_search("critical alerts", actor="analyst1")
+
+
+def test_run_search_events_returns_structured_table_and_meta():
+    """The home search response carries structured meta + a top-IP table (with
+    country) so the UI can render a rich result card, not just a paragraph."""
+    from app.ai import home_search
+    _configure_ai()
+
+    mock_intent_result = MagicMock()
+    mock_intent_result.text = json.dumps(
+        {"target": "events", "filters": {"method": "Failed password"}, "group_by": None}
+    )
+    mock_answer_result = MagicMock()
+    mock_answer_result.text = "Most traffic is concentrated in a single /24 block."
+
+    with patch(
+        "app.ai.providers.anthropic_provider.AnthropicProvider.chat",
+        side_effect=[mock_intent_result, mock_answer_result],
+    ):
+        with patch("app.ai.home_search._query_events", return_value=(1864, {"status_code_breakdown": {"403": 1800}})):
+            with patch("app.ai.home_search._top_source_ips", return_value=[
+                {"ip": "195.178.110.3", "count": 139, "country_code": "NL", "country_name": "Netherlands"},
+                {"ip": "2.57.121.25", "count": 72, "country_code": "RU", "country_name": "Russia"},
+            ]):
+                result = home_search.run_search("top ips", actor="analyst1")
+
+    assert result["answer"] == "Most traffic is concentrated in a single /24 block."
+    assert result["meta"] == {
+        "target": "events",
+        "count": 1864,
+        "filters": {"method": "Failed password"},
+        "group_by": None,
+    }
+    assert result["table"]["rows"][0] == {"rank": 1, "ip": "195.178.110.3", "country": "NL", "events": 139}
+    assert result["table"]["rows"][1] == {"rank": 2, "ip": "2.57.121.25", "country": "RU", "events": 72}
+    assert result["breakdown"] == {"403": 1800}
+
+
+def test_run_search_alerts_returns_severity_breakdown():
+    from app.ai import home_search
+    _configure_ai()
+
+    mock_intent_result = MagicMock()
+    mock_intent_result.text = json.dumps({"target": "alerts", "filters": {"severity": "high"}, "group_by": None})
+    mock_answer_result = MagicMock()
+    mock_answer_result.text = "Three high-severity alerts in the window."
+
+    with patch(
+        "app.ai.providers.anthropic_provider.AnthropicProvider.chat",
+        side_effect=[mock_intent_result, mock_answer_result],
+    ):
+        with patch("app.ai.home_search._query_alerts", return_value=(3, {"severity_breakdown": {"high": 3}})):
+            result = home_search.run_search("high alerts", actor="analyst1")
+
+    assert result["meta"]["target"] == "alerts"
+    assert result["breakdown"] == {"high": 3}
+    assert "table" not in result
