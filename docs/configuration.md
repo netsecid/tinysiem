@@ -127,6 +127,7 @@ Go to **Settings → AI Config** (admin role required) and pick one of:
 | `anthropic` | No | Uses the Anthropic Messages API directly. |
 | `openai` | No | Defaults to `https://api.openai.com/v1`. |
 | `deepseek` | No | Defaults to `https://api.deepseek.com/v1`. |
+| `opencode` | No | Local [`opencode serve`](https://opencode.ai/docs/server/) session protocol (loopback, **no API key** — rides the OpenCode Go subscription / free-tier credentials). Requires the serve process running locally (see `scripts/opencode-serve.service`); endpoint from `TINYSIEM_OPENCODE_SERVE_URL` (default `http://127.0.0.1:8099`). Model ids follow `opencode models`: e.g. `opencode/deepseek-v4-flash-free` (free tier, $0) or `opencode-go/minimax-m3` (Go subscription). |
 | `custom` | **Yes** | Any OpenAI-compatible endpoint — a self-hosted model gateway, Ollama, LM Studio, etc. |
 
 For `custom`, `base_url` is validated when you save it — private, loopback, link-local, reserved, and multicast addresses are rejected — but that check happens once, at save time; it does not re-verify on every request, so a hostname that later starts resolving to an internal address (DNS rebinding) after being saved would not be re-checked. Only admins can set this field.
@@ -140,6 +141,8 @@ Every feature — parser generation, rule generation, alert explain, event analy
 If no provider is configured, AI-powered UI elements degrade gracefully — the Home page falls back to a plain message with manual links to Events/Alerts/Cases, and buttons like "Explain with AI" surface a clear "not configured" error instead of failing silently.
 
 `TINYSIEM_AI_DAILY_CALL_LIMIT` (default `100`) caps how many AI-powered calls (explain-alert, analyze-events, home search) a single user can make per rolling 24-hour window — a cost-abuse guard, not a security boundary. Raise it if your team's legitimate usage exceeds the default.
+
+For the `opencode` provider, `TINYSIEM_OPENCODE_SERVE_URL` (default `http://127.0.0.1:8099`) points at the local `opencode serve` process — loopback only, no API key stored in AI Config (`has_api_key` stays `false`). Run the server with `opencode serve --port 8099` (or install `scripts/opencode-serve.service`).
 
 ---
 

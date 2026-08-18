@@ -154,12 +154,17 @@ Query stored events. Requires `analyst` role.
 | `method` | string | HTTP method (case-insensitive) |
 | `uri` | string | Substring match on URI |
 | `q` | string | Full-text search on raw log line |
+| `country_code` | string | Exact ISO 3166-1 alpha-2 country code (e.g. `ID`, `RU`) |
+| `city` | string | Case-insensitive substring match on city |
+| `asn` | int | Exact ASN |
+| `response_size_min` / `response_size_max` | int | Response size range |
+| `user_agent` / `referer` | string | Case-insensitive substring match |
 | `start` / `end` | ISO 8601 | Time window on `ingested_at` |
 | `limit` | int | Max results (default 100, max 1000) |
 | `offset` | int | Pagination offset |
 | `format` | string | Set to `csv` to stream a CSV instead of JSON — honors every filter above, capped at 10,000 rows, with `Content-Disposition: attachment` |
 
-Note: `source_ip`, `uri`, and `q` use `LIKE`/`ILIKE` matching. SQL metacharacters (`%`, `_`) in filter values are escaped and treated literally.
+Note: `source_ip`, `uri`, `q`, `user_agent`, `referer`, and `city` use `LIKE`/`ILIKE` matching. SQL metacharacters (`%`, `_`) in filter values are escaped and treated literally. (The AI home search uses **exact** IP matching under the hood via the same query layer — see [AI](#ai).)
 
 **Response:**
 ```json
@@ -224,6 +229,8 @@ Query alerts. Requires `analyst` role.
 | `rule_name` | string | Exact match |
 | `source_ip` | string | Substring match |
 | `status` | string | Triage status: `open`, `investigating`, `resolved` |
+| `mitre_tactic` | string | Substring match on MITRE ATT&CK tactic (e.g. `defense-evasion`, `credential-access`) |
+| `mitre_technique` | string | Substring match on MITRE ATT&CK technique (e.g. `T1110`, `T1566`) |
 | `q` | string | Full-text on rule name and summary |
 | `start` / `end` | ISO 8601 | Window on `triggered_at` |
 | `limit` / `offset` | int | Pagination |
@@ -755,11 +762,28 @@ Analyst+. `{ "alert_id": "uuid" }` → a plain-language explanation of why the a
 Analyst+. `{ "event_ids": ["uuid1", "uuid2"], "question": "..." }` → answers a free-form question about a specific set of selected events (used by the Events page's multi-select "Explain with AI" flow).
 
 ### `POST /ai/search`
-Analyst+. `{ "question": "show me critical alerts from the last 24 hours" }` → the Home page's natural-language search. Internally: one AI call extracts a structured `{target, filters}` intent, a real query runs against Events/Alerts/Cases, and a second AI call summarizes the real results — see [Architecture](architecture.md#ai-layer-optional) for the full sequence diagram.
+Analyst+. `{ "question": "show me critical alerts from the last 24 hours" }` → the Home page's natural-language search. Internally: one AI call extracts a structured `{target, filters, group_by}` intent, a real query runs against Events/Alerts/Cases, and a second AI call summarizes the real results — see [Architecture](architecture.md#ai-layer-optional) for the full sequence diagram.
 ```json
-{ "answer": "3 critical alerts fired in the last 24 hours, all from rule tinysiem-internal-brute-force...", "link": "/ui/alerts.html?severity=critical&start=...", "link_label": "View 3 alerts" }
+{
+  "answer": "3 critical alerts fired in the last 24 hours, all from rule tinysiem-internal-brute-force...",
+  "link": "/ui/alerts.html?severity=critical&start=...",
+  "link_label": "View 3 alerts",
+  "meta": {
+    "target": "alerts",
+    "count": 3,
+    "filters": { "severity": "critical" },
+    "group_by": null,
+    "dropped": []
+  }
+}
 ```
-If the question isn't a search (a greeting, a general question), `link`/`link_label` are `null` and `answer` is a plain conversational reply.
+The response is structured for the rich result card:
+- `meta.filters` — the applied filters (display keys); `meta.dropped` — filters the question requested but that could not be applied, each with a `reason` (unsupported field, unparseable value, unknown country, …). The UI renders these as amber ⚠️ chips.
+- For `events`: `table` (rank/IP/country/events — top source IPs with country enrichment), `breakdown` (status code distribution), and `country_breakdown` (country distribution of **all** matches).
+- For `alerts`/`cases`: `breakdown` carries the severity / status distribution.
+- Supported filters are registry-driven (`app/ai/filters.py`): events add `country_code` (names like "Indonesia" normalize to ISO codes), `city`, `asn`, `response_size_min/max`, `user_agent`, `referer`; `source_ip` is **exact** (CIDR / `a.b.c.x` degrade to a prefix match); alerts add `mitre_tactic` / `mitre_technique`.
+- If the question isn't a search (a greeting, a general question), `link`/`link_label` are `null` and `answer` is a plain conversational reply.
+- If the provider returns an empty response (e.g. a reasoning model starved of `max_tokens`), the endpoint returns `503` with an explanatory `detail` instead of a blank answer.
 
 ### `POST /parsers/generate` and `POST /rules/generate`
 Covered under [Parsers](#parsers) and [Rules](#rules) above — both are AI-powered but scoped to their own resource, so they stay documented there rather than here.
