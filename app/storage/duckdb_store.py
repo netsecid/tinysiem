@@ -343,6 +343,45 @@ def get_event_facets(
     }
 
 
+def top_source_ips(
+    source: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    status_code: Optional[int] = None,
+    status_min: Optional[int] = None,
+    status_max: Optional[int] = None,
+    method: Optional[str] = None,
+    uri: Optional[str] = None,
+    q: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    limit: int = 10,
+) -> list[dict]:
+    """Top-N source IPs matching the filters, with country enrichment.
+
+    Used by the AI home search to render a ranked table (ip / country / count)
+    alongside the LLM answer. Read-only; shares _build_where with the rest of
+    the query layer.
+    """
+    conn = _get_conn()
+    where, params = _build_where(
+        source=source, source_ip=source_ip,
+        status_code=status_code, status_min=status_min, status_max=status_max,
+        method=method, uri=uri, q=q, start=start, end=end,
+    )
+    and_or_where = "AND" if where else "WHERE"
+    with _lock:
+        rows = conn.execute(
+            f"SELECT source_ip, COUNT(*) AS c, MAX(country_code) AS cc, MAX(country_name) AS cn "
+            f"FROM events {where} {and_or_where} source_ip IS NOT NULL "
+            f"GROUP BY source_ip ORDER BY c DESC LIMIT {int(limit)}",
+            params,
+        ).fetchall()
+    return [
+        {"ip": r[0], "count": r[1], "country_code": r[2], "country_name": r[3]}
+        for r in rows
+    ]
+
+
 def get_event_histogram(start: datetime, end: datetime, buckets: int = 60) -> list:
     conn = _get_conn()
     start_n = start.replace(tzinfo=None) if start.tzinfo else start

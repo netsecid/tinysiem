@@ -65,3 +65,17 @@ def test_get_active_provider_uses_stored_base_url_for_custom():
     assert isinstance(provider, OpenAICompatibleProvider)
     assert provider.base_url == "http://localhost:11434/v1"
     assert provider.api_key is None
+
+
+def test_get_active_provider_returns_opencode_provider():
+    from app.ai import config_store
+    from app.ai.provider_factory import get_active_provider
+    from app.ai.providers.opencode_provider import OpenCodeProvider
+
+    config_store.save_ai_config(
+        provider="opencode", model="opencode/deepseek-v4-flash-free",
+        base_url=None, api_key=None, updated_by="admin",
+    )
+    provider = get_active_provider()
+    assert isinstance(provider, OpenCodeProvider)
+    assert provider.model == "opencode/deepseek-v4-flash-free"

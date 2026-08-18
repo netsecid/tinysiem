@@ -137,14 +137,10 @@ def _query_events(filters: dict) -> tuple:
 
 
 def _top_source_ips(filters: dict, limit: int = 10) -> list[dict]:
-    """Top-N source IPs matching the filters (GROUP BY source_ip, descending)."""
+    """Top-N source IPs matching the filters, with country enrichment."""
     from app.storage import duckdb_store
     kwargs = _normalize_event_filters(filters)
-    facets = duckdb_store.get_event_facets(**kwargs)
-    return [
-        {"ip": f["value"], "count": f["count"]}
-        for f in facets.get("source_ip", [])[:limit]
-    ]
+    return duckdb_store.top_source_ips(**kwargs, limit=limit)
 
 
 def _query_alerts(filters: dict) -> tuple:
@@ -191,13 +187,21 @@ def _build_link(target: str, filters: dict) -> str:
     return f"{base}?{qs}" if qs else base
 
 
-def _summary_system_prompt() -> str:
-    return (
+def _summary_system_prompt(with_table: bool = False) -> str:
+    prompt = (
         "You are a security analyst assistant for TinySIEM. Given a question and the real "
         "results of a search against the SIEM's data, write a concise 2-4 sentence answer. "
         "Be specific: cite the actual counts and notable patterns from the results provided. "
         "Do not invent data beyond what's given. Plain text only — no markdown, no bullet points."
     )
+    if with_table:
+        prompt += (
+            " A table of the top source IPs (with countries and event counts) is displayed "
+            "alongside your answer, so do NOT re-list the IPs. Instead interpret the pattern: "
+            "same-subnet clustering, geographic concentration, unusual proportions, or which "
+            "attacker deserves the most attention."
+        )
+    return prompt
 
 
 def _general_system_prompt() -> str:
@@ -241,14 +245,19 @@ def run_search(question: str, actor: str) -> dict:
         "cases": _query_cases,
     }[target]
     count, summary = query_fn(filters)
-    context = f"Question: {question}\n\nReal results: {count} {target} matched.\nSummary: {summary}"
-    if target == "events" and group_by == "source_ip":
+
+    # Real top-N source IPs (with countries) for the events target — rendered as a
+    # table by the UI and, for "top N ip" questions, fed to the summary LLM.
+    top_ips: list[dict] = []
+    if target == "events":
         top_ips = _top_source_ips(filters)
-        if top_ips:
-            context += "\nTop source IPs (highest event counts):\n" + "\n".join(
-                f"- {t['ip']}: {t['count']} events" for t in top_ips
-            )
-    result = provider.chat(system=_summary_system_prompt(), user=context, max_tokens=400)
+
+    context = f"Question: {question}\n\nReal results: {count} {target} matched.\nSummary: {summary}"
+    if target == "events" and group_by == "source_ip" and top_ips:
+        context += "\nTop source IPs (highest event counts):\n" + "\n".join(
+            f"- {t['ip']}: {t['count']} events" for t in top_ips
+        )
+    result = provider.chat(system=_summary_system_prompt(with_table=bool(top_ips)), user=context, max_tokens=400)
     answer = (result.text or "").strip()
     if not answer:
         raise RuntimeError(
@@ -258,8 +267,34 @@ def run_search(question: str, actor: str) -> dict:
     duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
     _log_ai_call("home_search", actor, question, answer, duration_ms, success=True, model=provider.model)
 
-    return {
+    response: dict = {
         "answer": answer,
         "link": _build_link(target, filters),
         "link_label": f"View {count} {target}",
+        "meta": {
+            "target": target,
+            "count": count,
+            "filters": filters,
+            "group_by": group_by,
+        },
     }
+    if target == "events":
+        response["table"] = {
+            "title": "Top source IPs",
+            "columns": ["rank", "ip", "country", "events"],
+            "rows": [
+                {
+                    "rank": i + 1,
+                    "ip": t["ip"],
+                    "country": t.get("country_code") or t.get("country_name") or "",
+                    "events": t["count"],
+                }
+                for i, t in enumerate(top_ips)
+            ],
+        }
+        response["breakdown"] = summary.get("status_code_breakdown", {})
+    elif target == "alerts":
+        response["breakdown"] = summary.get("severity_breakdown", {})
+    elif target == "cases":
+        response["breakdown"] = summary.get("status_breakdown", {})
+    return response
