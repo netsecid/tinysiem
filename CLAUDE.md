@@ -2,30 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current State: v1.5
+## Current State: v1.6
 
-All v1.4 "Hardened Tiny" features shipped and tested (see git history for A1–A10, B1–B3, C1).
+v1.6 shipped and merged (PRs #4–#9): **GeoIP enrichment** (db-ip lite CSV, offline, at-ingest; events gain `country_code/country_name/city/asn`), **UTC timestamp markers** (every API timestamp ends in `Z`; UI renders browser-local), **multi-source real-time tailers** (sshd/ufw/fail2ban/syslog via systemd), v1.6 docs refresh.
 
-v1.5 "Analyst Experience" shipped and tested:
-- **E1** entity pivot view — `GET /entities/ip/{value}` + `ui/entity.html`; every rendered IP in Events/Alerts/Cases links to it
-- **E2** IOC watchlists — `watchlist_entries` table, CRUD + CSV import under `/watchlists`, ingest-time matching emits `watchlist:<list_name>` alerts
-- **E3** rule backtesting — `POST /rules/{name}/backtest` and `POST /rules/backtest` (inline), UI in the rule detail panel
-- **E4** saved searches + deep links — `saved_searches` table, owner-scoped `/searches` API, Events/Alerts serialize filter state to the URL and hydrate on load
-- **E5** per-rule exceptions — `rule_exceptions` table, `/rules/{name}/exceptions` API, enforced in the rule engine (skips evaluation and excludes from threshold counting)
-- **E6** CSV export — `format=csv` on `GET /events`/`GET /alerts`, honoring all filters, 10,000-row cap
-- **E7** MITRE ATT&CK coverage matrix — `GET /rules/mitre-coverage` + UI section on the Rules page
+v1.6.x — AI home search overhaul (PRs #11–#15):
+- **Structured search results** — `POST /ai/search` returns `meta` (target/count/filters/group_by/dropped), `table` (top source IPs with country), `breakdown`, `country_breakdown`; UI renders badge + filter chips + IP table with flags + severity pills + step tracker.
+- **`opencode` AI provider** — local `opencode serve` session protocol (loopback, no api_key); model ids like `opencode/deepseek-v4-flash-free` (free tier) or `opencode-go/minimax-m3` (Go subscription). Env: `TINYSIEM_OPENCODE_SERVE_URL` (default `http://127.0.0.1:8099`), unit file `scripts/opencode-serve.service`.
+- **Filter registry** — `app/ai/filters.py` is the single source of truth for valid filters (events/alerts/cases); the extraction prompt's field list is generated from it. New filters: `country_code` (name→ISO via `app/ai/countries.py`, EN+ID), `city`, `asn`, `response_size_min/max`, `user_agent`, `referer`; alerts `mitre_tactic`/`mitre_technique`; `source_ip` is EXACT (CIDR/`a.b.c.x` → prefix). Unparseable/unknown filters land in `meta.dropped` with a reason (UI ⚠️ chips), never silently ignored.
+- **Empty-response guard** — a provider returning empty content raises → clear 503 instead of a blank answer (reasoning models with small `max_tokens` are the classic cause; use non-reasoning models or larger budgets).
 
-**Next version: v1.6.** Deferred from v1.4/v1.5: TOTP/2FA, dependency extras split, audit-log hash chaining, username/actor entities.
-
-v1.6 progress (merged via PR):
-- **GeoIP enrichment (PR #4)** — offline IP → country/city/ASN enrichment at ingest:
-  - `app/geoip/` package: CSV provider (db-ip lite `.csv`/`.csv.gz`, stdlib-only, family-aware binary search over IPv4+IPv6 ranges) + optional MaxMind `.mmdb` provider (`pip install geoip2`; optional GeoLite2-ASN via `TINYSIEM_GEOIP_ASN_PATH`). No DB configured → Null provider, enrichment no-ops.
-  - Events table gains `country_code`, `country_name`, `city`, `asn` columns (plain `ADD COLUMN` migration for pre-v1.6 DBs). Enrichment hook lives in `duckdb_store.insert_event()` — one chokepoint covering raw/file/beats/syslog/integrations.
-  - `country_code` added to `_ALLOWED_FIELDS` (threshold rules can now count per-country) and to `/events/facets`.
-  - `GET /geoip/{ip}` (analyst+), `geo` field on `GET /entities/ip/{value}` and on MCP `investigate_ip`; entity page shows a geolocation card, events table shows a flag badge + geo fields in the row expander.
-  - `scripts/fetch_geoip_db.py` (db-ip lite download, no registration) + `scripts/backfill_geoip.py` (offline rebuild of the events table to enrich historical rows — UPDATE is blocked by the PK+index constraint, so it rebuilds via LEFT JOIN + RENAME; run with the server stopped).
-
-**After v1.6 ships:** update this section to "Current State: v1.6" and set next to v1.7.
+**Next version: v1.7.** Deferred from v1.4/v1.5: TOTP/2FA, dependency extras split, audit-log hash chaining, username/actor entities.
 
 **Known DuckDB constraints:**
 - DuckDB 1.1.3 fails `UPDATE` on tables with PRIMARY KEY + any secondary index. Do NOT add `CREATE INDEX` to tables that will be updated. Applies to `baselines`, `baseline_violations`, cases tables, `integrations`, `integration_runs`, `case_playbook_steps`, `users`, and `watchlist_entries` (v1.5 — the `active` toggle is a plain `UPDATE`, so this table never gets a secondary index either). Dashboard uses DELETE+INSERT pattern (no UNIQUE on `owner`) to avoid this. `saved_searches` and `rule_exceptions` (also v1.5) are insert/delete-only, so this constraint doesn't apply to them at all.

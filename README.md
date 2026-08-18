@@ -17,7 +17,7 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 **Parsing**
 - YAML decoder engine — regex, JSON, and key-value formats
 - Built-in decoders: nginx access, syslog RFC 3164/5424, Windows Event Log, AWS CloudTrail, iptables, ufw, fail2ban — plus a custom sshd auth-log decoder
-- AI-assisted parser generation (Anthropic, OpenAI, DeepSeek, or any OpenAI-compatible endpoint)
+- AI-assisted parser generation (Anthropic, OpenAI, DeepSeek, opencode — or any OpenAI-compatible endpoint)
 - Hot-reload: add a YAML file, no rebuild required
 
 **Detection**
@@ -56,7 +56,7 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - Auto-refresh every 60 s per widget
 
 **UI**
-- Home — AI natural-language search landing page; falls back to manual search links if no provider is configured
+- Home — AI natural-language search landing page with structured results (target badge, filter chips, ranked top-IP table with country flags, severity pills, deep-link); falls back to manual search links if no provider is configured
 - Events — search, sidebar facets, time histogram, expandable rows, live-tail mode, New Case / Add to Case
 - Alerts — severity/rule facets, triage panel, AI Explain, New Case / Add to Case
 - Dashboard — fully configurable, per-user widget layout
