@@ -35,7 +35,7 @@ def test_extract_search_intent_valid_alerts_target():
     mock_result.text = json.dumps({"target": "alerts", "filters": {"severity": "critical"}})
     with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", return_value=mock_result):
         intent = extract_search_intent("show me critical alerts")
-    assert intent == {"target": "alerts", "filters": {"severity": "critical"}, "group_by": None}
+    assert intent == {"target": "alerts", "filters": {"severity": "critical"}, "group_by": None, "dropped": []}
 
 
 def test_extract_search_intent_target_null_for_non_search_question():
@@ -45,7 +45,7 @@ def test_extract_search_intent_target_null_for_non_search_question():
     mock_result.text = json.dumps({"target": None, "filters": {}, "group_by": None})
     with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", return_value=mock_result):
         intent = extract_search_intent("what is TinySIEM?")
-    assert intent == {"target": None, "filters": {}, "group_by": None}
+    assert intent == {"target": None, "filters": {}, "group_by": None, "dropped": []}
 
 
 def test_extract_search_intent_malformed_json_falls_back_to_null():
@@ -55,7 +55,7 @@ def test_extract_search_intent_malformed_json_falls_back_to_null():
     mock_result.text = "this is not valid JSON at all"
     with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", return_value=mock_result):
         intent = extract_search_intent("show me events")
-    assert intent == {"target": None, "filters": {}, "group_by": None}
+    assert intent == {"target": None, "filters": {}, "group_by": None, "dropped": []}
 
 
 def test_extract_search_intent_unknown_target_falls_back_to_null():
@@ -65,7 +65,7 @@ def test_extract_search_intent_unknown_target_falls_back_to_null():
     mock_result.text = json.dumps({"target": "rules", "filters": {}})
     with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", return_value=mock_result):
         intent = extract_search_intent("show me rules")
-    assert intent == {"target": None, "filters": {}, "group_by": None}
+    assert intent == {"target": None, "filters": {}, "group_by": None, "dropped": []}
 
 
 def test_extract_search_intent_drops_filter_keys_not_valid_for_target():
@@ -78,7 +78,8 @@ def test_extract_search_intent_drops_filter_keys_not_valid_for_target():
     mock_result.text = json.dumps({"target": "events", "filters": {"status_code": 404, "severity": "high"}})
     with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", return_value=mock_result):
         intent = extract_search_intent("show me 404s")
-    assert intent == {"target": "events", "filters": {"status_code": 404}, "group_by": None}
+    assert intent == {"target": "events", "filters": {"status_code": 404}, "group_by": None,
+                      "dropped": [{"field": "severity", "value": "high", "reason": "'severity' is not a supported filter"}]}
 
 
 def test_extract_search_intent_drops_empty_string_filter_values():
@@ -88,7 +89,7 @@ def test_extract_search_intent_drops_empty_string_filter_values():
     mock_result.text = json.dumps({"target": "alerts", "filters": {"severity": "", "rule_name": "brute-force"}})
     with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", return_value=mock_result):
         intent = extract_search_intent("brute force alerts")
-    assert intent == {"target": "alerts", "filters": {"rule_name": "brute-force"}, "group_by": None}
+    assert intent == {"target": "alerts", "filters": {"rule_name": "brute-force"}, "group_by": None, "dropped": []}
 
 
 def test_extract_search_intent_raises_when_ai_unconfigured():
@@ -216,7 +217,7 @@ def test_extract_search_intent_group_by_source_ip_passthrough():
     )
     with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", return_value=mock_result):
         intent = extract_search_intent("top 10 ip attacking")
-    assert intent == {"target": "events", "filters": {"method": "Failed password"}, "group_by": "source_ip"}
+    assert intent == {"target": "events", "filters": {"method": "Failed password"}, "group_by": "source_ip", "dropped": []}
 
 
 def test_extract_search_intent_group_by_cleared_for_non_events_target():
@@ -228,7 +229,7 @@ def test_extract_search_intent_group_by_cleared_for_non_events_target():
     )
     with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", return_value=mock_result):
         intent = extract_search_intent("top 10 attacking ip in alerts")
-    assert intent == {"target": "alerts", "filters": {"severity": "high"}, "group_by": None}
+    assert intent == {"target": "alerts", "filters": {"severity": "high"}, "group_by": None, "dropped": []}
 
 
 def test_extract_search_intent_invalid_group_by_cleared():
@@ -238,7 +239,7 @@ def test_extract_search_intent_invalid_group_by_cleared():
     mock_result.text = json.dumps({"target": "events", "filters": {}, "group_by": "method"})
     with patch("app.ai.providers.anthropic_provider.AnthropicProvider.chat", return_value=mock_result):
         intent = extract_search_intent("top methods")
-    assert intent == {"target": "events", "filters": {}, "group_by": None}
+    assert intent == {"target": "events", "filters": {}, "group_by": None, "dropped": []}
 
 
 def test_run_search_group_by_source_ip_feeds_top_ips_into_summary_context():
@@ -323,6 +324,7 @@ def test_run_search_events_returns_structured_table_and_meta():
         "count": 1864,
         "filters": {"method": "Failed password"},
         "group_by": None,
+        "dropped": [],
     }
     assert result["table"]["rows"][0] == {"rank": 1, "ip": "195.178.110.3", "country": "NL", "events": 139}
     assert result["table"]["rows"][1] == {"rank": 2, "ip": "2.57.121.25", "country": "RU", "events": 72}
@@ -348,3 +350,87 @@ def test_run_search_alerts_returns_severity_breakdown():
     assert result["meta"]["target"] == "alerts"
     assert result["breakdown"] == {"high": 3}
     assert "table" not in result
+
+
+def test_run_search_country_filter_normalized_and_surfaced():
+    """'dari Indonesia' must become country_code=ID in the applied filters and
+    be visible in the response meta — the exact failure from the wild."""
+    from app.ai import home_search
+    _configure_ai()
+
+    mock_intent_result = MagicMock()
+    mock_intent_result.text = json.dumps({
+        "target": "events",
+        "filters": {"source": "fail2ban", "method": "Ban", "country_code": "Indonesia"},
+        "group_by": "source_ip",
+    })
+    mock_answer_result = MagicMock()
+    mock_answer_result.text = "142 bans trace to Indonesian IPs; 69.5.20.133 leads with 15."
+
+    with patch(
+        "app.ai.providers.anthropic_provider.AnthropicProvider.chat",
+        side_effect=[mock_intent_result, mock_answer_result],
+    ):
+        with patch("app.ai.home_search._query_events", return_value=(142, {"status_code_breakdown": {}})):
+            with patch("app.ai.home_search._top_source_ips", return_value=[
+                {"ip": "69.5.20.133", "count": 15, "country_code": "ID", "country_name": "Indonesia"},
+            ]):
+                with patch("app.ai.home_search._country_breakdown", return_value=[
+                    {"code": "ID", "count": 142},
+                ]):
+                    result = home_search.run_search(
+                        "top 10 ip dari Indonesia yang diblok fail2ban", actor="analyst1"
+                    )
+
+    assert result["meta"]["filters"]["country_code"] == "ID"
+    assert result["meta"]["filters"]["source"] == "fail2ban"
+    assert result["meta"]["dropped"] == []
+    assert result["country_breakdown"] == [{"code": "ID", "count": 142}]
+    assert result["link"] == "/ui/events.html?source=fail2ban&method=Ban&country_code=ID"
+
+
+def test_run_search_dropped_filters_surface_in_meta():
+    """Unsupported/unparseable filters the LLM emitted must show up as warnings,
+    not silently vanish."""
+    from app.ai import home_search
+    _configure_ai()
+
+    mock_intent_result = MagicMock()
+    mock_intent_result.text = json.dumps({
+        "target": "events",
+        "filters": {"source_ip": "45.148.10.151", "port": 443},
+        "group_by": None,
+    })
+    mock_answer_result = MagicMock()
+    mock_answer_result.text = "One IP matched."
+
+    with patch(
+        "app.ai.providers.anthropic_provider.AnthropicProvider.chat",
+        side_effect=[mock_intent_result, mock_answer_result],
+    ):
+        with patch("app.ai.home_search._query_events", return_value=(1, {"status_code_breakdown": {}})):
+            with patch("app.ai.home_search._top_source_ips", return_value=[]):
+                with patch("app.ai.home_search._country_breakdown", return_value=[]):
+                    result = home_search.run_search("events from 45.148.10.151 on port 443", actor="analyst1")
+
+    assert result["meta"]["filters"] == {"source_ip": "45.148.10.151"}
+    assert result["meta"]["dropped"] == [{"field": "port", "value": 443, "reason": "'port' is not a supported filter"}]
+
+
+def test_query_alerts_passes_mitre_filters():
+    """'defense evasion' alerts must reach apply_alert_filters as mitre_tactic."""
+    from app.ai import home_search
+    _configure_ai()
+
+    with patch("app.alerts.router.read_all_alerts", return_value=[
+        {"alert_id": "a1", "severity": "high", "rule_name": "r1",
+         "mitre_tactic": "defense-evasion", "mitre_technique": "T1110",
+         "triggered_at": "2026-08-18T00:00:00Z"},
+        {"alert_id": "a2", "severity": "low", "rule_name": "r2",
+         "mitre_tactic": "initial-access", "mitre_technique": "T1566",
+         "triggered_at": "2026-08-18T00:00:00Z"},
+    ]):
+        count, summary = home_search._query_alerts({"mitre_tactic": "defense-evasion"})
+
+    assert count == 1
+    assert summary == {"severity_breakdown": {"high": 1}}

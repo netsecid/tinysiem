@@ -60,11 +60,17 @@ def apply_alert_filters(
     q: Optional[str],
     start: Optional[datetime],
     end: Optional[datetime],
+    mitre_tactic: Optional[str] = None,
+    mitre_technique: Optional[str] = None,
 ) -> list[dict]:
     if severity:
         alerts = [a for a in alerts if (a.get("severity") or "").lower() == severity.lower()]
     if rule_name:
         alerts = [a for a in alerts if rule_name.lower() in (a.get("rule_name") or "").lower()]
+    if mitre_tactic:
+        alerts = [a for a in alerts if mitre_tactic.lower() in (a.get("mitre_tactic") or "").lower()]
+    if mitre_technique:
+        alerts = [a for a in alerts if mitre_technique.lower() in (a.get("mitre_technique") or "").lower()]
     if source_ip:
         alerts = [a for a in alerts if source_ip in (a.get("source_ip") or "")]
     if status:
@@ -117,11 +123,16 @@ def list_alerts(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    mitre_tactic: Optional[str] = None,
+    mitre_technique: Optional[str] = None,
     format: Optional[str] = None,
     _: AuthUser = Depends(require_analyst),
 ):
     alerts = read_all_alerts()
-    alerts = apply_alert_filters(alerts, severity, rule_name, source_ip, status, q, start, end)
+    alerts = apply_alert_filters(
+        alerts, severity, rule_name, source_ip, status, q, start, end,
+        mitre_tactic=mitre_tactic, mitre_technique=mitre_technique,
+    )
     alerts.sort(key=lambda a: a.get("triggered_at", ""), reverse=True)
     if format == "csv":
         csv_text = rows_to_csv(alerts[:_CSV_EXPORT_CAP], _ALERT_CSV_COLUMNS)

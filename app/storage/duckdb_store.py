@@ -110,6 +110,8 @@ def _escape_like(val: str) -> str:
 def _build_where(
     source: Optional[str] = None,
     source_ip: Optional[str] = None,
+    source_ip_exact: Optional[str] = None,
+    source_ip_prefix: Optional[str] = None,
     status_code: Optional[int] = None,
     status_min: Optional[int] = None,
     status_max: Optional[int] = None,
@@ -118,6 +120,13 @@ def _build_where(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    country_code: Optional[str] = None,
+    city: Optional[str] = None,
+    asn: Optional[int] = None,
+    response_size_min: Optional[int] = None,
+    response_size_max: Optional[int] = None,
+    user_agent: Optional[str] = None,
+    referer: Optional[str] = None,
 ) -> tuple[str, list]:
     conditions: list[str] = []
     params: list = []
@@ -128,6 +137,12 @@ def _build_where(
     if source_ip:
         conditions.append("source_ip LIKE ? ESCAPE '\\'")
         params.append(f"%{_escape_like(source_ip)}%")
+    if source_ip_exact:
+        conditions.append("source_ip = ?")
+        params.append(source_ip_exact)
+    if source_ip_prefix:
+        conditions.append("source_ip LIKE ? ESCAPE '\\'")
+        params.append(f"{_escape_like(source_ip_prefix)}%")
     if status_code is not None:
         conditions.append("status_code = ?")
         params.append(status_code)
@@ -143,6 +158,27 @@ def _build_where(
     if uri:
         conditions.append("uri ILIKE ? ESCAPE '\\'")
         params.append(f"%{_escape_like(uri)}%")
+    if user_agent:
+        conditions.append("user_agent ILIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(user_agent)}%")
+    if referer:
+        conditions.append("referer ILIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(referer)}%")
+    if country_code:
+        conditions.append("country_code = ?")
+        params.append(country_code.upper())
+    if city:
+        conditions.append("city ILIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(city)}%")
+    if asn is not None:
+        conditions.append("asn = ?")
+        params.append(asn)
+    if response_size_min is not None:
+        conditions.append("response_size >= ?")
+        params.append(response_size_min)
+    if response_size_max is not None:
+        conditions.append("response_size <= ?")
+        params.append(response_size_max)
     if q:
         conditions.append("raw ILIKE ? ESCAPE '\\'")
         params.append(f"%{_escape_like(q)}%")
@@ -228,6 +264,8 @@ def query_events(
     offset: int = 0,
     source: Optional[str] = None,
     source_ip: Optional[str] = None,
+    source_ip_exact: Optional[str] = None,
+    source_ip_prefix: Optional[str] = None,
     status_code: Optional[int] = None,
     status_min: Optional[int] = None,
     status_max: Optional[int] = None,
@@ -236,12 +274,23 @@ def query_events(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    country_code: Optional[str] = None,
+    city: Optional[str] = None,
+    asn: Optional[int] = None,
+    response_size_min: Optional[int] = None,
+    response_size_max: Optional[int] = None,
+    user_agent: Optional[str] = None,
+    referer: Optional[str] = None,
 ) -> dict:
     conn = _get_conn()
     where, params = _build_where(
         source=source, source_ip=source_ip,
+        source_ip_exact=source_ip_exact, source_ip_prefix=source_ip_prefix,
         status_code=status_code, status_min=status_min, status_max=status_max,
         method=method, uri=uri, q=q, start=start, end=end,
+        country_code=country_code, city=city, asn=asn,
+        response_size_min=response_size_min, response_size_max=response_size_max,
+        user_agent=user_agent, referer=referer,
     )
 
     with _lock:
@@ -276,6 +325,8 @@ def query_events(
 def get_event_facets(
     source: Optional[str] = None,
     source_ip: Optional[str] = None,
+    source_ip_exact: Optional[str] = None,
+    source_ip_prefix: Optional[str] = None,
     status_code: Optional[int] = None,
     status_min: Optional[int] = None,
     status_max: Optional[int] = None,
@@ -284,12 +335,23 @@ def get_event_facets(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    country_code: Optional[str] = None,
+    city: Optional[str] = None,
+    asn: Optional[int] = None,
+    response_size_min: Optional[int] = None,
+    response_size_max: Optional[int] = None,
+    user_agent: Optional[str] = None,
+    referer: Optional[str] = None,
 ) -> dict:
     conn = _get_conn()
     where, params = _build_where(
         source=source, source_ip=source_ip,
+        source_ip_exact=source_ip_exact, source_ip_prefix=source_ip_prefix,
         status_code=status_code, status_min=status_min, status_max=status_max,
         method=method, uri=uri, q=q, start=start, end=end,
+        country_code=country_code, city=city, asn=asn,
+        response_size_min=response_size_min, response_size_max=response_size_max,
+        user_agent=user_agent, referer=referer,
     )
     # Helpers for appending a NULL-check condition
     and_or_where = "AND" if where else "WHERE"
@@ -346,6 +408,8 @@ def get_event_facets(
 def top_source_ips(
     source: Optional[str] = None,
     source_ip: Optional[str] = None,
+    source_ip_exact: Optional[str] = None,
+    source_ip_prefix: Optional[str] = None,
     status_code: Optional[int] = None,
     status_min: Optional[int] = None,
     status_max: Optional[int] = None,
@@ -354,6 +418,13 @@ def top_source_ips(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    country_code: Optional[str] = None,
+    city: Optional[str] = None,
+    asn: Optional[int] = None,
+    response_size_min: Optional[int] = None,
+    response_size_max: Optional[int] = None,
+    user_agent: Optional[str] = None,
+    referer: Optional[str] = None,
     limit: int = 10,
 ) -> list[dict]:
     """Top-N source IPs matching the filters, with country enrichment.
@@ -365,8 +436,12 @@ def top_source_ips(
     conn = _get_conn()
     where, params = _build_where(
         source=source, source_ip=source_ip,
+        source_ip_exact=source_ip_exact, source_ip_prefix=source_ip_prefix,
         status_code=status_code, status_min=status_min, status_max=status_max,
         method=method, uri=uri, q=q, start=start, end=end,
+        country_code=country_code, city=city, asn=asn,
+        response_size_min=response_size_min, response_size_max=response_size_max,
+        user_agent=user_agent, referer=referer,
     )
     and_or_where = "AND" if where else "WHERE"
     with _lock:
@@ -380,6 +455,50 @@ def top_source_ips(
         {"ip": r[0], "count": r[1], "country_code": r[2], "country_name": r[3]}
         for r in rows
     ]
+
+
+def country_breakdown(
+    source: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    source_ip_exact: Optional[str] = None,
+    source_ip_prefix: Optional[str] = None,
+    status_code: Optional[int] = None,
+    status_min: Optional[int] = None,
+    status_max: Optional[int] = None,
+    method: Optional[str] = None,
+    uri: Optional[str] = None,
+    q: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    country_code: Optional[str] = None,
+    city: Optional[str] = None,
+    asn: Optional[int] = None,
+    response_size_min: Optional[int] = None,
+    response_size_max: Optional[int] = None,
+    user_agent: Optional[str] = None,
+    referer: Optional[str] = None,
+    limit: int = 8,
+) -> list[dict]:
+    """Country distribution of matching events (GROUP BY country_code)."""
+    conn = _get_conn()
+    where, params = _build_where(
+        source=source, source_ip=source_ip,
+        source_ip_exact=source_ip_exact, source_ip_prefix=source_ip_prefix,
+        status_code=status_code, status_min=status_min, status_max=status_max,
+        method=method, uri=uri, q=q, start=start, end=end,
+        country_code=country_code, city=city, asn=asn,
+        response_size_min=response_size_min, response_size_max=response_size_max,
+        user_agent=user_agent, referer=referer,
+    )
+    and_or_where = "AND" if where else "WHERE"
+    with _lock:
+        rows = conn.execute(
+            f"SELECT COALESCE(country_code, '??') AS cc, COUNT(*) AS c "
+            f"FROM events {where} {and_or_where} source_ip IS NOT NULL "
+            f"GROUP BY cc ORDER BY c DESC LIMIT {int(limit)}",
+            params,
+        ).fetchall()
+    return [{"code": r[0], "count": r[1]} for r in rows]
 
 
 def get_event_histogram(start: datetime, end: datetime, buckets: int = 60) -> list:

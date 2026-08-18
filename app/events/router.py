@@ -16,6 +16,9 @@ _FILTER_PARAMS = dict(
     status_code=None, status_min=None, status_max=None,
     method=None, uri=None, q=None,
     start=None, end=None,
+    country_code=None, city=None, asn=None,
+    response_size_min=None, response_size_max=None,
+    user_agent=None, referer=None,
 )
 
 _CSV_EXPORT_CAP = 10_000
@@ -37,11 +40,21 @@ def _filter_kwargs(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    country_code: Optional[str] = None,
+    city: Optional[str] = None,
+    asn: Optional[int] = None,
+    response_size_min: Optional[int] = None,
+    response_size_max: Optional[int] = None,
+    user_agent: Optional[str] = None,
+    referer: Optional[str] = None,
 ) -> dict:
     return dict(
         source=source, source_ip=source_ip,
         status_code=status_code, status_min=status_min, status_max=status_max,
         method=method, uri=uri, q=q, start=start, end=end,
+        country_code=country_code, city=city, asn=asn,
+        response_size_min=response_size_min, response_size_max=response_size_max,
+        user_agent=user_agent, referer=referer,
     )
 
 
@@ -59,11 +72,21 @@ def list_events(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    country_code: Optional[str] = None,
+    city: Optional[str] = None,
+    asn: Optional[int] = None,
+    response_size_min: Optional[int] = None,
+    response_size_max: Optional[int] = None,
+    user_agent: Optional[str] = None,
+    referer: Optional[str] = None,
     format: Optional[str] = None,
     _: AuthUser = Depends(require_analyst),
 ):
     filter_kwargs = _filter_kwargs(source, source_ip, status_code, status_min, status_max,
-                                    method, uri, q, start, end)
+                                    method, uri, q, start, end,
+                                    country_code, city, asn,
+                                    response_size_min, response_size_max,
+                                    user_agent, referer)
     if format == "csv":
         result = duckdb_store.query_events(limit=_CSV_EXPORT_CAP, offset=0, **filter_kwargs)
         csv_text = rows_to_csv(result["events"], _CSV_COLUMNS)
@@ -90,11 +113,21 @@ def event_facets(
     q: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    country_code: Optional[str] = None,
+    city: Optional[str] = None,
+    asn: Optional[int] = None,
+    response_size_min: Optional[int] = None,
+    response_size_max: Optional[int] = None,
+    user_agent: Optional[str] = None,
+    referer: Optional[str] = None,
     _: AuthUser = Depends(require_analyst),
 ):
     return duckdb_store.get_event_facets(
         **_filter_kwargs(source, source_ip, status_code, status_min, status_max,
-                         method, uri, q, start, end),
+                         method, uri, q, start, end,
+                         country_code, city, asn,
+                         response_size_min, response_size_max,
+                         user_agent, referer),
     )
 
 
