@@ -5,10 +5,21 @@ from datetime import datetime, timezone
 _VALID_TARGETS = {"events", "alerts", "cases"}
 
 _TARGET_FILTER_KEYS = {
-    "events": {"source_ip", "status_code", "status_min", "status_max", "method", "uri", "q", "start", "end"},
+    "events": {"source", "source_ip", "status_code", "status_min", "status_max", "method", "uri", "q", "start", "end"},
     "alerts": {"severity", "rule_name", "source_ip", "q", "start", "end"},
     "cases": {"status", "severity", "assignee", "q", "start", "end"},
 }
+
+# Values that appear verbatim in real SIEM data — the extraction LLM must know these
+# so natural phrasing maps to filters that actually match (a bare `q` full-text search
+# often returns 0 for concepts like "brute force", which live in structured fields).
+_SOURCE_VALUES = ("sshd", "ufw", "fail2ban", "syslog", "nginx", "tinysiem_internal")
+_METHOD_HINTS = (
+    'for sshd logs: "Failed password", "Accepted", "Invalid user", "Connection closed", '
+    '"Break-in attempt"; for ufw/fail2ban: the protocol or action ("Ban", "Unban", "TCP", "UDP"); '
+    "for HTTP logs: the HTTP verb (GET, POST, ...)"
+)
+_RULE_NAME_VALUES = ("ssh-bruteforce", "fail2ban-ban", "fail2ban-unban", "ufw-repeated-blocks")
 
 
 def _extraction_system_prompt() -> str:
@@ -18,20 +29,30 @@ def _extraction_system_prompt() -> str:
         "management tool. Given a natural-language question from a security analyst, decide "
         "which data source (if any) the question is asking about, and extract the relevant filters.\n\n"
         "Valid targets and their filters:\n"
-        "- \"events\": source_ip, status_code, status_min, status_max, method, uri, q, start, end\n"
+        "- \"events\": source, source_ip, status_code, status_min, status_max, method, uri, q, start, end\n"
         "- \"alerts\": severity, rule_name, source_ip, q, start, end\n"
         "- \"cases\": status, severity, assignee, q, start, end\n\n"
+        f"SIEM vocabulary — use these exact values so filters match real data:\n"
+        f"- events.source values: {', '.join(_SOURCE_VALUES)}\n"
+        f"- events.method values: {_METHOD_HINTS}\n"
+        f"- alerts.rule_name values: {', '.join(_RULE_NAME_VALUES)}\n"
+        "- \"brute force\", \"attack\", \"attacking\", \"scanning\", \"probing\" usually mean sshd "
+        "events with method \"Failed password\" (or alerts with rule_name \"ssh-bruteforce\")\n"
+        "- \"q\" does a free-text search of the raw log line\n\n"
         "Rules:\n"
         "- If the question is not asking to search/filter/find data (e.g. a greeting, a general "
-        "knowledge question, a question about how TinySIEM works), set \"target\" to null and leave "
-        "\"filters\" empty.\n"
+        "knowledge question, a question about how TinySIEM works), set \"target\" to null, \"filters\" "
+        "empty, and \"group_by\" null.\n"
         "- Only include filter keys that are relevant to the question — do not invent values.\n"
         "- severity must be one of: low, medium, high, critical\n"
         "- status (cases only) must be one of: open, investigating, resolved\n"
         f"- start/end must be ISO 8601 datetime strings. The current time is {now}. If the question "
         "implies recent activity without an explicit time bound, default to the last 24 hours.\n"
+        "- If the question asks for the top/most frequent N IP addresses (e.g. \"top 10 ip address "
+        "attacking\", \"which source ip sent the most requests\"), set \"target\" to \"events\" and "
+        "\"group_by\" to \"source_ip\"; otherwise \"group_by\" must be null.\n"
         "- Output ONLY a JSON object with this exact shape, no prose, no markdown:\n"
-        "{\"target\": \"events\"|\"alerts\"|\"cases\"|null, \"filters\": {...}}"
+        "{\"target\": \"events\"|\"alerts\"|\"cases\"|null, \"filters\": {...}, \"group_by\": \"source_ip\"|null}"
     )
 
 
@@ -39,18 +60,28 @@ def extract_search_intent(question: str) -> dict:
     from app.ai.provider_factory import get_active_provider
     provider = get_active_provider()
     result = provider.chat(system=_extraction_system_prompt(), user=question, max_tokens=500)
+    text = (result.text or "").strip()
+    if not text:
+        # A reasoning model can burn its whole token budget on `reasoning_content`
+        # and return an empty `content` (finish_reason=length). Surface that loudly
+        # instead of silently falling back to a generic answer — the caller maps
+        # RuntimeError to a 503 the UI can explain.
+        raise RuntimeError(
+            "AI provider returned an empty response for intent extraction — check the model "
+            "configured in Settings → AI Config (reasoning models may need a larger max_tokens)."
+        )
 
     try:
-        parsed = json.loads(result.text.strip())
+        parsed = json.loads(text)
     except (json.JSONDecodeError, AttributeError, TypeError):
-        return {"target": None, "filters": {}}
+        return {"target": None, "filters": {}, "group_by": None}
 
     if not isinstance(parsed, dict):
-        return {"target": None, "filters": {}}
+        return {"target": None, "filters": {}, "group_by": None}
 
     target = parsed.get("target")
     if target not in _VALID_TARGETS:
-        return {"target": None, "filters": {}}
+        return {"target": None, "filters": {}, "group_by": None}
 
     raw_filters = parsed.get("filters")
     if not isinstance(raw_filters, dict):
@@ -61,7 +92,13 @@ def extract_search_intent(question: str) -> dict:
         k: v for k, v in raw_filters.items()
         if k in allowed_keys and v not in (None, "")
     }
-    return {"target": target, "filters": filters}
+
+    # group_by is only meaningful for events (source_ip facet). Anything else is
+    # dropped so a hallucinated value can never reach the query layer.
+    group_by = parsed.get("group_by") if target == "events" else None
+    if group_by not in (None, "source_ip"):
+        group_by = None
+    return {"target": target, "filters": filters, "group_by": group_by}
 
 
 def _parse_iso_datetime(value):
@@ -73,8 +110,8 @@ def _parse_iso_datetime(value):
         return None
 
 
-def _query_events(filters: dict) -> tuple:
-    from app.storage import duckdb_store
+def _normalize_event_filters(filters: dict) -> dict:
+    """Convert raw extracted filter values into the types query_events() expects."""
     kwargs = dict(filters)
     for key in ("status_code", "status_min", "status_max"):
         if key in kwargs:
@@ -85,12 +122,29 @@ def _query_events(filters: dict) -> tuple:
     for key in ("start", "end"):
         if key in kwargs:
             kwargs[key] = _parse_iso_datetime(kwargs[key])
+    return kwargs
+
+
+def _query_events(filters: dict) -> tuple:
+    from app.storage import duckdb_store
+    kwargs = _normalize_event_filters(filters)
     result = duckdb_store.query_events(limit=50, **kwargs)
     status_counts = Counter(
         e.get("status_code") for e in result["events"] if e.get("status_code") is not None
     )
     summary = {"status_code_breakdown": dict(status_counts.most_common(5))}
     return result["total"], summary
+
+
+def _top_source_ips(filters: dict, limit: int = 10) -> list[dict]:
+    """Top-N source IPs matching the filters (GROUP BY source_ip, descending)."""
+    from app.storage import duckdb_store
+    kwargs = _normalize_event_filters(filters)
+    facets = duckdb_store.get_event_facets(**kwargs)
+    return [
+        {"ip": f["value"], "count": f["count"]}
+        for f in facets.get("source_ip", [])[:limit]
+    ]
 
 
 def _query_alerts(filters: dict) -> tuple:
@@ -162,27 +216,50 @@ def run_search(question: str, actor: str) -> dict:
     intent = extract_search_intent(question)
     target = intent["target"]
     filters = intent["filters"]
+    group_by = intent.get("group_by")
 
     start_time = datetime.now(timezone.utc)
     if target is None:
         result = provider.chat(system=_general_system_prompt(), user=question, max_tokens=400)
+        answer = (result.text or "").strip()
+        if not answer:
+            raise RuntimeError(
+                "AI provider returned an empty response — check the model "
+                "configured in Settings → AI Config."
+            )
         duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
-        _log_ai_call("home_search", actor, question, result.text, duration_ms, success=True, model=provider.model)
-        return {"answer": result.text, "link": None, "link_label": None}
+        _log_ai_call("home_search", actor, question, answer, duration_ms, success=True, model=provider.model)
+        return {"answer": answer, "link": None, "link_label": None}
 
-    # Dispatch through the module namespace (not a pre-bound dict of function objects)
+    # Look up the query function at call time (not a module-level pre-bound dict)
     # so that tests patching app.ai.home_search._query_events/_alerts/_cases take
     # effect — a dict built at import time would keep pointing at the originals
     # after unittest.mock.patch swaps the module attribute.
-    query_fn = globals()[f"_query_{target}"]
+    query_fn = {
+        "events": _query_events,
+        "alerts": _query_alerts,
+        "cases": _query_cases,
+    }[target]
     count, summary = query_fn(filters)
     context = f"Question: {question}\n\nReal results: {count} {target} matched.\nSummary: {summary}"
+    if target == "events" and group_by == "source_ip":
+        top_ips = _top_source_ips(filters)
+        if top_ips:
+            context += "\nTop source IPs (highest event counts):\n" + "\n".join(
+                f"- {t['ip']}: {t['count']} events" for t in top_ips
+            )
     result = provider.chat(system=_summary_system_prompt(), user=context, max_tokens=400)
+    answer = (result.text or "").strip()
+    if not answer:
+        raise RuntimeError(
+            "AI provider returned an empty response — check the model "
+            "configured in Settings → AI Config."
+        )
     duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
-    _log_ai_call("home_search", actor, question, result.text, duration_ms, success=True, model=provider.model)
+    _log_ai_call("home_search", actor, question, answer, duration_ms, success=True, model=provider.model)
 
     return {
-        "answer": result.text,
+        "answer": answer,
         "link": _build_link(target, filters),
         "link_label": f"View {count} {target}",
     }

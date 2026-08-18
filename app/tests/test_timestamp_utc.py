@@ -7,7 +7,7 @@ render (see fmtT/fmtTime in the UI files).
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.storage import duckdb_store
 
@@ -56,8 +56,9 @@ def test_time_range_filter_is_timezone_agnostic():
     """A tz-aware UTC window must match events inserted at the same instant —
     the naive-UTC storage comparison must not drift with server/browser tz."""
     event_id = _insert_event()
-    start = datetime(2026, 8, 10, 2, 0, 0, tzinfo=timezone.utc)
-    end = datetime(2026, 8, 10, 3, 0, 0, tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(minutes=5)
+    end = now + timedelta(minutes=5)
     result = duckdb_store.query_events(source="test_ts", start=start, end=end, limit=10)
     ids = {e["id"] for e in result["events"]}
     assert event_id in ids

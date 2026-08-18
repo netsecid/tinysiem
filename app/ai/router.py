@@ -166,7 +166,7 @@ def test_ai_config_endpoint(_: AuthUser = Depends(require_admin)):
     except RuntimeError as exc:
         return {"success": False, "detail": str(exc)}
     try:
-        result = provider.chat(system="You are a test.", user="Reply with exactly: OK", max_tokens=10)
+        result = provider.chat(system="You are a test.", user="Reply with exactly: OK", max_tokens=512)
         return {"success": True, "detail": result.text}
     except Exception as exc:
         return {"success": False, "detail": str(exc)}
