@@ -161,6 +161,8 @@ def get_fidelity(
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "totals": snap["totals"],
         "sources": sources_out,
+        "top_rules": snap["top_rules"],
+        "recent_alerts": snap["recent_alerts"],
         "engine": {
             "rules_loaded": rule_engine.loaded_rules_count(),
         },
