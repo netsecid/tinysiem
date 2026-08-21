@@ -72,3 +72,10 @@ def write_alert(
         notify(alert)
     except Exception as exc:
         logger.error(f"Notification dispatch failed: {exc}")
+
+    # Detection Fidelity telemetry — in-memory alert-rate counter, O(1), no I/O.
+    try:
+        from app.dashboard.fidelity import record_alert
+        record_alert()
+    except Exception:
+        pass

@@ -29,7 +29,11 @@ def process_line(source: str, raw: str, strict: bool = True) -> str:
     event = decoder_engine.decode(source, raw)
     if event is None:
         if strict:
+            from app.dashboard.fidelity import record_parse_failure
+            record_parse_failure(source)
             raise HTTPException(status_code=422, detail="Log line could not be decoded")
+        from app.dashboard.fidelity import record_parse_failure
+        record_parse_failure(source)
         event = {
             "id": str(uuid.uuid4()),
             "source": source,

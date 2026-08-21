@@ -124,6 +124,17 @@ def reset_corr_state() -> None:
         _corr_state.clear()
 
 
+def get_loaded_rules() -> list[dict]:
+    """Read-only accessor for currently loaded rules. Used by /dashboard/fidelity
+    to report the engine's rules-loaded count without re-reading YAML files per
+    request."""
+    return list(_rules)
+
+
+def loaded_rules_count() -> int:
+    return len(_rules)
+
+
 def evaluate(event: dict) -> None:
     source = event.get("source")
     for rule in _rules:
