@@ -618,26 +618,43 @@ Generate a static HTML snapshot of the dashboard for sharing or archiving.
 ### `GET /dashboard/fidelity`
 Executive "SOC pipeline" snapshot for the Detection Fidelity tab. Requires `analyst` role.
 
+**Query params:**
+
+| Param | Values | Default | Notes |
+|---|---|---|---|
+| `window` | `60`, `3600`, `86400` | `60` | Rolling window for all volume metrics. `60` = in-memory live pulse; `3600`/`86400` = DB-backed `COUNT` over the events table (in-memory counters reset on server restart, so long windows are DB-derived). Invalid values → `422`. |
+
 **Response:**
 ```json
 {
-  "window_seconds": 60,
-  "generated_at": "2026-08-21T07:53:08Z",
-  "sources": [{"name": "sshd", "eps": 12.5, "status": "active", "parse_fail_count": 0}],
-  "engine": {"rules_loaded": 9, "alerts_per_min": 0.0},
+  "window_seconds": 3600,
+  "window_label": "1h",
+  "generated_at": "2026-08-21T08:00:00Z",
+  "totals": {
+    "events": 726,
+    "events_rate": 726.0,
+    "events_rate_unit": "events/hr",
+    "alerts": 29,
+    "alerts_rate": 29.0,
+    "alerts_rate_unit": "alerts/hr"
+  },
+  "sources": [{"name": "sshd", "events": 137, "rate": 137.0, "status": "active", "parse_fail_count": 0}],
+  "engine": {"rules_loaded": 9},
   "outcomes": {
     "cases_open": 0,
     "cases_investigating": 1,
     "resolved": {"true_positive": 1, "false_positive": 0, "benign": 0, "undetermined": 0},
     "total_resolved": 1,
-    "fidelity_pct": 100.0
+    "fidelity_pct": 100.0,
+    "scope": "all_time"
   }
 }
 ```
 
-- `sources[].eps` — live events/sec over the rolling `window_seconds` window (in-memory counters; reset on server restart, DB-derived status from the same logic as `GET /sources`).
-- `sources[].status` — `active` / `stale` / `silent`.
-- `fidelity_pct` — `100 × true_positive / (true_positive + false_positive + benign)` computed over **resolved** cases only; `undetermined` is excluded from the denominator; `null` when no resolved cases exist (never `0`).
+- `totals` — combined volume for the window: `events` count, `events_rate` + `events_rate_unit` (unit adapts: `eps` / `events/hr` / `events/day`), `alerts` count (from the alerts JSONL `triggered_at`), `alerts_rate` + `alerts_rate_unit` (`alerts/min` / `alerts/hr` / `alerts/day`).
+- `sources[].events` / `sources[].rate` — per-source count and rate for the window; `sources[].status` — `active` / `stale` / `silent` (same logic as `GET /sources`); `sources[].parse_fail_count` — in-memory counter (live 60s pulse only).
+- `engine.rules_loaded` — count of loaded rules.
+- `outcomes.scope` — always `all_time`: `fidelity_pct` is a detection-quality KPI and is intentionally **not** windowed. `fidelity_pct` = `100 × true_positive / (true_positive + false_positive + benign)` over **resolved** cases only; `undetermined` excluded from the denominator; `null` when no resolved cases exist (never `0`).
 
 ---
 

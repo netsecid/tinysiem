@@ -53,7 +53,7 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - 7 widget types: event volume chart, top sources, top IPs, alert severity distribution, recent alerts, case status, baseline health
 - Edit mode: add / remove / reconfigure widgets in-browser
 - HTML export via the API
-- **Detection Fidelity tab** — executive SOC pipeline view: per-source live EPS with status dots, detection engine stats (rules loaded, alerts/min), case outcomes (TP/FP/benign/undetermined) and headline Fidelity % (`100×TP/(TP+FP+benign)`, null-guarded); `#fidelity` deep-link, dark + light themes
+- **Detection Fidelity tab** — executive SOC pipeline view: per-source rates with status dots, detection engine stats (rules loaded, alerts per window), case outcomes (TP/FP/benign/undetermined) and headline Fidelity % (`100×TP/(TP+FP+benign)`, null-guarded, all-time); **1m/1h/24h window filter** drives all volume metrics (totals + per-source rates, unit adapts); `#fidelity` deep-link, dark + light themes
 - Auto-refresh every 60 s per widget
 
 **UI**

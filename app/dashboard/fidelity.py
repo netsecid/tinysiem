@@ -1,25 +1,46 @@
-"""In-process telemetry for the Detection Fidelity view.
+"""In-process telemetry + DB-backed snapshot for the Detection Fidelity view.
 
-Zero-I/O on the hot path: ``record_event``/``record_alert`` are O(1) appends to
-per-source deques, guarded by a single lock. ``snapshot()`` prunes entries older
-than ``window_seconds`` and returns EPS per source, total EPS, and alerts/min.
+Hot-path counters (``record_event``/``record_alert``) are O(1) appends to
+per-source deques, guarded by a single lock — zero I/O so the ingest path
+stays fast.
+
+The snapshot() function returns a consistent shape for any of three windows
+(60s / 1h / 24h):
+
+  - window == 60  → in-memory rolling deques (live pulse, no DB hit)
+  - window > 60   → DB-backed ``COUNT(*)`` over events (in-memory would
+                    undercount because deques only hold the last ~window
+                    entries; in-memory is per-process and lost on restart)
+
+Alert counting is DB/file based for ALL windows: we scan the alerts JSONL
+file once per snapshot and filter by ``triggered_at`` within the window.
+File reads are wrapped in try/except so they never crash the endpoint.
+
+Parse-failure counters are in-memory only — they reflect only the recent
+process lifetime and are surfaced via the live 60s pulse.
 
 This module deliberately does NOT query the database on the ingest path —
 counting events here keeps the existing chokepoints (``insert_event`` and
 ``write_alert``) free of extra DB round-trips, which would matter at high
 throughput.
 """
+import json
 import threading
 import time
 from collections import deque
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
+
+from app.config import settings
 
 _lock = threading.Lock()
 _event_ts: dict[str, deque] = {}
 _alert_ts: deque = deque()
 _parse_fail: dict[str, int] = {}
 
-_DEFAULT_WINDOW = 60
+_ALLOWED_WINDOWS = (60, 3600, 86400)
+_WINDOW_LABELS = {60: "1m", 3600: "1h", 86400: "24h"}
 
 
 def _now() -> float:
@@ -63,42 +84,140 @@ def _prune(dq: deque, cutoff: float) -> None:
         dq.popleft()
 
 
-def snapshot(window_seconds: int = _DEFAULT_WINDOW) -> dict:
-    """Return a per-source EPS / total EPS / alerts-per-minute view.
-
-    No DB queries — purely in-memory arithmetic over the rolling windows.
-    """
+def _events_in_memory(window_seconds: int) -> dict[str, int]:
+    """{source: count} from the in-memory rolling deques (live 60s pulse)."""
     cutoff = _now() - window_seconds
-    sources = []
-    total_events = 0
+    out: dict[str, int] = {}
     with _lock:
-        all_sources = set(_event_ts.keys()) | set(_parse_fail.keys())
-        for src in all_sources:
-            dq = _event_ts.get(src)
-            if dq is not None:
-                _prune(dq, cutoff)
-                count = len(dq)
-            else:
-                count = 0
-            total_events += count
-            eps = count / window_seconds if window_seconds > 0 else 0.0
-            sources.append({
-                "name": src or "(unknown)",
-                "eps": round(eps, 2),
-                "event_count_window": count,
-                "parse_fail_count": _parse_fail.get(src, 0),
-            })
-        _prune(_alert_ts, cutoff)
-        alerts_in_window = len(_alert_ts)
-    alerts_per_min = alerts_in_window * 60.0 / window_seconds if window_seconds > 0 else 0.0
+        for src, dq in _event_ts.items():
+            _prune(dq, cutoff)
+            out[src] = len(dq)
+    return out
+
+
+def _events_in_db(window_seconds: int) -> dict[str, int]:
+    """{source: count} from the events table for the last ``window_seconds``.
+
+    Uses ``epoch()`` on both sides so the comparison is timezone-safe
+    (DuckDB ``current_timestamp`` is server-local; ``ingested_at`` is
+    stored as naive UTC — comparing raw would yield an 8h drift).
+    """
+    from app.storage import duckdb_store
+    conn = duckdb_store._get_conn()
+    with duckdb_store._lock:
+        rows = conn.execute(
+            "SELECT source, COUNT(*) FROM events "
+            "WHERE epoch(ingested_at) >= epoch(current_timestamp) - ? "
+            "GROUP BY source",
+            [window_seconds],
+        ).fetchall()
+    return {(r[0] or "(unknown)"): r[1] for r in rows}
+
+
+def _alerts_in_window(window_seconds: int) -> int:
+    """Count alerts in the JSONL file whose ``triggered_at`` falls within the
+    window. Always 0 on any read/parse error so this can never crash the
+    endpoint.
+    """
+    try:
+        path = Path(settings.tinysiem_alerts_path)
+        if not path.exists():
+            return 0
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=window_seconds)
+        count = 0
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                ts = rec.get("triggered_at")
+                if not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if dt >= cutoff:
+                    count += 1
+        return count
+    except Exception:
+        return 0
+
+
+def _events_rate_for_window(events: int, window_seconds: int) -> tuple[float, str]:
+    """Normalize an event count + window into a (rate, unit) pair."""
+    if window_seconds == 60:
+        return round(events / 60.0, 2), "eps"
+    if window_seconds == 3600:
+        return round(float(events), 2), "events/hr"
+    if window_seconds == 86400:
+        return round(float(events), 2), "events/day"
+    return 0.0, "eps"
+
+
+def _alerts_rate_for_window(alerts: int, window_seconds: int) -> tuple[float, str]:
+    """Normalize an alert count + window into a (rate, unit) pair."""
+    if window_seconds == 60:
+        return round(float(alerts), 2), "alerts/min"
+    if window_seconds == 3600:
+        return round(float(alerts), 2), "alerts/hr"
+    if window_seconds == 86400:
+        return round(float(alerts), 2), "alerts/day"
+    return 0.0, "alerts/min"
+
+
+def snapshot(window_seconds: int = 60) -> dict:
+    """Return the fidelity snapshot for ``window_seconds``.
+
+    The router validates the window is one of ``(60, 3600, 86400)``.
+    Returns a dict with the keys documented in the Detection Fidelity spec.
+    """
+    if window_seconds == 60:
+        counts = _events_in_memory(window_seconds)
+    else:
+        counts = _events_in_db(window_seconds)
+
+    # parse-fail counts: in-memory only. For DB-backed windows we still report
+    # the live pulse values (failures are rare and the 60s window shows them).
+    with _lock:
+        parse_fails = dict(_parse_fail)
+
+    sources: list[dict] = []
+    total_events = 0
+    for src, count in counts.items():
+        total_events += count
+        name = src or "(unknown)"
+        rate, _unit = _events_rate_for_window(count, window_seconds)
+        sources.append({
+            "name": name,
+            "events": count,
+            "rate": rate,
+            "parse_fail_count": parse_fails.get(src, 0),
+        })
     sources.sort(key=lambda s: s["name"])
+
+    alerts_in_window = _alerts_in_window(window_seconds)
+    events_rate, events_unit = _events_rate_for_window(total_events, window_seconds)
+    alerts_rate, alerts_unit = _alerts_rate_for_window(alerts_in_window, window_seconds)
+
     return {
         "window_seconds": window_seconds,
-        "total_eps": round(total_events / window_seconds, 2) if window_seconds > 0 else 0.0,
-        "total_events_window": total_events,
-        "alerts_per_min": round(alerts_per_min, 2),
-        "alerts_in_window": alerts_in_window,
+        "window_label": _WINDOW_LABELS.get(window_seconds, f"{window_seconds}s"),
+        "totals": {
+            "events": total_events,
+            "events_rate": events_rate,
+            "events_rate_unit": events_unit,
+            "alerts": alerts_in_window,
+            "alerts_rate": alerts_rate,
+            "alerts_rate_unit": alerts_unit,
+        },
         "sources": sources,
+        "alerts_in_window": alerts_in_window,
     }
 
 
