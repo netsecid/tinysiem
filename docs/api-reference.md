@@ -615,6 +615,30 @@ Generate a static HTML snapshot of the dashboard for sharing or archiving.
 
 **Response:** `text/html` content for download.
 
+### `GET /dashboard/fidelity`
+Executive "SOC pipeline" snapshot for the Detection Fidelity tab. Requires `analyst` role.
+
+**Response:**
+```json
+{
+  "window_seconds": 60,
+  "generated_at": "2026-08-21T07:53:08Z",
+  "sources": [{"name": "sshd", "eps": 12.5, "status": "active", "parse_fail_count": 0}],
+  "engine": {"rules_loaded": 9, "alerts_per_min": 0.0},
+  "outcomes": {
+    "cases_open": 0,
+    "cases_investigating": 1,
+    "resolved": {"true_positive": 1, "false_positive": 0, "benign": 0, "undetermined": 0},
+    "total_resolved": 1,
+    "fidelity_pct": 100.0
+  }
+}
+```
+
+- `sources[].eps` — live events/sec over the rolling `window_seconds` window (in-memory counters; reset on server restart, DB-derived status from the same logic as `GET /sources`).
+- `sources[].status` — `active` / `stale` / `silent`.
+- `fidelity_pct` — `100 × true_positive / (true_positive + false_positive + benign)` computed over **resolved** cases only; `undetermined` is excluded from the denominator; `null` when no resolved cases exist (never `0`).
+
 ---
 
 ## Sources
