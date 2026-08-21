@@ -114,18 +114,28 @@ def _events_in_db(window_seconds: int) -> dict[str, int]:
     return {(r[0] or "(unknown)"): r[1] for r in rows}
 
 
-def _alerts_in_window(window_seconds: int) -> int:
-    """Count alerts in the JSONL file whose ``triggered_at`` falls within the
-    window. Always 0 on any read/parse error so this can never crash the
+def _alert_stats(window_seconds: int) -> dict:
+    """Scan the alerts JSONL file ONCE and return window-scoped stats.
+
+    Returns ``{"count", "by_rule", "recent"}``:
+      - ``count``   — number of alerts whose ``triggered_at`` is in the window
+      - ``by_rule`` — ``{rule_name: count}`` for alerts in the window
+      - ``recent``  — the last ≤10 in-window alerts, newest first (the file is
+                      append-only chronological, so keep the tail and reverse)
+
+    Any read/parse error returns the empty shape so this can never crash the
     endpoint.
     """
+    empty = {"count": 0, "by_rule": {}, "recent": []}
     try:
         path = Path(settings.tinysiem_alerts_path)
         if not path.exists():
-            return 0
+            return empty
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(seconds=window_seconds)
         count = 0
+        by_rule: dict[str, int] = {}
+        recent: list[dict] = []
         with open(path) as fh:
             for line in fh:
                 line = line.strip()
@@ -142,11 +152,25 @@ def _alerts_in_window(window_seconds: int) -> int:
                     dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                 except ValueError:
                     continue
-                if dt >= cutoff:
-                    count += 1
-        return count
+                if dt < cutoff:
+                    continue
+                count += 1
+                rule = rec.get("rule_name") or "(unknown)"
+                by_rule[rule] = by_rule.get(rule, 0) + 1
+                recent.append({
+                    "alert_id": rec.get("alert_id"),
+                    "rule_name": rule,
+                    "severity": rec.get("severity"),
+                    "triggered_at": rec.get("triggered_at"),
+                    "source_ip": rec.get("source_ip"),
+                    "summary": rec.get("summary"),
+                })
+                if len(recent) > 10:
+                    recent.pop(0)
+        recent.reverse()
+        return {"count": count, "by_rule": by_rule, "recent": recent}
     except Exception:
-        return 0
+        return empty
 
 
 def _events_rate_for_window(events: int, window_seconds: int) -> tuple[float, str]:
@@ -201,9 +225,17 @@ def snapshot(window_seconds: int = 60) -> dict:
         })
     sources.sort(key=lambda s: s["name"])
 
-    alerts_in_window = _alerts_in_window(window_seconds)
+    alert_stats = _alert_stats(window_seconds)
+    alerts_in_window = alert_stats["count"]
     events_rate, events_unit = _events_rate_for_window(total_events, window_seconds)
     alerts_rate, alerts_unit = _alerts_rate_for_window(alerts_in_window, window_seconds)
+
+    top_rules = [
+        {"rule_name": name, "count": cnt}
+        for name, cnt in sorted(
+            alert_stats["by_rule"].items(), key=lambda kv: (-kv[1], kv[0])
+        )[:5]
+    ]
 
     return {
         "window_seconds": window_seconds,
@@ -217,7 +249,8 @@ def snapshot(window_seconds: int = 60) -> dict:
             "alerts_rate_unit": alerts_unit,
         },
         "sources": sources,
-        "alerts_in_window": alerts_in_window,
+        "top_rules": top_rules,
+        "recent_alerts": alert_stats["recent"],
     }
 
 

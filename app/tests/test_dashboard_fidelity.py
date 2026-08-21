@@ -46,6 +46,7 @@ async def test_fidelity_response_shape_and_engine_fields(client, analyst_headers
     assert set(data.keys()) == {
         "window_seconds", "window_label", "generated_at",
         "totals", "sources", "engine", "outcomes",
+        "top_rules", "recent_alerts",
     }
     # totals shape
     assert set(data["totals"].keys()) == {
@@ -79,6 +80,15 @@ async def test_fidelity_response_shape_and_engine_fields(client, analyst_headers
     assert src_row["status"] in ("active", "stale", "silent")
     assert src_row["parse_fail_count"] == 0
     assert "eps" not in src_row
+    # top_rules / recent_alerts shape
+    assert isinstance(data["top_rules"], list)
+    assert isinstance(data["recent_alerts"], list)
+    for tr in data["top_rules"]:
+        assert set(tr.keys()) == {"rule_name", "count"}
+    for ra in data["recent_alerts"]:
+        assert set(ra.keys()) == {
+            "alert_id", "rule_name", "severity", "triggered_at", "source_ip", "summary",
+        }
     # fidelity_pct must equal round(100 * tp / denom, 2) where denom = tp+fp+bn.
     res = data["outcomes"]["resolved"]
     denom = res["true_positive"] + res["false_positive"] + res["benign"]
@@ -318,32 +328,112 @@ async def test_fidelity_alert_rate_recorded(client, analyst_headers):
     assert totals["alerts_rate_unit"] == "alerts/min"
 
 
-def test_fidelity_alerts_in_window_helper_against_tempfile():
-    """Direct unit test of the alerts-in-window counter against a temp JSONL file.
+def test_fidelity_alert_stats_helper_against_tempfile():
+    """Direct unit test of _alert_stats against a temp JSONL file.
 
     Independent of the shared test alerts path so we can inject deterministic
     triggered_at values without colliding with other tests.
     """
-    from app.dashboard.fidelity import _alerts_in_window
+    from app.dashboard.fidelity import _alert_stats
     now = datetime.utcnow().replace(microsecond=0)
     recent = (now).isoformat() + "Z"
     old = "2000-01-01T00:00:00Z"
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "alerts.log"
         with open(path, "w") as fh:
-            fh.write(json.dumps({"alert_id": "a", "triggered_at": recent}) + "\n")
-            fh.write(json.dumps({"alert_id": "b", "triggered_at": recent}) + "\n")
-            fh.write(json.dumps({"alert_id": "c", "triggered_at": old}) + "\n")
+            fh.write(json.dumps({"alert_id": "a", "triggered_at": recent, "rule_name": "r1", "severity": "low"}) + "\n")
+            fh.write(json.dumps({"alert_id": "b", "triggered_at": recent, "rule_name": "r2", "severity": "high"}) + "\n")
+            fh.write(json.dumps({"alert_id": "c", "triggered_at": recent, "rule_name": "r1", "severity": "medium"}) + "\n")
+            fh.write(json.dumps({"alert_id": "d", "triggered_at": old, "rule_name": "r1", "severity": "low"}) + "\n")
         # Monkey-patch settings.tinysiem_alerts_path to the temp file
         original = settings.tinysiem_alerts_path
         settings.tinysiem_alerts_path = str(path)
         try:
-            n_60 = _alerts_in_window(60)
-            n_24h = _alerts_in_window(86400)
+            stats_60 = _alert_stats(60)
+            stats_24h = _alert_stats(86400)
         finally:
             settings.tinysiem_alerts_path = original
-    assert n_60 == 2  # only the two recent ones
-    assert n_24h == 2
+    # 3 recent alerts, 1 old — count excludes the old one.
+    assert stats_60["count"] == 3
+    assert stats_24h["count"] == 3
+    # by_rule counts only in-window alerts.
+    assert stats_60["by_rule"] == {"r1": 2, "r2": 1}
+    # recent is newest-first and carries all documented fields.
+    assert len(stats_60["recent"]) == 3
+    assert [r["alert_id"] for r in stats_60["recent"]] == ["c", "b", "a"]
+    assert set(stats_60["recent"][0].keys()) == {
+        "alert_id", "rule_name", "severity", "triggered_at", "source_ip", "summary",
+    }
+
+
+def test_fidelity_alert_stats_recent_capped_at_10():
+    """recent is capped at the last 10 in-window alerts, newest first."""
+    from app.dashboard.fidelity import _alert_stats
+    now = datetime.utcnow().replace(microsecond=0)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "alerts.log"
+        with open(path, "w") as fh:
+            for i in range(15):
+                fh.write(json.dumps({
+                    "alert_id": f"a{i:02d}",
+                    "triggered_at": now.isoformat() + "Z",
+                    "rule_name": f"r{i}",
+                }) + "\n")
+        original = settings.tinysiem_alerts_path
+        settings.tinysiem_alerts_path = str(path)
+        try:
+            stats = _alert_stats(60)
+        finally:
+            settings.tinysiem_alerts_path = original
+    assert stats["count"] == 15
+    assert len(stats["recent"]) == 10
+    # newest-first → the last 10 written, reversed: a14..a05.
+    assert [r["alert_id"] for r in stats["recent"]] == [f"a{i:02d}" for i in range(14, 4, -1)]
+
+
+def test_fidelity_alert_stats_empty_when_no_alerts():
+    """Empty/missing file → empty stats, never a crash."""
+    from app.dashboard.fidelity import _alert_stats
+    original = settings.tinysiem_alerts_path
+    with tempfile.TemporaryDirectory() as tmp:
+        settings.tinysiem_alerts_path = str(Path(tmp) / "does-not-exist.log")
+        try:
+            stats = _alert_stats(60)
+        finally:
+            settings.tinysiem_alerts_path = original
+    assert stats == {"count": 0, "by_rule": {}, "recent": []}
+
+
+def test_fidelity_top_rules_sorted_desc_by_count():
+    """top_rules must be sorted by count desc with rule_name asc as tie-break,
+    and capped at 5.
+    """
+    from app.dashboard.fidelity import _alert_stats
+    now = datetime.utcnow().replace(microsecond=0)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "alerts.log"
+        lines = (
+            [("zeta", 1), ("alpha", 3), ("beta", 3), ("gamma", 2),
+             ("delta", 1), ("epsilon", 1)]
+        )
+        with open(path, "w") as fh:
+            for rule, n in lines:
+                for _ in range(n):
+                    fh.write(json.dumps({
+                        "alert_id": str(uuid.uuid4()),
+                        "triggered_at": now.isoformat() + "Z",
+                        "rule_name": rule,
+                    }) + "\n")
+        original = settings.tinysiem_alerts_path
+        settings.tinysiem_alerts_path = str(path)
+        try:
+            snap = fidelity_telemetry.snapshot(window_seconds=60)
+        finally:
+            settings.tinysiem_alerts_path = original
+    # counts: alpha=3, beta=3, gamma=2, zeta=1, delta=1, epsilon=1 → top 5.
+    top = snap["top_rules"]
+    assert [t["rule_name"] for t in top] == ["alpha", "beta", "gamma", "delta", "epsilon"]
+    assert [t["count"] for t in top] == [3, 3, 2, 1, 1]
 
 
 async def test_fidelity_alerts_counted_in_db_window(client, analyst_headers):
@@ -380,7 +470,10 @@ def test_fidelity_snapshot_basic():
     assert snap["totals"]["events_rate_unit"] == "eps"
     # Alerts count reads the JSONL file (shared with other tests) — delta-based
     assert snap["totals"]["alerts"] == before_alerts + 1
-    assert snap["alerts_in_window"] == before_alerts + 1
+    # The alert we just wrote is the newest line → first in recent_alerts.
+    assert isinstance(snap["top_rules"], list)
+    assert isinstance(snap["recent_alerts"], list)
+    assert snap["recent_alerts"][0]["rule_name"] == "fid-snap-rule"
     a = next(s for s in snap["sources"] if s["name"] == "src-a")
     b = next(s for s in snap["sources"] if s["name"] == "src-b")
     assert a["events"] == 2

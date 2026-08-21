@@ -98,39 +98,40 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .fid-window-btn:hover{color:var(--text);background:var(--surface3)}
 .fid-window-btn.active{background:var(--accent-dim);color:var(--accent)}
 .fid-window-btn+.fid-window-btn{border-left:1px solid var(--border)}
-.fid-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:8px;align-items:stretch;position:relative;padding:4px 0}
-.fid-col{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px;display:flex;flex-direction:column;min-height:260px}
+.fid-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+.fid-kpi{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.fid-kpi-num{font-family:var(--mono);font-size:28px;font-weight:600;line-height:1;color:var(--accent);white-space:nowrap}
+.fid-kpi-num.green{color:var(--green)}
+.fid-kpi-num.fid-kpi-low{color:var(--yellow)}
+.fid-kpi-num.null{color:var(--text-muted)}
+.fid-kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+.fid-kpi-sub{font-family:var(--mono);font-size:10px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fid-kpi-tag{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--yellow);background:var(--yellow-dim);border:1px solid var(--yellow);padding:0 5px;border-radius:3px;line-height:1.7;white-space:nowrap}
+.fid-details{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.fid-detail-panel{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px;display:flex;flex-direction:column;min-height:200px}
 .fid-col-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
 .fid-col-title .fid-hint{font-size:10px;color:var(--text-muted);text-transform:none;letter-spacing:0;font-weight:400}
-.fid-arrow{display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:20px;position:relative}
-.fid-arrow::after{content:'';position:absolute;top:50%;left:0;right:0;border-top:1px dashed var(--border2);z-index:-1}
-.fid-arrow span{background:var(--bg);padding:0 4px;position:relative;z-index:1}
 .fid-source-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px}
 .fid-source-row:last-child{border-bottom:none}
 .fid-source-row .src-name{flex:1;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fid-source-row .src-eps{font-family:var(--mono);font-size:11px;color:var(--text-dim);min-width:60px;text-align:right}
-.fid-total{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
-.fid-total .fid-total-num{font-size:28px;font-weight:600;font-family:var(--mono);color:var(--accent);line-height:1}
-.fid-total .fid-total-rate{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
 .fid-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .fid-status-dot.active{background:var(--green);box-shadow:0 0 6px var(--green-dim)}
 .fid-status-dot.stale{background:var(--yellow)}
 .fid-status-dot.silent{background:var(--text-muted)}
 .fid-status-dot.parsefail{background:var(--red);box-shadow:0 0 6px var(--red-dim)}
 .fid-empty{color:var(--text-muted);font-size:12px;padding:12px;text-align:center}
-.fid-engine-stat{display:flex;align-items:baseline;gap:8px;padding:6px 0}
-.fid-engine-stat .num{font-size:28px;font-weight:600;font-family:var(--mono);color:var(--accent)}
-.fid-engine-stat .label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
-.fid-engine-divider{border-top:1px solid var(--border);margin:8px 0}
-.fid-outcome-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px}
-.fid-outcome-row .label{color:var(--text-dim);text-transform:capitalize}
-.fid-outcome-row .val{font-family:var(--mono);font-size:13px;font-weight:600}
-.fid-fidelity{display:flex;flex-direction:column;align-items:center;padding:8px 0 12px}
-.fid-fidelity-num{font-size:56px;font-weight:700;font-family:var(--mono);line-height:1;color:var(--green);letter-spacing:-.02em}
-.fid-fidelity-num.null{color:var(--text-muted)}
-.fid-fidelity-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-top:4px}
-.fid-fidelity-formula{font-family:var(--mono);font-size:10px;color:var(--text-muted);margin-top:8px;text-align:center}
-@media (max-width:900px){.fid-flow{grid-template-columns:1fr;gap:12px}.fid-arrow{display:none}}
+.fid-rule-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px}
+.fid-rule-row:last-child{border-bottom:none}
+.fid-rule-row .rule-name{flex:1;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fid-rule-count{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid var(--accent);border-radius:8px;padding:0 8px;line-height:1.7;flex-shrink:0}
+.fid-alert-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px}
+.fid-alert-row:last-child{border-bottom:none}
+.fid-alert-row .rule-name{flex:1;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fid-alert-row .src-ip{font-family:var(--mono);font-size:10.5px;color:var(--text-dim);white-space:nowrap}
+.fid-alert-time{font-family:var(--mono);font-size:10.5px;color:var(--text-muted);white-space:nowrap}
+.fid-outcomes-strip{font-family:var(--mono);font-size:10.5px;color:var(--text-muted);margin-top:12px;text-align:center}
+@media (max-width:900px){.fid-kpis{grid-template-columns:repeat(3,1fr)}.fid-details{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -187,59 +188,57 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
             </div>
             <button onclick="refreshFidelity()" title="Refresh now">↻ Refresh</button>
           </div>
-          <div class="fid-flow">
-            <!-- Left: Sources -->
-            <div class="fid-col">
-              <div class="fid-col-title">
-                Sources <span class="fid-hint" id="fidSourcesHint">live EPS</span>
-              </div>
-              <div id="fidSources"><div class="fid-empty">Loading…</div></div>
-              <div class="fid-total" id="fidTotal" style="display:none">
-                <span class="fid-total-num" id="fidTotalNum">—</span>
-                <span class="fid-total-rate" id="fidTotalRate">—</span>
-              </div>
+          <div class="fid-kpis">
+            <div class="fid-kpi">
+              <div class="fid-kpi-num" id="fidKpiSources">—</div>
+              <div class="fid-kpi-label">Sources</div>
+              <div class="fid-kpi-sub" id="fidKpiSourcesSub">—</div>
             </div>
-            <div class="fid-arrow"><span>→</span></div>
-            <!-- Center: Detection Engine -->
-            <div class="fid-col">
-              <div class="fid-col-title">Detection Engine</div>
-              <div id="fidEngine">
-                <div class="fid-engine-stat">
-                  <span class="num" id="fidRulesLoaded">—</span>
-                  <span class="label">rules loaded</span>
-                </div>
-                <div class="fid-engine-divider"></div>
-                <div class="fid-engine-stat">
-                  <span class="num" id="fidAlertsNum">—</span>
-                  <span class="label" id="fidAlertsLabel">alerts / min</span>
-                </div>
-                <div class="fid-engine-stat" style="margin-top:2px">
-                  <span class="fid-engine-sub" id="fidAlertsSub">— in window</span>
-                </div>
-              </div>
+            <div class="fid-kpi">
+              <div class="fid-kpi-num" id="fidKpiEvents">—</div>
+              <div class="fid-kpi-label">Events</div>
+              <div class="fid-kpi-sub" id="fidKpiEventsSub">—</div>
             </div>
-            <div class="fid-arrow"><span>→</span></div>
-            <!-- Right: Outcomes -->
-            <div class="fid-col">
-              <div class="fid-col-title">Outcomes</div>
-              <div class="fid-fidelity">
-                <div class="fid-fidelity-num" id="fidFidelityNum">—</div>
-                <div class="fid-fidelity-label" id="fidFidelityLabel">Fidelity %</div>
-              </div>
-              <div class="fid-engine-divider"></div>
-              <div id="fidResolved">
-                <div class="fid-outcome-row"><span class="label">True Positive</span><span class="val" id="fidTP">0</span></div>
-                <div class="fid-outcome-row"><span class="label">False Positive</span><span class="val" id="fidFP">0</span></div>
-                <div class="fid-outcome-row"><span class="label">Benign</span><span class="val" id="fidBenign">0</span></div>
-                <div class="fid-outcome-row"><span class="label">Undetermined</span><span class="val" id="fidUndet">0</span></div>
-              </div>
-              <div class="fid-engine-divider"></div>
-              <div class="fid-outcome-row"><span class="label">Open cases</span><span class="val" id="fidOpen">0</span></div>
-              <div class="fid-outcome-row"><span class="label">Investigating</span><span class="val" id="fidInvestigating">0</span></div>
-              <div class="fid-engine-divider"></div>
-              <div class="fid-fidelity-formula" id="fidFormula"></div>
+            <div class="fid-kpi">
+              <div class="fid-kpi-num" id="fidKpiRules">—</div>
+              <div class="fid-kpi-label">Rules</div>
+              <div class="fid-kpi-sub">detection rules</div>
+            </div>
+            <div class="fid-kpi">
+              <div class="fid-kpi-num" id="fidKpiAlertRate">—</div>
+              <div class="fid-kpi-label">Alerts rate</div>
+              <div class="fid-kpi-sub" id="fidKpiAlertRateSub">—</div>
+            </div>
+            <div class="fid-kpi">
+              <div class="fid-kpi-num" id="fidKpiAlerts">—</div>
+              <div class="fid-kpi-label">Total alerts</div>
+              <div class="fid-kpi-sub">in window</div>
+            </div>
+            <div class="fid-kpi">
+              <div class="fid-kpi-num green" id="fidKpiFidelity">—</div>
+              <div class="fid-kpi-label">Fidelity %<span class="fid-kpi-tag" id="fidKpiLowTag" style="display:none">low sample</span></div>
+              <div class="fid-kpi-sub" id="fidKpiFidelitySub">—</div>
             </div>
           </div>
+          <div class="fid-details">
+            <div class="fid-detail-panel">
+              <div class="fid-col-title">
+                Data sources <span class="fid-hint" id="fidSourcesHint">live EPS</span>
+              </div>
+              <div id="fidSources"><div class="fid-empty">Loading…</div></div>
+            </div>
+            <div class="fid-detail-panel">
+              <div class="fid-col-title">
+                Top Rules <span class="fid-hint">by alerts in window</span>
+              </div>
+              <div id="fidTopRules"><div class="fid-empty">Loading…</div></div>
+            </div>
+            <div class="fid-detail-panel">
+              <div class="fid-col-title">Recent Alerts</div>
+              <div id="fidRecentAlerts"><div class="fid-empty">Loading…</div></div>
+            </div>
+          </div>
+          <div class="fid-outcomes-strip" id="fidOutcomesStrip">—</div>
         </div>
       </div>
     </div>
@@ -678,14 +677,61 @@ function renderFidelity(d){
   const unit=totals.events_rate_unit||'eps';
   const shortUnit=unit==='eps'?'eps':('/'+unit.split('/')[1]);
   const alertUnit=totals.alerts_rate_unit||'alerts/min';
-  const shortAlertUnit=alertUnit==='alerts/min'?'alerts/min':('/'+alertUnit.split('/')[1]);
+  const shortAlertUnit=alertUnit==='alerts/min'?'/min':('/'+alertUnit.split('/')[1]);
 
-  // Sources
+  const sources=d.sources||[];
+  const countActive=sources.filter(s=>s.status==='active').length;
+  const eRate=Number(totals.events_rate||0);
+  const aRate=Number(totals.alerts_rate||0);
+
+  // ── KPI strip ──────────────────────────────────────────────────────────────
+  document.getElementById('fidKpiSources').textContent=fmtInt(sources.length);
+  document.getElementById('fidKpiSourcesSub').textContent=`${fmtInt(countActive)} active`;
+
+  document.getElementById('fidKpiEvents').textContent=fmtInt(totals.events||0);
+  document.getElementById('fidKpiEventsSub').textContent=unit==='eps'
+    ? eRate.toFixed(2)+' eps'
+    : fmtInt(eRate)+' '+shortUnit;
+
+  document.getElementById('fidKpiRules').textContent=(d.engine&&d.engine.rules_loaded!=null)?d.engine.rules_loaded:'—';
+
+  document.getElementById('fidKpiAlertRate').textContent=alertUnit==='alerts/min'
+    ? aRate.toFixed(2)
+    : fmtInt(aRate);
+  document.getElementById('fidKpiAlertRateSub').textContent=`alerts ${shortAlertUnit}`;
+
+  document.getElementById('fidKpiAlerts').textContent=fmtInt(totals.alerts||0);
+
+  // Fidelity % — sample-size aware (never show a naked 100% at n=1).
+  const out=d.outcomes||{};
+  const res=out.resolved||{};
+  const denom=(res.true_positive||0)+(res.false_positive||0)+(res.benign||0);
+  const fpct=out.fidelity_pct;
+  const fidNumEl=document.getElementById('fidKpiFidelity');
+  const fidSubEl=document.getElementById('fidKpiFidelitySub');
+  const lowTagEl=document.getElementById('fidKpiLowTag');
+  fidNumEl.classList.remove('fid-kpi-low','null');
+  lowTagEl.style.display='none';
+  if(fpct==null){
+    fidNumEl.textContent='—';
+    fidNumEl.classList.add('null');
+    fidSubEl.textContent='no resolved cases yet';
+  }else{
+    fidNumEl.textContent=fpct.toFixed(2)+'%';
+    if(denom<10){
+      fidNumEl.classList.add('fid-kpi-low');
+      lowTagEl.style.display='';
+    }
+    fidSubEl.textContent=`based on ${fmtInt(denom)} classified case${denom===1?'':'s'}`;
+  }
+
+  // ── Detail panels ──────────────────────────────────────────────────────────
+  // Data sources
   const srcEl=document.getElementById('fidSources');
-  if(!d.sources||!d.sources.length){
+  if(!sources.length){
     srcEl.innerHTML='<div class="fid-empty">No sources yet</div>';
   }else{
-    srcEl.innerHTML=d.sources.map(s=>{
+    srcEl.innerHTML=sources.map(s=>{
       // Parse failures get a red dot even if the source is otherwise active.
       let cls=s.status||'silent';
       if((s.parse_fail_count||0)>0)cls='parsefail';
@@ -704,55 +750,48 @@ function renderFidelity(d){
   const hintEl=document.getElementById('fidSourcesHint');
   if(hintEl){hintEl.textContent=unit==='eps'?'live EPS':'events '+shortUnit;}
 
-  // Total footer (big number = total events; sub = rate + short unit)
-  const totalEl=document.getElementById('fidTotal');
-  const totalNumEl=document.getElementById('fidTotalNum');
-  const totalRateEl=document.getElementById('fidTotalRate');
-  if(totalEl&&totalNumEl&&totalRateEl){
-    totalEl.style.display='';
-    totalNumEl.textContent=fmtInt(totals.events||0);
-    const r=totals.events_rate||0;
-    totalRateEl.textContent=unit==='eps'
-      ? r.toFixed(2)+' eps'
-      : fmtInt(r)+' '+shortUnit;
-  }
-
-  // Engine: rules loaded (unchanged) + alerts (rate + sub)
-  document.getElementById('fidRulesLoaded').textContent=(d.engine&&d.engine.rules_loaded!=null)?d.engine.rules_loaded:'—';
-  const aRate=Number(totals.alerts_rate||0);
-  document.getElementById('fidAlertsNum').textContent=alertUnit==='alerts/min'
-    ? aRate.toFixed(2)
-    : fmtInt(aRate);
-  document.getElementById('fidAlertsLabel').textContent=shortAlertUnit;
-  document.getElementById('fidAlertsSub').textContent=`${fmtInt(totals.alerts||0)} in window`;
-
-  // Outcomes (unchanged) + "all-time" hint on the Fidelity label
-  const out=d.outcomes||{};
-  const res=out.resolved||{};
-  document.getElementById('fidTP').textContent=res.true_positive||0;
-  document.getElementById('fidFP').textContent=res.false_positive||0;
-  document.getElementById('fidBenign').textContent=res.benign||0;
-  document.getElementById('fidUndet').textContent=res.undetermined||0;
-  document.getElementById('fidOpen').textContent=out.cases_open||0;
-  document.getElementById('fidInvestigating').textContent=out.cases_investigating||0;
-
-  const fpct=out.fidelity_pct;
-  const numEl=document.getElementById('fidFidelityNum');
-  const lblEl=document.getElementById('fidFidelityLabel');
-  const formulaEl=document.getElementById('fidFormula');
-  if(fpct==null){
-    numEl.textContent='—';
-    numEl.classList.add('null');
-    lblEl.textContent='No resolved cases yet';
-    formulaEl.textContent='100 × TP / (TP + FP + Benign)';
+  // Top detection rules
+  const rulesEl=document.getElementById('fidTopRules');
+  if(!d.top_rules||!d.top_rules.length){
+    rulesEl.innerHTML='<div class="fid-empty">no alerts in this window</div>';
   }else{
-    numEl.textContent=fpct.toFixed(2)+'%';
-    numEl.classList.remove('null');
-    const scope=(out.scope==='all_time')?' <span class="fid-hint">all-time</span>':'';
-    lblEl.innerHTML='Fidelity %'+scope;
-    const denom=res.true_positive+res.false_positive+res.benign;
-    formulaEl.textContent=`100 × ${res.true_positive} / (${denom}) — undetermined excluded`;
+    rulesEl.innerHTML=d.top_rules.map(t=>`<div class="fid-rule-row" title="${esc(t.rule_name)}">
+      <span class="rule-name">${esc(t.rule_name)}</span>
+      <span class="fid-rule-count">${fmtInt(t.count||0)}</span>
+    </div>`).join('');
   }
+
+  // Recent alerts
+  const alertsEl=document.getElementById('fidRecentAlerts');
+  if(!d.recent_alerts||!d.recent_alerts.length){
+    alertsEl.innerHTML='<div class="fid-empty">no alerts in this window</div>';
+  }else{
+    alertsEl.innerHTML=d.recent_alerts.map(a=>`<div class="fid-alert-row" title="${esc(a.summary||'')}">
+      <span class="sev-dot ${_sevDotClass(a.severity)}"></span>
+      <span class="rule-name">${esc(a.rule_name||'')}</span>
+      <span class="src-ip">${esc(a.source_ip||'—')}</span>
+      <span class="fid-alert-time">${_fmtAlertTime(a.triggered_at)}</span>
+    </div>`).join('');
+  }
+
+  // ── Slim outcomes strip (quiet footnote) ───────────────────────────────────
+  document.getElementById('fidOutcomesStrip').textContent=
+    `TP ${res.true_positive||0} · FP ${res.false_positive||0} · Benign ${res.benign||0} · Undetermined ${res.undetermined||0} · Open ${out.cases_open||0} · Investigating ${out.cases_investigating||0}`;
+}
+
+function _sevDotClass(sev){
+  const s=String(sev||'').toLowerCase();
+  return ['critical','high','medium','low'].includes(s)?'dot-'+s:'';
+}
+
+function _fmtAlertTime(ts){
+  if(!ts) return '—';
+  try{
+    const d=new Date(ts.endsWith('Z')||ts.includes('+')?ts:ts+'Z');
+    const pad=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} `+
+           `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }catch(e){return ts}
 }
 
 function fmtInt(n){
