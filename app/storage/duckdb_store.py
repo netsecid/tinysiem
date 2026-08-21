@@ -201,6 +201,9 @@ def insert_event(event: dict) -> None:
     # integrations) flows through here, so enrichment is a single chokepoint.
     from app.geoip import enrich_event
     enrich_event(event)
+    # Detection Fidelity telemetry — in-memory EPS counter, O(1), no DB I/O.
+    from app.dashboard.fidelity import record_event
+    record_event(event.get("source"))
 
     ingested_at = event.get("ingested_at", datetime.now(timezone.utc))
     if hasattr(ingested_at, "tzinfo") and ingested_at.tzinfo is not None:

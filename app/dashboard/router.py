@@ -1,5 +1,5 @@
 """API endpoints for /dashboard."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field
 
 from app.auth import AuthUser, require_analyst
 from app.audit import store as audit
+from app.dashboard import fidelity as fidelity_telemetry
 from app.dashboard import store as dstore
+from app.rules import engine as rule_engine
+from app.storage import duckdb_store
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -67,3 +70,86 @@ def export_html(actor: AuthUser = Depends(require_analyst)):
         content=html,
         headers={"Content-Disposition": f'attachment; filename="dashboard-{ts}.html"'},
     )
+
+
+@router.get("/fidelity")
+def get_fidelity(_: AuthUser = Depends(require_analyst)):
+    """Executive "SOC pipeline" snapshot — sources with live EPS, detection
+    engine stats, and case outcomes with a headline Fidelity %.
+
+    The EPS/alert-rate counters are in-process (zero-I/O on the ingest path);
+    the outcomes aggregate is a read-only SELECT over the cases table.
+    """
+    snap = fidelity_telemetry.snapshot(window_seconds=60)
+    activity = duckdb_store.query_source_activity()
+    activity_by_source = {a["source"]: a["status"] for a in activity}
+    # Merge in-memory EPS with persistent source-status (status is owned by
+    # the storage layer; EPS is owned by telemetry).
+    seen = set()
+    sources_out = []
+    for s in snap["sources"]:
+        name = s["name"]
+        seen.add(name)
+        sources_out.append({
+            "name": name,
+            "eps": s["eps"],
+            "status": activity_by_source.get(name, "silent"),
+            "parse_fail_count": s["parse_fail_count"],
+        })
+    # Sources that exist in the DB but produced no events in the last 60s —
+    # still show them, with eps=0, so the UI doesn't drop them silently.
+    for name, status in activity_by_source.items():
+        if name in seen:
+            continue
+        sources_out.append({
+            "name": name,
+            "eps": 0.0,
+            "status": status,
+            "parse_fail_count": 0,
+        })
+    sources_out.sort(key=lambda s: s["name"])
+
+    resolved_counts = {"true_positive": 0, "false_positive": 0, "benign": 0, "undetermined": 0}
+    cases_open = 0
+    cases_investigating = 0
+    conn = duckdb_store._get_conn()  # noqa: PLC2701 — intentional internal access
+    with duckdb_store._lock:
+        res_rows = conn.execute(
+            "SELECT resolution, COUNT(*) FROM cases WHERE status='resolved' GROUP BY resolution"
+        ).fetchall()
+        for r in res_rows:
+            if r[0] in resolved_counts:
+                resolved_counts[r[0]] = r[1]
+        cases_open = conn.execute(
+            "SELECT COUNT(*) FROM cases WHERE status='open'"
+        ).fetchone()[0]
+        cases_investigating = conn.execute(
+            "SELECT COUNT(*) FROM cases WHERE status='investigating'"
+        ).fetchone()[0]
+
+    tp = resolved_counts["true_positive"]
+    fp = resolved_counts["false_positive"]
+    bn = resolved_counts["benign"]
+    total_resolved = tp + fp + bn + resolved_counts["undetermined"]
+    denom = tp + fp + bn
+    if denom <= 0:
+        fidelity_pct = None
+    else:
+        fidelity_pct = round(100.0 * tp / denom, 2)
+
+    return {
+        "window_seconds": 60,
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "sources": sources_out,
+        "engine": {
+            "rules_loaded": rule_engine.loaded_rules_count(),
+            "alerts_per_min": snap["alerts_per_min"],
+        },
+        "outcomes": {
+            "cases_open": cases_open,
+            "cases_investigating": cases_investigating,
+            "resolved": resolved_counts,
+            "total_resolved": total_resolved,
+            "fidelity_pct": fidelity_pct,
+        },
+    }

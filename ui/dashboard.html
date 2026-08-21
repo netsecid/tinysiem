@@ -75,6 +75,54 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .type-opt{padding:8px 10px;border:1px solid var(--border2);border-radius:4px;cursor:pointer;font-size:12px;text-align:center}
 .type-opt:hover,.type-opt.selected{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
 .btn-row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+
+/* ── Tab bar (Overview / Detection Fidelity) ───────────────────────────── */
+.tab-bar{display:flex;gap:4px;background:var(--surface2);border-bottom:1px solid var(--border);padding:0 20px}
+.tab-btn{background:none;border:none;color:var(--text-dim);padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;text-transform:uppercase;letter-spacing:.04em;font-family:inherit}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-btn .tab-badge{margin-left:6px;font-size:10px;padding:1px 6px;border-radius:8px;background:var(--surface4);color:var(--text-muted)}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* ── Detection Fidelity pane ───────────────────────────────────────────── */
+.fid-pane{padding:0}
+.fid-error{color:var(--yellow);font-size:12px;padding:8px 12px;background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:4px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.fid-error .retry-btn{background:none;border:1px solid var(--yellow);color:var(--yellow);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit}
+.fid-error .retry-btn:hover{background:var(--yellow);color:var(--bg)}
+.fid-updated{font-family:var(--mono);font-size:10px;color:var(--text-muted);margin-bottom:10px;display:flex;justify-content:flex-end;gap:10px;align-items:center}
+.fid-updated button{background:none;border:1px solid var(--border2);color:var(--text-dim);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit}
+.fid-updated button:hover{color:var(--text);border-color:var(--accent)}
+.fid-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:8px;align-items:stretch;position:relative;padding:4px 0}
+.fid-col{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px;display:flex;flex-direction:column;min-height:260px}
+.fid-col-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.fid-col-title .fid-hint{font-size:10px;color:var(--text-muted);text-transform:none;letter-spacing:0;font-weight:400}
+.fid-arrow{display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:20px;position:relative}
+.fid-arrow::after{content:'';position:absolute;top:50%;left:0;right:0;border-top:1px dashed var(--border2);z-index:-1}
+.fid-arrow span{background:var(--bg);padding:0 4px;position:relative;z-index:1}
+.fid-source-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px}
+.fid-source-row:last-child{border-bottom:none}
+.fid-source-row .src-name{flex:1;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fid-source-row .src-eps{font-family:var(--mono);font-size:11px;color:var(--text-dim);min-width:60px;text-align:right}
+.fid-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.fid-status-dot.active{background:var(--green);box-shadow:0 0 6px var(--green-dim)}
+.fid-status-dot.stale{background:var(--yellow)}
+.fid-status-dot.silent{background:var(--text-muted)}
+.fid-status-dot.parsefail{background:var(--red);box-shadow:0 0 6px var(--red-dim)}
+.fid-empty{color:var(--text-muted);font-size:12px;padding:12px;text-align:center}
+.fid-engine-stat{display:flex;align-items:baseline;gap:8px;padding:6px 0}
+.fid-engine-stat .num{font-size:28px;font-weight:600;font-family:var(--mono);color:var(--accent)}
+.fid-engine-stat .label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
+.fid-engine-divider{border-top:1px solid var(--border);margin:8px 0}
+.fid-outcome-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px}
+.fid-outcome-row .label{color:var(--text-dim);text-transform:capitalize}
+.fid-outcome-row .val{font-family:var(--mono);font-size:13px;font-weight:600}
+.fid-fidelity{display:flex;flex-direction:column;align-items:center;padding:8px 0 12px}
+.fid-fidelity-num{font-size:56px;font-weight:700;font-family:var(--mono);line-height:1;color:var(--green);letter-spacing:-.02em}
+.fid-fidelity-num.null{color:var(--text-muted)}
+.fid-fidelity-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-top:4px}
+.fid-fidelity-formula{font-family:var(--mono);font-size:10px;color:var(--text-muted);margin-top:8px;text-align:center}
+@media (max-width:900px){.fid-flow{grid-template-columns:1fr;gap:12px}.fid-arrow{display:none}}
 </style>
 </head>
 <body>
@@ -102,10 +150,78 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       </div>
     </div>
 
+    <!-- Tab bar -->
+    <div class="tab-bar" id="tabBar">
+      <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
+      <button class="tab-btn" data-tab="fidelity" onclick="switchTab('fidelity')">Detection Fidelity</button>
+    </div>
+
     <div class="dash-body" id="dashBody">
-      <div class="widget-grid" id="widgetGrid"></div>
-      <button class="add-widget-btn" id="addWidgetBtn" onclick="openAddWidget()">+ Add Widget</button>
-      <div style="margin-top:8px;font-size:11px;color:var(--text-muted);display:none" id="editHint">Click widget × to remove · Click Edit to change settings · Drag-and-drop coming in v1.3</div>
+      <div class="tab-pane active" data-tab="overview" id="overviewPane">
+        <div class="widget-grid" id="widgetGrid"></div>
+        <button class="add-widget-btn" id="addWidgetBtn" onclick="openAddWidget()">+ Add Widget</button>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-muted);display:none" id="editHint">Click widget × to remove · Click Edit to change settings · Drag-and-drop coming in v1.3</div>
+      </div>
+
+      <div class="tab-pane" data-tab="fidelity" id="fidelityPane">
+        <div class="fid-pane">
+          <div class="fid-error" id="fidError" style="display:none">
+            <span class="spinner" style="display:none"></span>
+            <span id="fidErrorMsg">Connection lost — retrying…</span>
+            <button class="retry-btn" onclick="refreshFidelity()">Retry</button>
+          </div>
+          <div class="fid-updated">
+            <span id="fidUpdated">—</span>
+            <button onclick="refreshFidelity()" title="Refresh now">↻ Refresh</button>
+          </div>
+          <div class="fid-flow">
+            <!-- Left: Sources -->
+            <div class="fid-col">
+              <div class="fid-col-title">
+                Sources <span class="fid-hint">live EPS</span>
+              </div>
+              <div id="fidSources"><div class="fid-empty">Loading…</div></div>
+            </div>
+            <div class="fid-arrow"><span>→</span></div>
+            <!-- Center: Detection Engine -->
+            <div class="fid-col">
+              <div class="fid-col-title">Detection Engine</div>
+              <div id="fidEngine">
+                <div class="fid-engine-stat">
+                  <span class="num" id="fidRulesLoaded">—</span>
+                  <span class="label">rules loaded</span>
+                </div>
+                <div class="fid-engine-divider"></div>
+                <div class="fid-engine-stat">
+                  <span class="num" id="fidAlertsPerMin">—</span>
+                  <span class="label">alerts / min</span>
+                </div>
+              </div>
+            </div>
+            <div class="fid-arrow"><span>→</span></div>
+            <!-- Right: Outcomes -->
+            <div class="fid-col">
+              <div class="fid-col-title">Outcomes</div>
+              <div class="fid-fidelity">
+                <div class="fid-fidelity-num" id="fidFidelityNum">—</div>
+                <div class="fid-fidelity-label" id="fidFidelityLabel">Fidelity %</div>
+              </div>
+              <div class="fid-engine-divider"></div>
+              <div id="fidResolved">
+                <div class="fid-outcome-row"><span class="label">True Positive</span><span class="val" id="fidTP">0</span></div>
+                <div class="fid-outcome-row"><span class="label">False Positive</span><span class="val" id="fidFP">0</span></div>
+                <div class="fid-outcome-row"><span class="label">Benign</span><span class="val" id="fidBenign">0</span></div>
+                <div class="fid-outcome-row"><span class="label">Undetermined</span><span class="val" id="fidUndet">0</span></div>
+              </div>
+              <div class="fid-engine-divider"></div>
+              <div class="fid-outcome-row"><span class="label">Open cases</span><span class="val" id="fidOpen">0</span></div>
+              <div class="fid-outcome-row"><span class="label">Investigating</span><span class="val" id="fidInvestigating">0</span></div>
+              <div class="fid-engine-divider"></div>
+              <div class="fid-fidelity-formula" id="fidFormula"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -456,9 +572,117 @@ function load(){
   if(!S.jwt){window.location.href='/ui/login.html';return}
   const p=parseJwt(S.jwt);
   if(!p||p.exp*1000<Date.now()){clearAuth();window.location.href='/ui/login.html';return}
+  // Apply tab from URL hash before kicking off the loader so the right pane renders.
+  applyTabFromHash();
   loadDashboard();
 }
 window.addEventListener('DOMContentLoaded',load);
+
+// ── Tabs (Overview / Detection Fidelity) ────────────────────────────────────
+
+let _fidTimer=null;
+
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.dataset.tab===tab));
+  if(tab==='fidelity'){
+    refreshFidelity();
+    if(_fidTimer)clearInterval(_fidTimer);
+    _fidTimer=setInterval(refreshFidelity,7500);
+  }else{
+    if(_fidTimer){clearInterval(_fidTimer);_fidTimer=null;}
+  }
+  // Reflect in the URL hash without scrolling.
+  if(window.location.hash!=='#'+tab){
+    history.replaceState(null,'','#'+tab);
+  }
+}
+
+function applyTabFromHash(){
+  const h=(window.location.hash||'').replace('#','');
+  const initial=(h==='fidelity')?'fidelity':'overview';
+  switchTab(initial);
+}
+
+window.addEventListener('hashchange',applyTabFromHash);
+
+// ── Detection Fidelity rendering ─────────────────────────────────────────────
+
+async function refreshFidelity(){
+  const r=await api('/dashboard/fidelity');
+  if(!r){showFidError('Not authenticated');return}
+  if(!r.ok){showFidError(`HTTP ${r.status}`);return}
+  try{
+    const d=await r.json();
+    renderFidelity(d);
+    hideFidError();
+  }catch(e){showFidError('Bad response: '+e.message);}
+}
+
+function showFidError(msg){
+  const box=document.getElementById('fidError');
+  box.style.display='flex';
+  document.getElementById('fidErrorMsg').textContent=msg;
+}
+
+function hideFidError(){
+  const box=document.getElementById('fidError');
+  box.style.display='none';
+}
+
+function renderFidelity(d){
+  // Timestamp
+  const ts=new Date(d.generated_at||Date.now()).toLocaleTimeString();
+  document.getElementById('fidUpdated').textContent=`Updated ${ts} · ${d.window_seconds}s window`;
+
+  // Sources
+  const srcEl=document.getElementById('fidSources');
+  if(!d.sources||!d.sources.length){
+    srcEl.innerHTML='<div class="fid-empty">No sources yet</div>';
+  }else{
+    srcEl.innerHTML=d.sources.map(s=>{
+      // Parse failures get a red dot even if the source is otherwise active.
+      let cls=s.status||'silent';
+      if((s.parse_fail_count||0)>0)cls='parsefail';
+      return `<div class="fid-source-row" title="${esc(s.name)} — ${esc(s.status||'')}${s.parse_fail_count?' · '+s.parse_fail_count+' parse failures':''}">
+        <span class="fid-status-dot ${esc(cls)}"></span>
+        <span class="src-name">${esc(s.name)}</span>
+        <span class="src-eps">${(s.eps||0).toFixed(2)} eps</span>
+      </div>`;
+    }).join('');
+  }
+
+  // Engine
+  document.getElementById('fidRulesLoaded').textContent=(d.engine&&d.engine.rules_loaded!=null)?d.engine.rules_loaded:'—';
+  document.getElementById('fidAlertsPerMin').textContent=(d.engine&&d.engine.alerts_per_min!=null)?d.engine.alerts_per_min.toFixed(2):'—';
+
+  // Outcomes
+  const out=d.outcomes||{};
+  const res=out.resolved||{};
+  document.getElementById('fidTP').textContent=res.true_positive||0;
+  document.getElementById('fidFP').textContent=res.false_positive||0;
+  document.getElementById('fidBenign').textContent=res.benign||0;
+  document.getElementById('fidUndet').textContent=res.undetermined||0;
+  document.getElementById('fidOpen').textContent=out.cases_open||0;
+  document.getElementById('fidInvestigating').textContent=out.cases_investigating||0;
+
+  const fpct=out.fidelity_pct;
+  const numEl=document.getElementById('fidFidelityNum');
+  const lblEl=document.getElementById('fidFidelityLabel');
+  const formulaEl=document.getElementById('fidFormula');
+  if(fpct==null){
+    numEl.textContent='—';
+    numEl.classList.add('null');
+    lblEl.textContent='No resolved cases yet';
+    formulaEl.textContent='100 × TP / (TP + FP + Benign)';
+  }else{
+    numEl.textContent=fpct.toFixed(2)+'%';
+    numEl.classList.remove('null');
+    lblEl.textContent='Fidelity %';
+    const denom=res.true_positive+res.false_positive+res.benign;
+    formulaEl.textContent=`100 × ${res.true_positive} / (${denom}) — undetermined excluded`;
+  }
+}
 </script>
 </body>
 </html>
