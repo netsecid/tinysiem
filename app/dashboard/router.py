@@ -72,19 +72,35 @@ def export_html(actor: AuthUser = Depends(require_analyst)):
     )
 
 
+_ALLOWED_FIDELITY_WINDOWS = (60, 3600, 86400)
+
+
 @router.get("/fidelity")
-def get_fidelity(_: AuthUser = Depends(require_analyst)):
+def get_fidelity(
+    window: int = 60,
+    _: AuthUser = Depends(require_analyst),
+):
     """Executive "SOC pipeline" snapshot — sources with live EPS, detection
     engine stats, and case outcomes with a headline Fidelity %.
 
-    The EPS/alert-rate counters are in-process (zero-I/O on the ingest path);
-    the outcomes aggregate is a read-only SELECT over the cases table.
+    ``window`` selects the rolling window for volume metrics: 60s, 1h, or 24h.
+    For 60s the EPS/alerts counters are in-process (zero-I/O on the ingest
+    path); for 1h/24h we fall back to a read-only SELECT over the events
+    table because the in-memory deque only holds the last ~60s of timestamps.
+    Outcomes are always all-time (cumulative) — ``fidelity_pct`` is a
+    detection-quality KPI, not a throughput metric, so it is intentionally
+    NOT windowed.
     """
-    snap = fidelity_telemetry.snapshot(window_seconds=60)
+    if window not in _ALLOWED_FIDELITY_WINDOWS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"window must be one of {_ALLOWED_FIDELITY_WINDOWS}",
+        )
+    snap = fidelity_telemetry.snapshot(window_seconds=window)
     activity = duckdb_store.query_source_activity()
     activity_by_source = {a["source"]: a["status"] for a in activity}
-    # Merge in-memory EPS with persistent source-status (status is owned by
-    # the storage layer; EPS is owned by telemetry).
+    # Merge telemetry (events/rate) with persistent source-status (status is
+    # owned by the storage layer; events/rate is owned by telemetry).
     seen = set()
     sources_out = []
     for s in snap["sources"]:
@@ -92,18 +108,20 @@ def get_fidelity(_: AuthUser = Depends(require_analyst)):
         seen.add(name)
         sources_out.append({
             "name": name,
-            "eps": s["eps"],
+            "events": s["events"],
+            "rate": s["rate"],
             "status": activity_by_source.get(name, "silent"),
             "parse_fail_count": s["parse_fail_count"],
         })
-    # Sources that exist in the DB but produced no events in the last 60s —
-    # still show them, with eps=0, so the UI doesn't drop them silently.
+    # Sources that exist in the DB but produced no events in the chosen window
+    # — still show them, with rate=0, so the UI doesn't drop them silently.
     for name, status in activity_by_source.items():
         if name in seen:
             continue
         sources_out.append({
             "name": name,
-            "eps": 0.0,
+            "events": 0,
+            "rate": 0.0,
             "status": status,
             "parse_fail_count": 0,
         })
@@ -138,12 +156,13 @@ def get_fidelity(_: AuthUser = Depends(require_analyst)):
         fidelity_pct = round(100.0 * tp / denom, 2)
 
     return {
-        "window_seconds": 60,
+        "window_seconds": window,
+        "window_label": snap["window_label"],
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "totals": snap["totals"],
         "sources": sources_out,
         "engine": {
             "rules_loaded": rule_engine.loaded_rules_count(),
-            "alerts_per_min": snap["alerts_per_min"],
         },
         "outcomes": {
             "cases_open": cases_open,
@@ -151,5 +170,6 @@ def get_fidelity(_: AuthUser = Depends(require_analyst)):
             "resolved": resolved_counts,
             "total_resolved": total_resolved,
             "fidelity_pct": fidelity_pct,
+            "scope": "all_time",
         },
     }

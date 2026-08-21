@@ -93,6 +93,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .fid-updated{font-family:var(--mono);font-size:10px;color:var(--text-muted);margin-bottom:10px;display:flex;justify-content:flex-end;gap:10px;align-items:center}
 .fid-updated button{background:none;border:1px solid var(--border2);color:var(--text-dim);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit}
 .fid-updated button:hover{color:var(--text);border-color:var(--accent)}
+.fid-window{display:inline-flex;gap:0;background:var(--surface2);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.fid-window-btn{background:none;border:none;color:var(--text-dim);padding:3px 10px;font-size:11px;font-family:var(--mono);cursor:pointer;font-weight:600;letter-spacing:.04em;transition:all .15s}
+.fid-window-btn:hover{color:var(--text);background:var(--surface3)}
+.fid-window-btn.active{background:var(--accent-dim);color:var(--accent)}
+.fid-window-btn+.fid-window-btn{border-left:1px solid var(--border)}
 .fid-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:8px;align-items:stretch;position:relative;padding:4px 0}
 .fid-col{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px;display:flex;flex-direction:column;min-height:260px}
 .fid-col-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
@@ -104,6 +109,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .fid-source-row:last-child{border-bottom:none}
 .fid-source-row .src-name{flex:1;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fid-source-row .src-eps{font-family:var(--mono);font-size:11px;color:var(--text-dim);min-width:60px;text-align:right}
+.fid-total{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
+.fid-total .fid-total-num{font-size:28px;font-weight:600;font-family:var(--mono);color:var(--accent);line-height:1}
+.fid-total .fid-total-rate{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
 .fid-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .fid-status-dot.active{background:var(--green);box-shadow:0 0 6px var(--green-dim)}
 .fid-status-dot.stale{background:var(--yellow)}
@@ -172,15 +180,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
           </div>
           <div class="fid-updated">
             <span id="fidUpdated">—</span>
+            <div class="fid-window" role="group" aria-label="Fidelity window">
+              <button class="fid-window-btn" data-window="60" onclick="setFidWindow(60,this)" title="Last 60 seconds">1m</button>
+              <button class="fid-window-btn" data-window="3600" onclick="setFidWindow(3600,this)" title="Last hour">1h</button>
+              <button class="fid-window-btn" data-window="86400" onclick="setFidWindow(86400,this)" title="Last 24 hours">24h</button>
+            </div>
             <button onclick="refreshFidelity()" title="Refresh now">↻ Refresh</button>
           </div>
           <div class="fid-flow">
             <!-- Left: Sources -->
             <div class="fid-col">
               <div class="fid-col-title">
-                Sources <span class="fid-hint">live EPS</span>
+                Sources <span class="fid-hint" id="fidSourcesHint">live EPS</span>
               </div>
               <div id="fidSources"><div class="fid-empty">Loading…</div></div>
+              <div class="fid-total" id="fidTotal" style="display:none">
+                <span class="fid-total-num" id="fidTotalNum">—</span>
+                <span class="fid-total-rate" id="fidTotalRate">—</span>
+              </div>
             </div>
             <div class="fid-arrow"><span>→</span></div>
             <!-- Center: Detection Engine -->
@@ -193,8 +210,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
                 </div>
                 <div class="fid-engine-divider"></div>
                 <div class="fid-engine-stat">
-                  <span class="num" id="fidAlertsPerMin">—</span>
-                  <span class="label">alerts / min</span>
+                  <span class="num" id="fidAlertsNum">—</span>
+                  <span class="label" id="fidAlertsLabel">alerts / min</span>
+                </div>
+                <div class="fid-engine-stat" style="margin-top:2px">
+                  <span class="fid-engine-sub" id="fidAlertsSub">— in window</span>
                 </div>
               </div>
             </div>
@@ -608,8 +628,25 @@ window.addEventListener('hashchange',applyTabFromHash);
 
 // ── Detection Fidelity rendering ─────────────────────────────────────────────
 
+let _fidWindow=parseInt(localStorage.getItem('ts_fid_window')||'60',10);
+if(!['60','3600','86400'].includes(String(_fidWindow))){_fidWindow=60;}
+
+function _applyFidWindowButtons(){
+  document.querySelectorAll('.fid-window-btn').forEach(b=>{
+    b.classList.toggle('active',parseInt(b.dataset.window,10)===_fidWindow);
+  });
+}
+
+function setFidWindow(w,btn){
+  _fidWindow=w;
+  localStorage.setItem('ts_fid_window',String(w));
+  _applyFidWindowButtons();
+  refreshFidelity();
+}
+window.setFidWindow=setFidWindow;
+
 async function refreshFidelity(){
-  const r=await api('/dashboard/fidelity');
+  const r=await api('/dashboard/fidelity?window='+_fidWindow);
   if(!r){showFidError('Not authenticated');return}
   if(!r.ok){showFidError(`HTTP ${r.status}`);return}
   try{
@@ -618,6 +655,7 @@ async function refreshFidelity(){
     hideFidError();
   }catch(e){showFidError('Bad response: '+e.message);}
 }
+_applyFidWindowButtons();
 
 function showFidError(msg){
   const box=document.getElementById('fidError');
@@ -631,9 +669,16 @@ function hideFidError(){
 }
 
 function renderFidelity(d){
-  // Timestamp
+  // Timestamp + window label
   const ts=new Date(d.generated_at||Date.now()).toLocaleTimeString();
-  document.getElementById('fidUpdated').textContent=`Updated ${ts} · ${d.window_seconds}s window`;
+  const lbl=d.window_label||_WindowLabel(d.window_seconds||60);
+  document.getElementById('fidUpdated').textContent=`Updated ${ts} · window ${lbl}`;
+
+  const totals=(d.totals)||{};
+  const unit=totals.events_rate_unit||'eps';
+  const shortUnit=unit==='eps'?'eps':('/'+unit.split('/')[1]);
+  const alertUnit=totals.alerts_rate_unit||'alerts/min';
+  const shortAlertUnit=alertUnit==='alerts/min'?'alerts/min':('/'+alertUnit.split('/')[1]);
 
   // Sources
   const srcEl=document.getElementById('fidSources');
@@ -644,19 +689,44 @@ function renderFidelity(d){
       // Parse failures get a red dot even if the source is otherwise active.
       let cls=s.status||'silent';
       if((s.parse_fail_count||0)>0)cls='parsefail';
-      return `<div class="fid-source-row" title="${esc(s.name)} — ${esc(s.status||'')}${s.parse_fail_count?' · '+s.parse_fail_count+' parse failures':''}">
+      const rateStr=unit==='eps'
+        ? (s.rate||0).toFixed(2)+' eps'
+        : fmtInt(s.rate||0)+' '+shortUnit;
+      return `<div class="fid-source-row" title="${esc(s.name)} — ${esc(s.status||'')} · ${fmtInt(s.events||0)} events${s.parse_fail_count?' · '+s.parse_fail_count+' parse failures':''}">
         <span class="fid-status-dot ${esc(cls)}"></span>
         <span class="src-name">${esc(s.name)}</span>
-        <span class="src-eps">${(s.eps||0).toFixed(2)} eps</span>
+        <span class="src-eps">${rateStr}</span>
       </div>`;
     }).join('');
   }
 
-  // Engine
-  document.getElementById('fidRulesLoaded').textContent=(d.engine&&d.engine.rules_loaded!=null)?d.engine.rules_loaded:'—';
-  document.getElementById('fidAlertsPerMin').textContent=(d.engine&&d.engine.alerts_per_min!=null)?d.engine.alerts_per_min.toFixed(2):'—';
+  // Sources-panel hint adapts to window (e.g. "live EPS" vs "events / hr")
+  const hintEl=document.getElementById('fidSourcesHint');
+  if(hintEl){hintEl.textContent=unit==='eps'?'live EPS':'events '+shortUnit;}
 
-  // Outcomes
+  // Total footer (big number = total events; sub = rate + short unit)
+  const totalEl=document.getElementById('fidTotal');
+  const totalNumEl=document.getElementById('fidTotalNum');
+  const totalRateEl=document.getElementById('fidTotalRate');
+  if(totalEl&&totalNumEl&&totalRateEl){
+    totalEl.style.display='';
+    totalNumEl.textContent=fmtInt(totals.events||0);
+    const r=totals.events_rate||0;
+    totalRateEl.textContent=unit==='eps'
+      ? r.toFixed(2)+' eps'
+      : fmtInt(r)+' '+shortUnit;
+  }
+
+  // Engine: rules loaded (unchanged) + alerts (rate + sub)
+  document.getElementById('fidRulesLoaded').textContent=(d.engine&&d.engine.rules_loaded!=null)?d.engine.rules_loaded:'—';
+  const aRate=Number(totals.alerts_rate||0);
+  document.getElementById('fidAlertsNum').textContent=alertUnit==='alerts/min'
+    ? aRate.toFixed(2)
+    : fmtInt(aRate);
+  document.getElementById('fidAlertsLabel').textContent=shortAlertUnit;
+  document.getElementById('fidAlertsSub').textContent=`${fmtInt(totals.alerts||0)} in window`;
+
+  // Outcomes (unchanged) + "all-time" hint on the Fidelity label
   const out=d.outcomes||{};
   const res=out.resolved||{};
   document.getElementById('fidTP').textContent=res.true_positive||0;
@@ -678,11 +748,20 @@ function renderFidelity(d){
   }else{
     numEl.textContent=fpct.toFixed(2)+'%';
     numEl.classList.remove('null');
-    lblEl.textContent='Fidelity %';
+    const scope=(out.scope==='all_time')?' <span class="fid-hint">all-time</span>':'';
+    lblEl.innerHTML='Fidelity %'+scope;
     const denom=res.true_positive+res.false_positive+res.benign;
     formulaEl.textContent=`100 × ${res.true_positive} / (${denom}) — undetermined excluded`;
   }
 }
+
+function fmtInt(n){
+  return Number(n||0).toLocaleString('en-US');
+}
+
+// Window seconds → short label ("1m" / "1h" / "24h"); used as a fallback when
+// the API omits window_label.
+const _WindowLabel=s=>s===60?'1m':s===3600?'1h':s===86400?'24h':(s+'s');
 </script>
 </body>
 </html>
