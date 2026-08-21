@@ -640,6 +640,8 @@ Executive "SOC pipeline" snapshot for the Detection Fidelity tab. Requires `anal
   },
   "sources": [{"name": "sshd", "events": 137, "rate": 137.0, "status": "active", "parse_fail_count": 0}],
   "engine": {"rules_loaded": 9},
+  "top_rules": [{"rule_name": "ssh-bruteforce", "count": 26}],
+  "recent_alerts": [{"alert_id": "...", "rule_name": "ssh-bruteforce", "severity": "high", "triggered_at": "...Z", "source_ip": "203.0.113.7", "summary": "..."}],
   "outcomes": {
     "cases_open": 0,
     "cases_investigating": 1,
@@ -654,7 +656,9 @@ Executive "SOC pipeline" snapshot for the Detection Fidelity tab. Requires `anal
 - `totals` — combined volume for the window: `events` count, `events_rate` + `events_rate_unit` (unit adapts: `eps` / `events/hr` / `events/day`), `alerts` count (from the alerts JSONL `triggered_at`), `alerts_rate` + `alerts_rate_unit` (`alerts/min` / `alerts/hr` / `alerts/day`).
 - `sources[].events` / `sources[].rate` — per-source count and rate for the window; `sources[].status` — `active` / `stale` / `silent` (same logic as `GET /sources`); `sources[].parse_fail_count` — in-memory counter (live 60s pulse only).
 - `engine.rules_loaded` — count of loaded rules.
-- `outcomes.scope` — always `all_time`: `fidelity_pct` is a detection-quality KPI and is intentionally **not** windowed. `fidelity_pct` = `100 × true_positive / (true_positive + false_positive + benign)` over **resolved** cases only; `undetermined` excluded from the denominator; `null` when no resolved cases exist (never `0`).
+- `top_rules` — top 5 rules by alert count within the window, descending (`[{"rule_name", "count"}]`).
+- `recent_alerts` — last ≤10 alerts within the window, newest first (`alert_id`, `rule_name`, `severity`, `triggered_at`, `source_ip`, `summary`). Empty array when the window has no alerts (e.g. `window=60` on a quiet minute).
+- `outcomes.scope` — always `all_time`: `fidelity_pct` is a detection-quality KPI and is intentionally **not** windowed. `fidelity_pct` = `100 × true_positive / (true_positive + false_positive + benign)` over **resolved** cases only; `undetermined` excluded from the denominator; `null` when no resolved cases exist (never `0`). The UI dims the KPI + shows a `low sample` tag while the denominator is < 10.
 
 ---
 
