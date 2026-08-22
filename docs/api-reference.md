@@ -660,6 +660,55 @@ Executive "SOC pipeline" snapshot for the Detection Fidelity tab. Requires `anal
 - `recent_alerts` — last ≤10 alerts within the window, newest first (`alert_id`, `rule_name`, `severity`, `triggered_at`, `source_ip`, `summary`). Empty array when the window has no alerts (e.g. `window=60` on a quiet minute).
 - `outcomes.scope` — always `all_time`: `fidelity_pct` is a detection-quality KPI and is intentionally **not** windowed. `fidelity_pct` = `100 × true_positive / (true_positive + false_positive + benign)` over **resolved** cases only; `undetermined` excluded from the denominator; `null` when no resolved cases exist (never `0`). The UI dims the KPI + shows a `low sample` tag while the denominator is < 10.
 
+### `GET /dashboard/coverage`
+Detection Coverage payload for the MITRE ATT&CK heatmap tab. Requires `analyst` role.
+
+**Query params:**
+
+| Param | Values | Default | Notes |
+|---|---|---|---|
+| `window` | `60`, `3600`, `86400` | `86400` | Rolling window for alert activity counts only. Rule coverage is always all-time (a rule either exists or it doesn't). Invalid values → `422`. |
+
+**Response (`200 OK`):**
+```json
+{
+  "matrix_version": "v18.1",
+  "generated": "2026-08-22",
+  "window_seconds": 86400,
+  "window_label": "24h",
+  "generated_at": "2026-08-22T10:00:00Z",
+  "stats": {
+    "rules_total": 9, "rules_mapped": 9, "rules_unmapped": 0,
+    "techniques_covered": 4, "techniques_total": 216, "coverage_pct": 1.85,
+    "tactics_covered": 4, "tactics_total": 14,
+    "alerts_total": 5678, "alerts_unmapped": 12
+  },
+  "tactics": [
+    {
+      "tactic": "Credential Access",
+      "total": 17, "covered": 1, "coverage_pct": 5.88, "alerts": 5600,
+      "techniques": [
+        {"id": "T1110", "name": "Brute Force", "covered": true,
+         "rules": ["ssh-bruteforce", "fail2ban-ban"], "alerts": 5600},
+        {"id": "T1003", "name": "OS Credential Dumping", "covered": false, "rules": [], "alerts": 0}
+      ]
+    }
+  ]
+}
+```
+
+- `matrix_version` / `generated` — provenance of the bundled ATT&CK matrix (`app/rules/data/mitre_enterprise.json` by default; override via `TINYSIEM_MITRE_MATRIX_PATH`).
+- `stats.coverage_pct` — `100 × techniques_covered / techniques_total` (unique technique IDs, not per-tactic rows).
+- `stats.alerts_unmapped` — alerts in the window whose `mitre_technique` is missing or empty (e.g. pre-PR#14 alert records). Bucketed separately so the UI can surface "X unmapped alerts".
+- `tactics[]` — the **full** 14-tactic matrix. Every technique that exists in the dataset is included (covered + gaps); the UI renders gap cells as transparent/dashed.
+- `techniques[].rules` — rule names whose YAML `mitre_technique` matches `techniques[].id` (sub-technique IDs `.NNN` resolve to the prefix technique).
+- `techniques[].alerts` — count of in-window alerts whose `mitre_technique` is the same id (sub-technique → prefix).
+
+**Error: `503 Service Unavailable` when the matrix file is missing/unparseable:**
+```json
+{"detail": "MITRE matrix dataset unavailable at <path> — run scripts/fetch_mitre_matrix.py"}
+```
+
 ---
 
 ## Sources
@@ -768,6 +817,22 @@ searchable normally.
 Analyst+. Returns all 14 MITRE Enterprise tactics with technique/rule-count breakdowns
 computed from currently-loaded rules (built-in + custom). Tactics with no matching rules
 are included with an empty `techniques` list.
+
+### MITRE validator on rule create/update (v1.7)
+`POST /rules` and `PUT /rules/{name}` validate the YAML's `mitre_tactic` and
+`mitre_technique` against the bundled matrix (`app/rules/data/mitre_enterprise.json`).
+The rule is rejected with `422` when:
+
+1. Exactly one of `mitre_tactic` / `mitre_technique` is set (both-or-neither).
+2. `mitre_tactic` is not one of the 14 canonical ATT&CK Enterprise tactics.
+3. `mitre_technique` does not match `^T\d{4}(\.\d{3})?$`.
+4. The (tactic, technique) pair disagrees with the matrix — e.g. `Discovery / T1110`
+   is rejected because T1110 belongs to Credential Access. Sub-technique IDs
+   (`.NNN`) are resolved against the prefix technique's tactic list (e.g.
+   `T1059.001` checks against `T1059`'s tactics).
+
+Missing both fields is **allowed** — the rule is counted in `stats.rules_unmapped`
+on the Detection Coverage dashboard but is never rejected.
 
 ### `POST /rules/{name}/playbook/generate`
 Admin+. Asks the configured AI provider to generate a structured `playbook:` block (response
