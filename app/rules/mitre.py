@@ -173,7 +173,8 @@ def compute_coverage(rule_files: list[tuple[Path, bool]]) -> dict:
     for path, _is_custom in rule_files:
         try:
             data = yaml.safe_load(path.read_text())
-        except Exception:
+        except (yaml.YAMLError, OSError) as exc:
+            log.warning("skipping unreadable rule file %s: %s", path, exc)
             continue
         if not isinstance(data, dict):
             continue

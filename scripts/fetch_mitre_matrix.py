@@ -181,7 +181,7 @@ def _latest_attack_tag() -> str:
     """
     try:
         req = urllib.request.Request(_GH_TAGS_API, headers={"User-Agent": _UA})
-        with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
+        with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
             tags = json.loads(resp.read())
     except Exception as exc:  # noqa: BLE001
         print(
