@@ -85,6 +85,58 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .tab-pane{display:none}
 .tab-pane.active{display:block}
 
+/* ── Detection Coverage pane ───────────────────────────────────────────── */
+.cov-pane{padding:0}
+.cov-error{color:var(--yellow);font-size:12px;padding:8px 12px;background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:4px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.cov-error .retry-btn{background:none;border:1px solid var(--yellow);color:var(--yellow);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit}
+.cov-error .retry-btn:hover{background:var(--yellow);color:var(--bg)}
+.cov-updated{font-family:var(--mono);font-size:10px;color:var(--text-muted);margin-bottom:10px;display:flex;justify-content:flex-end;gap:10px;align-items:center}
+.cov-updated button{background:none;border:1px solid var(--border2);color:var(--text-dim);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit}
+.cov-updated button:hover{color:var(--text);border-color:var(--accent)}
+.cov-window{display:inline-flex;gap:0;background:var(--surface2);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.cov-window-btn{background:none;border:none;color:var(--text-dim);padding:3px 10px;font-size:11px;font-family:var(--mono);cursor:pointer;font-weight:600;letter-spacing:.04em;transition:all .15s}
+.cov-window-btn:hover{color:var(--text);background:var(--surface3)}
+.cov-window-btn.active{background:var(--accent-dim);color:var(--accent)}
+.cov-window-btn+.cov-window-btn{border-left:1px solid var(--border)}
+.cov-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+.cov-kpi{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.cov-kpi-num{font-family:var(--mono);font-size:24px;font-weight:600;line-height:1;color:var(--accent);white-space:nowrap}
+.cov-kpi-num.dim{color:var(--text-muted);font-size:14px;font-weight:400}
+.cov-kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted)}
+.cov-kpi-sub{font-family:var(--mono);font-size:10px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cov-summary{font-size:12px;color:var(--text-dim);margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cov-summary strong{color:var(--text);font-family:var(--mono)}
+.cov-legend{display:inline-flex;align-items:center;gap:14px;margin-left:auto;font-size:11px;color:var(--text-dim)}
+.cov-legend-swatch{display:inline-block;width:14px;height:14px;border-radius:2px;border:1px solid var(--border2);vertical-align:middle;margin-right:4px}
+.cov-heatmap-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:12px}
+.cov-heatmap{display:grid;gap:2px;min-width:1100px}
+.cov-col-hdr{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);padding:4px 2px;text-align:center;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)}
+.cov-row-hdr{font-size:10.5px;color:var(--text);font-family:var(--mono);padding:3px 8px 3px 0;text-align:right;border-right:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;gap:1px;min-height:22px}
+.cov-row-hdr .cov-row-name{font-family:var(--sans);font-size:10.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cov-row-hdr .cov-row-id{font-family:var(--mono);font-size:9px;color:var(--text-muted)}
+.cov-cell{height:22px;border-radius:2px;background:transparent;border:1px dashed var(--border);cursor:default;position:relative;transition:all .12s}
+.cov-cell.covered{background:var(--accent-dim);border:1px solid var(--accent);cursor:pointer}
+.cov-cell.covered:hover{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.cov-cell.fired{background:var(--accent);border:1px solid var(--accent);cursor:pointer}
+.cov-cell.fired:hover{box-shadow:0 0 0 1px var(--accent)}
+.cov-cell.gap{border:1px dashed var(--border2);background:transparent}
+.cov-cell.gap.has-data:hover{background:var(--surface3);border-color:var(--text-muted);cursor:help}
+.cov-cell-tip{position:fixed;background:var(--surface4);border:1px solid var(--border2);color:var(--text);font-size:11px;padding:6px 8px;border-radius:4px;pointer-events:none;z-index:50;max-width:280px;box-shadow:0 4px 12px rgba(0,0,0,.35);font-family:var(--mono);white-space:pre-line;line-height:1.45;display:none}
+.cov-drill{margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px;display:none}
+.cov-drill.open{display:block}
+.cov-drill-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:10px;flex-wrap:wrap}
+.cov-drill-title{font-size:13px;font-weight:600}
+.cov-drill-meta{font-size:11px;color:var(--text-muted);font-family:var(--mono)}
+.cov-drill-rules{margin-bottom:10px}
+.cov-drill-rule{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;font-family:var(--mono)}
+.cov-drill-rule .sev-dot{flex-shrink:0}
+.cov-drill-rules-hdr{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px}
+.cov-drill-alerts table{width:100%;border-collapse:collapse}
+.cov-drill-alerts th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:4px 6px;border-bottom:1px solid var(--border);text-align:left}
+.cov-drill-alerts td{padding:5px 6px;border-bottom:1px solid var(--border);font-size:11.5px;font-family:var(--mono)}
+.cov-empty{padding:24px;text-align:center;color:var(--text-muted);font-size:12px}
+@media (max-width:900px){.cov-kpis{grid-template-columns:repeat(3,1fr)}}
+
 /* ── Detection Fidelity pane ───────────────────────────────────────────── */
 .fid-pane{padding:0}
 .fid-error{color:var(--yellow);font-size:12px;padding:8px 12px;background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:4px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
@@ -163,6 +215,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
     <div class="tab-bar" id="tabBar">
       <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
       <button class="tab-btn" data-tab="fidelity" onclick="switchTab('fidelity')">Detection Fidelity</button>
+      <button class="tab-btn" data-tab="coverage" onclick="switchTab('coverage')">Detection Coverage</button>
     </div>
 
     <div class="dash-body" id="dashBody">
@@ -239,6 +292,68 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
             </div>
           </div>
           <div class="fid-outcomes-strip" id="fidOutcomesStrip">—</div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-tab="coverage" id="coveragePane">
+        <div class="cov-pane">
+          <div class="cov-error" id="covError" style="display:none">
+            <span id="covErrorMsg">Connection lost — retrying…</span>
+            <button class="retry-btn" onclick="refreshCoverage()">Retry</button>
+          </div>
+          <div class="cov-updated">
+            <span id="covUpdated">—</span>
+            <div class="cov-window" role="group" aria-label="Coverage window">
+              <button class="cov-window-btn" data-window="60" onclick="setCovWindow(60,this)" title="Last 60 seconds">1m</button>
+              <button class="cov-window-btn" data-window="3600" onclick="setCovWindow(3600,this)" title="Last hour">1h</button>
+              <button class="cov-window-btn" data-window="86400" onclick="setCovWindow(86400,this)" title="Last 24 hours">24h</button>
+            </div>
+            <button onclick="refreshCoverage()" title="Refresh now">↻ Refresh</button>
+          </div>
+          <div class="cov-kpis">
+            <div class="cov-kpi">
+              <div class="cov-kpi-num" id="covKpiRules">—</div>
+              <div class="cov-kpi-label">Rules mapped</div>
+              <div class="cov-kpi-sub" id="covKpiRulesSub">—</div>
+            </div>
+            <div class="cov-kpi">
+              <div class="cov-kpi-num" id="covKpiTechniques">—</div>
+              <div class="cov-kpi-label">Techniques covered</div>
+              <div class="cov-kpi-sub" id="covKpiTechniquesSub">—</div>
+            </div>
+            <div class="cov-kpi">
+              <div class="cov-kpi-num" id="covKpiTactics">—</div>
+              <div class="cov-kpi-label">Tactics covered</div>
+              <div class="cov-kpi-sub" id="covKpiTacticsSub">—</div>
+            </div>
+            <div class="cov-kpi">
+              <div class="cov-kpi-num" id="covKpiAlerts">—</div>
+              <div class="cov-kpi-label">Alerts (MITRE)</div>
+              <div class="cov-kpi-sub" id="covKpiAlertsSub">in window</div>
+            </div>
+            <div class="cov-kpi">
+              <div class="cov-kpi-num" id="covKpiMatrixVer">—</div>
+              <div class="cov-kpi-label">Matrix version</div>
+              <div class="cov-kpi-sub" id="covKpiMatrixVerSub">—</div>
+            </div>
+            <div class="cov-kpi">
+              <div class="cov-kpi-num dim" id="covKpiUnmapped">—</div>
+              <div class="cov-kpi-label">Unmapped</div>
+              <div class="cov-kpi-sub" id="covKpiUnmappedSub">—</div>
+            </div>
+          </div>
+          <div class="cov-summary" id="covSummary">—</div>
+          <div class="cov-heatmap-wrap">
+            <div class="cov-heatmap" id="covHeatmap"><div class="cov-empty">Loading…</div></div>
+          </div>
+          <div class="cov-drill" id="covDrill">
+            <div class="cov-drill-hdr">
+              <div class="cov-drill-title" id="covDrillTitle">—</div>
+              <div class="cov-drill-meta" id="covDrillMeta">—</div>
+            </div>
+            <div class="cov-drill-rules" id="covDrillRules"></div>
+            <div class="cov-drill-alerts" id="covDrillAlerts"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -601,29 +716,8 @@ window.addEventListener('DOMContentLoaded',load);
 
 let _fidTimer=null;
 
-function switchTab(tab){
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.dataset.tab===tab));
-  if(tab==='fidelity'){
-    refreshFidelity();
-    if(_fidTimer)clearInterval(_fidTimer);
-    _fidTimer=setInterval(refreshFidelity,7500);
-  }else{
-    if(_fidTimer){clearInterval(_fidTimer);_fidTimer=null;}
-  }
-  // Reflect in the URL hash without scrolling.
-  if(window.location.hash!=='#'+tab){
-    history.replaceState(null,'','#'+tab);
-  }
-}
-
-function applyTabFromHash(){
-  const h=(window.location.hash||'').replace('#','');
-  const initial=(h==='fidelity')?'fidelity':'overview';
-  switchTab(initial);
-}
-
-window.addEventListener('hashchange',applyTabFromHash);
+// (switchTab / applyTabFromHash are defined after the Detection Coverage
+// renderer below so coverage can be wired into the same tab switch.)
 
 // ── Detection Fidelity rendering ─────────────────────────────────────────────
 
@@ -801,6 +895,291 @@ function fmtInt(n){
 // Window seconds → short label ("1m" / "1h" / "24h"); used as a fallback when
 // the API omits window_label.
 const _WindowLabel=s=>s===60?'1m':s===3600?'1h':s===86400?'24h':(s+'s');
+
+// ── Tabs: include Detection Coverage in switchTab/applyTabFromHash ─────────
+
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.dataset.tab===tab));
+  if(tab==='fidelity'){
+    refreshFidelity();
+    if(_fidTimer)clearInterval(_fidTimer);
+    _fidTimer=setInterval(refreshFidelity,7500);
+  }else{
+    if(_fidTimer){clearInterval(_fidTimer);_fidTimer=null;}
+  }
+  if(tab==='coverage'){
+    refreshCoverage();
+    if(_covTimer)clearInterval(_covTimer);
+    _covTimer=setInterval(refreshCoverage,7500);
+  }else{
+    if(_covTimer){clearInterval(_covTimer);_covTimer=null;}
+  }
+  // Reflect in the URL hash without scrolling.
+  if(window.location.hash!=='#'+tab){
+    history.replaceState(null,'','#'+tab);
+  }
+}
+
+function applyTabFromHash(){
+  const h=(window.location.hash||'').replace('#','');
+  const initial=(h==='fidelity')?'fidelity':(h==='coverage')?'coverage':'overview';
+  switchTab(initial);
+}
+
+window.addEventListener('hashchange',applyTabFromHash);
+document.addEventListener('visibilitychange',()=>{
+  const active=document.querySelector('.tab-btn.active')?.dataset?.tab;
+  if(document.hidden){
+    if(_fidTimer){clearInterval(_fidTimer);_fidTimer=null;}
+    if(_covTimer){clearInterval(_covTimer);_covTimer=null;}
+  }else if(active==='fidelity'){
+    if(!_fidTimer)_fidTimer=setInterval(refreshFidelity,7500);
+    if(_covTimer){clearInterval(_covTimer);_covTimer=null;}
+  }else if(active==='coverage'){
+    if(!_covTimer)_covTimer=setInterval(refreshCoverage,7500);
+    if(_fidTimer){clearInterval(_fidTimer);_fidTimer=null;}
+  }
+});
+
+// ── Detection Coverage rendering ──────────────────────────────────────────
+
+let _covWindow=parseInt(localStorage.getItem('ts_cov_window')||'86400',10);
+if(!['60','3600','86400'].includes(String(_covWindow))){_covWindow=86400;}
+let _covTimer=null;
+let _covData=null;
+
+function _applyCovWindowButtons(){
+  document.querySelectorAll('.cov-window-btn').forEach(b=>{
+    b.classList.toggle('active',parseInt(b.dataset.window,10)===_covWindow);
+  });
+}
+
+function setCovWindow(w,btn){
+  _covWindow=w;
+  localStorage.setItem('ts_cov_window',String(w));
+  _applyCovWindowButtons();
+  refreshCoverage();
+}
+window.setCovWindow=setCovWindow;
+
+async function refreshCoverage(){
+  const r=await api('/dashboard/coverage?window='+_covWindow);
+  if(!r){showCovError('Not authenticated');return}
+  if(!r.ok){
+    let msg='HTTP '+r.status;
+    try{const j=await r.json();if(j&&j.detail)msg=j.detail;}catch(e){}
+    showCovError(msg);
+    return;
+  }
+  try{
+    const d=await r.json();
+    _covData=d;
+    renderCoverage(d);
+    hideCovError();
+  }catch(e){showCovError('Bad response: '+e.message);}
+}
+_applyCovWindowButtons();
+
+function showCovError(msg){
+  const box=document.getElementById('covError');
+  box.style.display='flex';
+  document.getElementById('covErrorMsg').textContent=msg;
+}
+function hideCovError(){
+  const box=document.getElementById('covError');
+  box.style.display='none';
+}
+
+function renderCoverage(d){
+  const stats=d.stats||{};
+  const ts=new Date(d.generated_at||Date.now()).toLocaleTimeString();
+  const lbl=d.window_label||_WindowLabel(d.window_seconds||86400);
+  document.getElementById('covUpdated').textContent=`Updated ${ts} · window ${lbl} · ATT&CK ${d.matrix_version||'?'}`;
+
+  // ── KPI strip ────────────────────────────────────────────────────────────
+  document.getElementById('covKpiRules').textContent=`${stats.rules_mapped||0}/${stats.rules_total||0}`;
+  document.getElementById('covKpiRulesSub').textContent=(stats.rules_unmapped||0)===0
+    ? 'all rules mapped'
+    : `${stats.rules_unmapped||0} unmapped`;
+
+  document.getElementById('covKpiTechniques').textContent=`${stats.techniques_covered||0}/${stats.techniques_total||0}`;
+  document.getElementById('covKpiTechniquesSub').textContent=`${(stats.coverage_pct||0).toFixed(1)}% of matrix`;
+
+  document.getElementById('covKpiTactics').textContent=`${stats.tactics_covered||0}/${stats.tactics_total||0}`;
+  document.getElementById('covKpiTacticsSub').textContent='tactics';
+
+  document.getElementById('covKpiAlerts').textContent=fmtInt(stats.alerts_total||0);
+  document.getElementById('covKpiAlertsSub').textContent=`in last ${lbl}`;
+
+  document.getElementById('covKpiMatrixVer').textContent=d.matrix_version||'—';
+  document.getElementById('covKpiMatrixVerSub').textContent=d.generated?'fetched '+d.generated:'—';
+
+  const unmappedEl=document.getElementById('covKpiUnmapped');
+  const unmappedSubEl=document.getElementById('covKpiUnmappedSub');
+  const totalUnmapped=(stats.rules_unmapped||0)+(stats.alerts_unmapped||0);
+  if(totalUnmapped>0){
+    unmappedEl.classList.remove('dim');
+    unmappedEl.textContent=String(totalUnmapped);
+    unmappedSubEl.textContent=`${stats.rules_unmapped||0} rules · ${stats.alerts_unmapped||0} alerts`;
+  }else{
+    unmappedEl.classList.add('dim');
+    unmappedEl.textContent='0';
+    unmappedSubEl.textContent='rules + alerts';
+  }
+
+  // ── Summary line ─────────────────────────────────────────────────────────
+  document.getElementById('covSummary').innerHTML=
+    `<strong>${stats.techniques_covered||0}/${stats.techniques_total||0}</strong> techniques covered (${(stats.coverage_pct||0).toFixed(1)}%) · `+
+    `<strong>${stats.tactics_covered||0}/${stats.tactics_total||0}</strong> tactics · `+
+    `<strong>${stats.rules_mapped||0}</strong> rule${(stats.rules_mapped||0)===1?'':'s'}`+
+    `<span class="cov-legend">`+
+      `<span><span class="cov-legend-swatch" style="background:var(--accent)"></span>covered + alerts</span>`+
+      `<span><span class="cov-legend-swatch" style="background:var(--accent-dim);border:1px solid var(--accent)"></span>covered, no alerts</span>`+
+      `<span><span class="cov-legend-swatch" style="background:transparent;border:1px dashed var(--border2)"></span>gap</span>`+
+    `</span>`;
+
+  // ── Heatmap ──────────────────────────────────────────────────────────────
+  renderHeatmap(d);
+}
+
+function renderHeatmap(d){
+  const tactics=d.tactics||[];
+  const heatmap=document.getElementById('covHeatmap');
+  if(!tactics.length){
+    heatmap.innerHTML='<div class="cov-empty">No tactics in matrix</div>';
+    return;
+  }
+  const colCount=tactics.length;
+  heatmap.style.gridTemplateColumns=`220px repeat(${colCount}, minmax(28px, 1fr))`;
+
+  // Compute log-scaled max alerts for cell intensity shading.
+  let maxAlerts=0;
+  tactics.forEach(t=>t.techniques.forEach(tech=>{ if(tech.alerts>maxAlerts) maxAlerts=tech.alerts; }));
+  const logMax=Math.log1p(maxAlerts) || 1;
+
+  // Build header row (tactic names)
+  let html='<div class="cov-col-hdr" style="grid-row:1"></div>';
+  tactics.forEach((t,i)=>{
+    const covPct=t.coverage_pct||0;
+    html+=`<div class="cov-col-hdr" style="grid-column:${i+2};grid-row:1" title="${esc(t.tactic)} — ${t.covered}/${t.total} techniques (${covPct}%)">
+      ${esc(t.tactic)}<br><span style="font-size:9px;color:var(--text-muted);font-weight:400">${t.covered}/${t.total} · ${covPct}%</span>
+    </div>`;
+  });
+
+  // Iterate the union of techniques across all tactics; render each row.
+  const allTechIds=new Set();
+  tactics.forEach(t=>t.techniques.forEach(tech=>allTechIds.add(tech.id)));
+  const orderedIds=[...allTechIds].sort();
+
+  // (tactic,id) -> name lookup for hover tooltips on gap cells.
+  const nameByTacticId={};
+  tactics.forEach(t=>t.techniques.forEach(tech=>{ nameByTacticId[`${t.tactic}::${tech.id}`]=tech.name; }));
+
+  orderedIds.forEach((techId,rowIdx)=>{
+    const row=rowIdx+2;
+    const firstName=Object.entries(nameByTacticId).find(([k])=>k.endsWith(`::${techId}`))?.[1]||techId;
+    html+=`<div class="cov-row-hdr" style="grid-column:1;grid-row:${row}" title="${esc(techId)} — ${esc(firstName)}">
+      <span class="cov-row-id">${esc(techId)}</span>
+      <span class="cov-row-name">${esc(firstName)}</span>
+    </div>`;
+    tactics.forEach((t,colIdx)=>{
+      const tech=t.techniques.find(x=>x.id===techId);
+      const col=colIdx+2;
+      if(!tech){
+        html+=`<div class="cov-cell gap" style="grid-column:${col};grid-row:${row}" data-empty="1"></div>`;
+        return;
+      }
+      const covered=tech.covered;
+      const fired=tech.alerts>0;
+      let cls='cov-cell';
+      let cellStyle=`grid-column:${col};grid-row:${row}`;
+      if(covered && fired){
+        cls+=' fired';
+        const intensity=Math.min(1, Math.log1p(tech.alerts)/logMax);
+        cellStyle+=`;opacity:${(0.4 + intensity*0.6).toFixed(2)};background:var(--accent);border:1px solid var(--accent);`;
+      } else if(covered){
+        cls+=' covered';
+      } else {
+        cls+=' gap';
+      }
+      html+=`<div class="${cls}" style="${cellStyle}" data-tech-id="${esc(tech.id)}" data-tactic="${esc(t.tactic)}" data-tech-name="${esc(tech.name)}" data-covered="${covered?1:0}" data-alerts="${tech.alerts}" data-rules="${esc(tech.rules.join(', '))}"></div>`;
+    });
+  });
+
+  heatmap.innerHTML=html;
+  attachCellListeners();
+  document.getElementById('covDrill').classList.remove('open');
+}
+
+const _tipEl=document.createElement('div');
+_tipEl.className='cov-cell-tip';
+document.body.appendChild(_tipEl);
+
+function _showTip(cell){
+  const tip=cell.getAttribute('data-tip')||'';
+  if(!tip){_tipEl.style.display='none';return;}
+  _tipEl.textContent=tip;
+  _tipEl.style.display='block';
+  const r=cell.getBoundingClientRect();
+  _tipEl.style.left=Math.min(window.innerWidth-300, r.left)+'px';
+  _tipEl.style.top=(r.bottom+4)+'px';
+}
+function _hideTip(){_tipEl.style.display='none';}
+
+function attachCellListeners(){
+  const cells=document.querySelectorAll('#covHeatmap .cov-cell');
+  cells.forEach(cell=>{
+    const covered=cell.dataset.covered==='1';
+    const techId=cell.dataset.techId||'';
+    const tactic=cell.dataset.tactic||'';
+    const alerts=parseInt(cell.dataset.alerts||'0',10);
+    const rules=cell.dataset.rules||'';
+    const name=cell.dataset.techName||'';
+    const tip=`${techId} — ${name}\nTactic: ${tactic}\n`+
+      (covered?`Rules: ${rules||'(none)'}\n`:'No detection rule (gap)\n')+
+      `Alerts in window: ${alerts}`;
+    cell.setAttribute('data-tip',tip);
+    cell.addEventListener('mouseenter',()=>_showTip(cell));
+    cell.addEventListener('mouseleave',_hideTip);
+    if(covered){
+      cell.addEventListener('click',()=>drillIntoTechnique(tactic,techId,name,rules));
+    }
+  });
+}
+
+async function drillIntoTechnique(tactic,techId,name,rules){
+  const drill=document.getElementById('covDrill');
+  document.getElementById('covDrillTitle').textContent=`${techId} — ${name}`;
+  document.getElementById('covDrillMeta').textContent=tactic;
+  const rulesHtml=(rules||'').split(',').filter(Boolean).map(r=>{
+    return `<div class="cov-drill-rule"><span class="sev-dot dot-medium"></span>${esc(r)}</div>`;
+  }).join('');
+  document.getElementById('covDrillRules').innerHTML=
+    `<div class="cov-drill-rules-hdr">Detection rules</div>${rulesHtml||'<div class="cov-empty">No rules</div>'}`;
+  document.getElementById('covDrillAlerts').innerHTML='<div class="cov-empty">Loading recent alerts…</div>';
+  drill.classList.add('open');
+  const r=await api(`/alerts?mitre_technique=${encodeURIComponent(techId)}&limit=10`);
+  if(!r){document.getElementById('covDrillAlerts').innerHTML='<div class="cov-empty">Failed to load alerts</div>';return;}
+  try{
+    const d=await r.json();
+    const alerts=d.alerts||[];
+    if(!alerts.length){
+      document.getElementById('covDrillAlerts').innerHTML='<div class="cov-empty">No alerts for this technique in window</div>';
+      return;
+    }
+    document.getElementById('covDrillAlerts').innerHTML=`<table><thead><tr><th>Time</th><th>Rule</th><th>IP</th><th>Sev</th></tr></thead><tbody>${
+      alerts.map(a=>`<tr>
+        <td>${_fmtAlertTime(a.triggered_at)}</td>
+        <td>${esc(a.rule_name||'')}</td>
+        <td>${esc(a.source_ip||'—')}</td>
+        <td>${esc(a.severity||'')}</td>
+      </tr>`).join('')
+    }</tbody></table>`;
+  }catch(e){
+    document.getElementById('covDrillAlerts').innerHTML='<div class="cov-empty">Bad response</div>';
+  }
+}
 </script>
 </body>
 </html>

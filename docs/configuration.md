@@ -179,6 +179,23 @@ Offline lookup at ingest: when a database is configured, every stored event gain
 
 ---
 
+## MITRE ATT&CK Matrix
+
+| Variable | Default | Description |
+|---|---|---|
+| `TINYSIEM_MITRE_MATRIX_PATH` | `<repo>/app/rules/data/mitre_enterprise.json` | Path to the MITRE ATT&CK Enterprise matrix JSON used by the Detection Coverage dashboard and the rule (tactic, technique) validator. Empty = repo-bundled file. |
+
+The matrix is bundled as `app/rules/data/mitre_enterprise.json` (no network needed at runtime) and contains all 14 ATT&CK Enterprise tactics with their top-level techniques — ATT&CK v18.1 by default (~216 unique techniques). Refresh any time with:
+
+```bash
+python scripts/fetch_mitre_matrix.py                # default: latest non-container release
+python scripts/fetch_mitre_matrix.py --release 17.1 # pin a specific ATT&CK version
+```
+
+The script uses stdlib only (urllib + json), pulls the STIX bundle from MITRE's `mitre/cti` GitHub repo, and trims it to a tiny JSON file. If the matrix file is missing or unparseable, `GET /dashboard/coverage` returns `503` with a message naming the path and the refresh script.
+
+---
+
 ## Smart Baselines
 
 | Variable | Default | Description |

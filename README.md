@@ -54,6 +54,7 @@ TinySIEM ingests logs from any source, decodes them with YAML-configured parsers
 - Edit mode: add / remove / reconfigure widgets in-browser
 - HTML export via the API
 - **Detection Fidelity tab** — executive SOC pipeline view: **KPI strip** (sources, events, rules, alerts rate, total alerts, Fidelity %) over **3 detail panels** (data sources, top rules by alerts in window, recent alerts) + outcomes footnote; Fidelity % (`100×TP/(TP+FP+benign)`, null-guarded, all-time, **low-sample tag below 10 classified cases**); **1m/1h/24h window filter** drives all volume metrics (units adapt); `#fidelity` deep-link, dark + light themes
+- **Detection Coverage tab** — MITRE ATT&CK Navigator-style heatmap: KPI strip (rules mapped · techniques covered · tactics covered · alerts · matrix version · unmapped) + summary line + full matrix with all 14 tactics and ≥190 techniques (covered cells + gaps), log-scaled alert intensity, hover tooltips, click-to-drill rule list + recent alerts; matrix bundled as `app/rules/data/mitre_enterprise.json` (MITRE STIX, ATT&CK v18.1 default); `#coverage` deep-link, 1m/1h/24h filter, dark + light themes; rule create/update validates (tactic, technique) pair against the matrix
 - Auto-refresh every 60 s per widget
 
 **UI**
