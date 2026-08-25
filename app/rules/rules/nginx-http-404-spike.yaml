@@ -9,7 +9,7 @@ condition:
   operator: eq
   threshold_count: 10
   window_seconds: 60
-mitre_tactic: "Discovery"
+mitre_tactic: "Reconnaissance"
 mitre_technique: "T1595"
 playbook:
   summary: "Investigate potential path/resource enumeration from a single IP"

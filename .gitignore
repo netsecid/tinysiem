@@ -19,6 +19,8 @@ logs/*.gz
 
 # ── Data directory (named Docker volume, never in repo) ───────────────────────
 data/
+# Bundled MITRE matrix (committed as part of the repo source — not user data)
+!app/rules/data/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/

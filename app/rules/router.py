@@ -11,6 +11,7 @@ from app.auth import AuthUser, require_admin, require_analyst
 from app.rules import backtest as backtest_module
 from app.rules import engine as rule_engine
 from app.rules import exceptions_store
+from app.rules import mitre
 
 router = APIRouter(prefix="/rules", tags=["rules"])
 
@@ -74,6 +75,14 @@ def _validate_rule_yaml(yaml_text: str) -> dict:
             status_code=422,
             detail=f"severity must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
         )
+    # MITRE ATT&CK validator (v1.7 Detection Coverage): both-or-neither rule,
+    # tactic must be in the canonical list, technique must match T0000(.000)?,
+    # and the (tactic, technique) pair must agree with the bundled matrix.
+    ok, msg = mitre.validate_mitre(
+        data.get("mitre_tactic"), data.get("mitre_technique")
+    )
+    if not ok:
+        raise HTTPException(status_code=422, detail=msg)
     if data.get("playbook"):
         _validate_playbook(data["playbook"])
     return data

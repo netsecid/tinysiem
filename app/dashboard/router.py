@@ -7,9 +7,12 @@ from pydantic import BaseModel, Field
 
 from app.auth import AuthUser, require_analyst
 from app.audit import store as audit
+from app.dashboard import coverage as coverage_telemetry
 from app.dashboard import fidelity as fidelity_telemetry
 from app.dashboard import store as dstore
 from app.rules import engine as rule_engine
+from app.rules import mitre
+from app.rules.router import _list_rule_files
 from app.storage import duckdb_store
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -175,3 +178,42 @@ def get_fidelity(
             "scope": "all_time",
         },
     }
+
+
+_ALLOWED_COVERAGE_WINDOWS = (60, 3600, 86400)
+
+
+@router.get("/coverage")
+def get_coverage(
+    window: int = 86400,
+    _: AuthUser = Depends(require_analyst),
+):
+    """Detection Coverage dashboard (v1.7) — Navigator-style heatmap of the
+    full MITRE ATT&CK Enterprise matrix, with rule coverage and live alert
+    activity per technique.
+
+    ``window`` selects the rolling window for alert counts: 60s, 1h, or 24h.
+    Rule coverage is always all-time (a rule either exists or it doesn't);
+    only alert activity is windowed.
+    """
+    if window not in _ALLOWED_COVERAGE_WINDOWS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"window must be one of {_ALLOWED_COVERAGE_WINDOWS}",
+        )
+    # Cache the matrix path so the 503 message can name it.
+    mpath = mitre.matrix_path()
+    payload = coverage_telemetry.build_coverage_payload(
+        rule_files=_list_rule_files(),
+        window_seconds=window,
+    )
+    if payload is None:
+        loc = str(mpath) if mpath else "<repo-bundled path>"
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"MITRE matrix dataset unavailable at {loc} — "
+                "run scripts/fetch_mitre_matrix.py"
+            ),
+        )
+    return payload

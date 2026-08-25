@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     # Optional second .mmdb (MaxMind GeoLite2-ASN) to populate the `asn` field
     tinysiem_geoip_asn_path: str = ""
 
+    # MITRE ATT&CK matrix (v1.7 Detection Coverage dashboard). Repo-relative
+    # default; override with an absolute path to point at a custom matrix.
+    # Refresh with: python scripts/fetch_mitre_matrix.py
+    tinysiem_mitre_matrix_path: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

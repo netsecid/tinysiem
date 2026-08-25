@@ -27,6 +27,9 @@ os.environ["TINYSIEM_BEATS_ENABLED"] = "true"
 # their own fixture DBs explicitly via app.geoip.configure()
 os.environ["TINYSIEM_GEOIP_DB_PATH"] = ""
 os.environ["TINYSIEM_GEOIP_ASN_PATH"] = ""
+# MITRE matrix: empty → mitre.py resolves to the repo-bundled
+# app/rules/data/mitre_enterprise.json (test fixture-friendly).
+os.environ["TINYSIEM_MITRE_MATRIX_PATH"] = ""
 import base64
 os.environ["TINYSIEM_MASTER_KEY"] = base64.urlsafe_b64encode(b"tinysiem-test-master-key-paddin!").decode()
 
